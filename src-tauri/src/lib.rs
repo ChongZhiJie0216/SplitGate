@@ -11,6 +11,7 @@ mod paths;
 mod platform;
 mod profiles;
 mod rules;
+mod service;
 mod settings;
 mod singbox;
 mod supervisor;
@@ -21,6 +22,11 @@ mod update;
 use tauri::Manager;
 
 pub fn run() {
+    // `SplitGate.exe --service`: the background service (no window, no tray, no single-instance check).
+    if service::is_service_launch() {
+        service::run_service();
+        return;
+    }
     if !platform::claim_single_instance() {
         return; // the running copy shows its window instead
     }
@@ -108,6 +114,9 @@ pub fn run() {
             commands::show_diagnostics,
             commands::check_update,
             commands::get_changelog,
+            commands::get_service_state,
+            commands::install_service,
+            commands::remove_service,
             commands::open_release_page,
         ])
         .build(tauri::generate_context!())

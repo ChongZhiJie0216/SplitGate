@@ -7,7 +7,7 @@ use crate::exits::wireguard;
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, block_detect, diagnostics, logs, paths, platform, supervisor, traffic, update};
+use crate::{autostart, block_detect, diagnostics, logs, paths, platform, service, supervisor, traffic, update};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -246,4 +246,28 @@ pub fn get_changelog() -> Vec<update::Section> {
 #[tauri::command]
 pub fn open_release_page(url: String) -> Result<(), String> {
     update::open_release_page(&url)
+}
+
+/// Asks Windows and the service itself (pipe); a second or two at most.
+#[tauri::command]
+pub async fn get_service_state() -> Result<service::ServiceState, String> {
+    tauri::async_runtime::spawn_blocking(service::state).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn install_service() -> Result<service::ServiceState, String> {
+    let r = tauri::async_runtime::spawn_blocking(service::install).await.map_err(|e| e.to_string())?;
+    if r.is_ok() {
+        logs::info("已安装后台服务（SplitGateService）");
+    }
+    r
+}
+
+#[tauri::command]
+pub async fn remove_service() -> Result<service::ServiceState, String> {
+    let r = tauri::async_runtime::spawn_blocking(service::remove).await.map_err(|e| e.to_string())?;
+    if r.is_ok() {
+        logs::info("已移除后台服务");
+    }
+    r
 }

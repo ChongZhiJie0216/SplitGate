@@ -137,6 +137,7 @@ SplitGate 和 sing-box 的日志，可以筛选、暂停滚动、复制。日志
 | 连接中断后自动重新连接 | 默认开；马上生效 |
 | sing-box 日志级别 | 平时用 info；排查问题时改 debug。下次连接生效 |
 | TUN 网段 | SplitGate 虚拟网卡的地址，只有和其他网络撞网段时才要改。下次连接生效 |
+| 后台服务（测试中） | 以后会由这个 Windows 服务负责连接，界面就不用再要求管理员。现在只是第一步：服务只回答 SplitGate 的询问，连接仍由 SplitGate 自己做，装不装都不影响使用 |
 
 ### 关于
 
@@ -203,7 +204,7 @@ SplitGate 要管理员权限才能连接。关掉后右键 `SplitGate.exe` →�
 
 ## 8. 卸载
 
-1. 设置页关掉“开机自启”（会删除任务计划里的 `SplitGate` 任务）。
+1. 设置页关掉“开机自启”（会删除任务计划里的 `SplitGate` 任务）；装过后台服务的话，按“移除后台服务”。
 2. 右键托盘图标 →“退出”。
 3. 删除 SplitGate 的整个文件夹（含 `data\`）。
 4. 想清干净的话：删除 `%LOCALAPPDATA%\SplitGate\`、旧版留下的 `%APPDATA%\SplitGate\`，以及凭据管理器里名称含 `SplitGate` 的项目（也可以先在 Profile 页删除每个 Profile，会一起删掉它的凭据）。

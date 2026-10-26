@@ -19,6 +19,12 @@ foreach ($p in @(Get-Process -Name 'SplitGate', 'sing-box' -ErrorAction Silently
     $dir = Split-Path $p.Path -Parent
     if ($targets -contains $dir) { Fail "$($p.Path) is running. Quit SplitGate first (tray icon > Quit), then build again." }
 }
+# The background service (v0.15+) runs as SYSTEM, so Get-Process may not show its path: ask Windows.
+$svc = Get-CimInstance Win32_Service -Filter "Name='SplitGateService'" -ErrorAction SilentlyContinue
+if ($svc -and $svc.State -eq 'Running' -and $svc.PathName -match '^"?([^"]+\\)SplitGate\.exe') {
+    $svcDir = $Matches[1].TrimEnd('\\')
+    if ($targets -contains $svcDir) { Fail "the SplitGate background service runs from $svcDir. Stop it first (admin): sc stop SplitGateService - or remove it on the Settings page." }
+}
 
 # npm writes node_modules\.package-lock.json on every install: older than package-lock.json (or missing)
 # means a dependency was added or changed since the last install, e.g. after git pull.

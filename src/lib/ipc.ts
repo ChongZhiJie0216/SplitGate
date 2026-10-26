@@ -204,6 +204,21 @@ export interface Blocked {
   time: string;
 }
 
+/** 后台服务（service.rs，第 3 阶段第 1 步）：现在只回答“在不在、版本几号”，连接仍由 SplitGate 自己做。 */
+export interface ServiceState {
+  installed: boolean;
+  running: boolean;
+  command: string | null;
+  /** 服务指向的是不是这一份 SplitGate.exe（便携版搬了位置时为 false）。 */
+  matches_this_exe: boolean;
+  /** 服务经命名管道回报的版本；没回应时为 null。 */
+  version: string | null;
+}
+
+export const getServiceState = () => invoke<ServiceState>("get_service_state");
+export const installService = () => invoke<ServiceState>("install_service");
+export const removeService = () => invoke<ServiceState>("remove_service");
+
 /** 检查更新（update.rs）：只提示，不下载、不安装。 */
 export interface UpdateSection {
   version: string;
