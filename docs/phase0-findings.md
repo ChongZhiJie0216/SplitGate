@@ -120,7 +120,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 - 结论：sing-box 进程被强制结束时，Windows 会自动撤掉 TUN 网卡和它的路由。SPEC 的“应用崩溃不能让电脑断网”在 sing-box 这一层成立；cleanup.rs 仍然要做，用来处理 openconnect 或 Olm 留下的东西。
 ---
 
-## V2 WireGuard — 准备好，等维护者提供 .conf
+## V2 WireGuard — ✅ 通过（经手机热点）；有线网络挡 WireGuard
 
 文件：`phase0/v2-wireguard/`（make-config.ps1、run.ps1、test.ps1、cleanup.ps1）。
 
@@ -138,3 +138,21 @@ cleanup-all.ps1（检查模式）：nothing left over
 - 修改：make-config / run.ps1 加 `-LogLevel` 选项（默认 info），用 `-LogLevel debug` 可以看到握手过程。- 维护者说明（2026-10-26）：学校网络可能挡官方 WireGuard。线索：同一时间这台电脑连家里 IP 的 TCP 8443 是通的（日志里有 `outbound connection to <家里IP>:8443`），所以家里服务器连得到，被挡的可能只是 WireGuard 的 UDP。
 - 诊断：make-config / run.ps1 加 `-BindInterface <网卡名>`，让 WireGuard 的 UDP 封包从指定网卡出去（例如手机热点的 `Wi-Fi`），用来对比两条网络。`sing-box check` 通过。
 - **对 SPEC 的影响（待确认）**：如果学校挡 WireGuard，那 WireGuard 出口和 **Pangolin 出口（Olm 也是 WireGuard）** 在学校都可能用不了。能在学校用的可能只剩走 TCP/TLS 443 的 Cisco，或者要把 WireGuard 包进 TCP/TLS（需要服务器配合，SPEC 目前没有这一项）。
+### 第 2 次（2026-10-26 13:33）— ✅ 通过（WireGuard 封包走 Wi-Fi 手机热点）
+
+命令：`run.ps1 -BindInterface Wi-Fi -LogLevel debug`，`test.ps1 -Kill`
+
+- 握手 ✅：`sending handshake initiation` 之后马上收到 `received handshake response`。第一个规则流量出现时才开始握手，peer 域名也是这时才解析。
+- 分流 ✅：`api.ipify.org`（不在规则里）→ 219.92.246.113（本地，经有线）；`ifconfig.me`（在规则里）→ **202.186.213.216（家里出口）**。日志：`router: match[3] domain_suffix=ifconfig.me => route(vpn)`。
+- DNS 分流 ✅：`dns: match[0] domain_suffix=ifconfig.me => route(vpn-dns)`，经隧道问 1.1.1.1，134 ms 返回。其余域名走 `local`；AAAA 查询照设置被拒（`strategy rejected`）。
+- 其他流量照常直连，`www.microsoft.com`：True。
+- 结束进程后 **0.7 秒**恢复网络；cleanup-all 检查结果为干净；run.ps1 退出时已删除运行时配置。
+
+### 结论
+
+- sing-box 1.14.4 的 WireGuard endpoint、`allowed_ips` 全开、按域名分流、vpn-dns 经隧道，都和 SPEC 第 7 节的设想一致。
+- **有线网络（第 1 次）握手没有回应，Wi-Fi 热点（第 2 次）马上就有回应**：同一份 .conf、同一个 sing-box，只换了出口网卡。所以是有线网络挡了发往 UDP 51820 的 WireGuard（是挡端口还是按内容识别，还没区分）。同一时间连家里 IP 的 TCP 8443 是通的。
+- 对 SPEC 的影响：
+  1. 在这个网络上，WireGuard 出口（很可能 Pangolin/Olm 也一样，它也是 WireGuard）不能用；Cisco（TLS over TCP 443/8443）是最有希望的出口。
+  2. 第 1 阶段要能清楚提示“出口握手失败”（握手超时 → 状态显示错误，并提示“可能被当前网络阻挡”），不能只看 sing-box 进程还在不在。
+  3. 可以考虑在 profile 加“出口封包走指定网卡”（`bind_interface`），用来固定走手机热点。是否加入要等维护者决定。
