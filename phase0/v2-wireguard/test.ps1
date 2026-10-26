@@ -6,7 +6,7 @@ param([string]$HomeIp = '', [switch]$Kill)
 $ErrorActionPreference = 'Continue'
 
 function Test-Web {
-    $code = curl.exe -s -o NUL -w '%{http_code}' --max-time 5 https://www.microsoft.com
+    $code = curl.exe -s -o NUL -w '%{http_code}' --max-time 2 https://www.microsoft.com
     return ($code -match '^[23]')
 }
 

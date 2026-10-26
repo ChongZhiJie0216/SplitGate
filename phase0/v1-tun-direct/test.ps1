@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Continue'
 
 function Test-Web {
     # Default address family, the way a browser would connect.
-    $code = curl.exe -s -o NUL -w '%{http_code}' --max-time 5 https://www.microsoft.com
+    $code = curl.exe -s -o NUL -w '%{http_code}' --max-time 2 https://www.microsoft.com
     return ($code -match '^[23]')
 }
 

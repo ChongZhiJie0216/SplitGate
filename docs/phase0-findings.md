@@ -127,3 +127,12 @@ cleanup-all.ps1（检查模式）：nothing left over
 - `make-config.ps1` 读取标准 `.conf`（必须放在仓库外面，否则拒绝执行），生成 `phase0/runtime/v2-singbox.json`。文件权限只给当前用户、Administrators 和 SYSTEM。run.ps1 结束时会删除它，cleanup-all 也会删。屏幕上不显示任何密钥。
 - 生成规则：WireGuard endpoint `tag: vpn`；peer 的 `allowed_ips` 固定为 `0.0.0.0/0, ::/0`；`.conf` 的 DNS 只取 IP（搜索域名会被忽略）作为 `vpn-dns`（`detour: vpn`）；`ifconfig.me` 走 `vpn` 并用 `vpn-dns` 解析；其余直连。
 - 用随机生成的假 `.conf` 测试：`sing-box check` 通过，ACL 正确，放在仓库里的 `.conf` 会被拒绝。
+### 第 1 次（2026-10-26 13:28）— ❌ 隧道不通
+
+- `.conf`：Endpoint 是一个 DDNS 域名，端口 51820；Address 10.0.0.2/24；没有 DNS，所以 vpn-dns 改用 1.1.1.1（经隧道）。
+- 分流规则 ✅：ifconfig.me 的 DNS 查询照规则走进了 `endpoint/wireguard[vpn]`（`outbound packet connection to 1.1.1.1:53`）。不在规则里的 api.ipify.org 走直连，返回本地出口 219.92.246.113。
+- 隧道 ❌：经隧道发出的 DNS 查询 **8.99 秒没有回应**，ifconfig.me 的结果是空的。sing-box 能解析 peer 的域名（第一次用到 vpn 出口时才解析），但 info 级别的日志里没有握手信息。
+- 推测原因（待确认）：当前网络挡了 UDP 51820；家里服务器没有在跑；密钥或 peer 公钥不对。
+- 结束进程后 5.7 秒恢复：测试循环里每次检查最多等 5 秒，第一次撞上正在关闭的连接就白等了 5 秒。已改成最多等 2 秒，下次重测。
+- 设计提示：vpn-dns 不通时，命中规则的域名会**整个打不开**，而不是悄悄改走直连（fail closed）。这符合“规则流量必须走 VPN”。但界面要能看出“隧道不通”，不能只显示“已连接”。第 1 阶段的状态检测要包含“隧道里能不能收到回应”。
+- 修改：make-config / run.ps1 加 `-LogLevel` 选项（默认 info），用 `-LogLevel debug` 可以看到握手过程。

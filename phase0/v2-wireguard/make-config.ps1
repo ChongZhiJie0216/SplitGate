@@ -4,7 +4,8 @@
 # Usage: make-config.ps1 -Conf C:\path\home.conf [-VpnDomains ifconfig.me]
 param(
     [Parameter(Mandatory = $true)][string]$Conf,
-    [string[]]$VpnDomains = @('ifconfig.me')
+    [string[]]$VpnDomains = @('ifconfig.me'),
+    [ValidateSet('trace', 'debug', 'info', 'warn', 'error')][string]$LogLevel = 'info'
 )
 . (Join-Path $PSScriptRoot '..\common.ps1')
 
@@ -65,7 +66,7 @@ $wg = [ordered]@{
 if ($if['mtu']) { $wg.mtu = [int]$if['mtu'][0] }
 
 $config = [ordered]@{
-    log       = [ordered]@{ level = 'info'; timestamp = $true }
+    log       = [ordered]@{ level = $LogLevel; timestamp = $true }
     dns       = [ordered]@{
         servers  = @(
             [ordered]@{ type = 'local'; tag = 'local' },
