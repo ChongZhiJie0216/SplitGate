@@ -31,6 +31,9 @@ pub struct Profile {
     pub name: String,
     #[serde(default)]
     pub ruleset_ids: Vec<String>,
+    /// Home LAN networks (IPv4 CIDR) that always go through this exit, e.g. 192.168.1.0/24.
+    #[serde(default)]
+    pub home_cidrs: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cisco: Option<CiscoProfile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -158,6 +161,9 @@ pub fn validate(p: &Profile) -> Result<(), String> {
     if p.name.trim().is_empty() {
         return Err("请填写名称".into());
     }
+    for c in &p.home_cidrs {
+        check_home_cidr(c)?;
+    }
     match p.kind {
         ExitType::Cisco => {
             let c = p.cisco.as_ref().ok_or("缺少 Cisco 设置")?;
@@ -226,6 +232,43 @@ pub(crate) fn check_cidr(s: &str) -> Result<(), String> {
     }
 }
 
+/// "192.168.1.0/24" → (address, prefix length).
+pub fn parse_v4_cidr(s: &str) -> Option<(u32, u8)> {
+    let (ip, len) = s.trim().split_once('/')?;
+    let ip: std::net::Ipv4Addr = ip.parse().ok()?;
+    let len: u8 = len.parse().ok().filter(|n| *n <= 32)?;
+    Some((u32::from(ip), len))
+}
+
+fn v4_mask(len: u8) -> u32 {
+    if len == 0 {
+        0
+    } else {
+        u32::MAX << (32 - len)
+    }
+}
+
+/// Two IPv4 networks share at least one address.
+pub fn v4_overlap(a: (u32, u8), b: (u32, u8)) -> bool {
+    let m = v4_mask(a.1.min(b.1));
+    a.0 & m == b.0 & m
+}
+
+/// Home LAN networks: private IPv4 only, /8 to /32, written as the network address.
+/// Anything wider would pull ordinary internet traffic into the VPN.
+fn check_home_cidr(s: &str) -> Result<(), String> {
+    let (ip, len) = parse_v4_cidr(s).ok_or_else(|| format!("家里内网网段“{s}”要写成 IPv4 网段，例如 192.168.1.0/24"))?;
+    let private = [(0x0a00_0000, 8), (0xac10_0000, 12), (0xc0a8_0000, 16), (0x6440_0000, 10)];
+    if len < 8 || !private.iter().any(|&net| v4_overlap((ip, len), net) && len >= net.1) {
+        return Err(format!("家里内网网段“{s}”只能是内网地址（10.x、172.16–31.x、192.168.x、100.64–127.x），前缀至少 /8"));
+    }
+    if ip & !v4_mask(len) != 0 {
+        let net = std::net::Ipv4Addr::from(ip & v4_mask(len));
+        return Err(format!("家里内网网段“{s}”要写网段的第一个地址：{net}/{len}"));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -236,6 +279,7 @@ pub(crate) mod tests {
             kind: ExitType::Cisco,
             name: "测试出口".into(),
             ruleset_ids: vec!["xbox".into()],
+            home_cidrs: vec![],
             cisco: Some(CiscoProfile {
                 server: "vpn.example.com".into(),
                 user: "user01".into(),
@@ -294,5 +338,34 @@ pub(crate) mod tests {
         let now: ProfilesFile = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(now.active.as_deref(), Some("x"));
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn home_cidrs_must_be_private_networks() {
+        for (v, ok) in [
+            ("192.168.1.0/24", true),
+            ("10.0.0.0/8", true),
+            ("172.20.0.0/16", true),
+            ("100.90.128.0/20", true),
+            ("192.168.1.10/32", true),
+            ("192.168.1.5/24", false), // host bits set
+            ("8.8.8.0/24", false),
+            ("172.32.0.0/16", false), // outside 172.16/12
+            ("0.0.0.0/0", false),
+            ("192.168.0.0/15", false), // wider than 192.168/16
+            ("fd00::/64", false),
+            ("192.168.1.0", false),
+        ] {
+            assert_eq!(check_home_cidr(v).is_ok(), ok, "{v}");
+        }
+    }
+
+    #[test]
+    fn overlap_detection() {
+        let p = |s| parse_v4_cidr(s).unwrap();
+        assert!(v4_overlap(p("192.168.1.0/24"), p("192.168.1.23/24")));
+        assert!(v4_overlap(p("192.168.0.0/16"), p("192.168.77.5/24")));
+        assert!(!v4_overlap(p("192.168.1.0/24"), p("192.168.0.10/24")));
+        assert!(!v4_overlap(p("10.8.0.0/24"), p("172.20.10.2/28")));
     }
 }

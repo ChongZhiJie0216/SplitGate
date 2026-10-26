@@ -2,7 +2,8 @@
 # You type each secret (VPN password, WireGuard private key, ...) at a hidden prompt; empty line ends.
 # Secrets stay in memory only: never printed, never written to the log or any file.
 # Searched, as UTF-8 and as UTF-16: every file under the data folder (%APPDATA%\SplitGate or
-# SPLITGATE_HOME), %LOCALAPPDATA%\SplitGate (WebView2 data, old tunnel.json), any -Extra folder,
+# SPLITGATE_HOME, zips such as diagnostics packages are unpacked to %TEMP% and searched too),
+# %LOCALAPPDATA%\SplitGate (WebView2 data, old tunnel.json), any -Extra folder,
 # plus the command lines of running SplitGate / sing-box and the SplitGate scheduled task.
 # Usage: powershell -ExecutionPolicy Bypass -File phase1\secret-scan.ps1 [-Extra C:\path\portable]
 param([string[]]$Extra = @(), [int]$MaxMB = 100)
@@ -29,19 +30,33 @@ for ($i = 0; $i -lt $secrets.Count; $i++) {
 
 $roots = @((Get-DataDir), (Join-Path $env:LOCALAPPDATA 'SplitGate')) + $Extra
 $hits = 0; $files = 0; $skipped = @()
+
+function Search-File($f, [string]$label) {
+    if ($f.Length -gt $MaxMB * 1MB) { $script:skipped += "$label (over $MaxMB MB)"; return }
+    try {
+        $fs = [IO.File]::Open($f.FullName, 'Open', 'Read', 'ReadWrite, Delete')
+        try { $buf = New-Object byte[] $fs.Length; [void]$fs.Read($buf, 0, $buf.Length) } finally { $fs.Close() }
+    } catch { $script:skipped += "$label (cannot read: in use?)"; return }
+    $script:files++
+    $hay = $latin1.GetString($buf)
+    foreach ($n in $needles) {
+        if ($hay.IndexOf($n.Text, [StringComparison]::Ordinal) -ge 0) { $script:hits++; Write-Host "[FOUND] secret #$($n.Id) ($($n.Enc)) in $label" }
+    }
+}
+
 foreach ($root in $roots) {
     if (-not (Test-Path $root)) { Write-Host "[skip] $root (does not exist)"; continue }
     Write-Host "[scan] $root"
     foreach ($f in @(Get-ChildItem $root -File -Recurse -Force -ErrorAction SilentlyContinue)) {
-        if ($f.Length -gt $MaxMB * 1MB) { $skipped += "$($f.FullName) (over $MaxMB MB)"; continue }
-        try {
-            $fs = [IO.File]::Open($f.FullName, 'Open', 'Read', 'ReadWrite, Delete')
-            try { $buf = New-Object byte[] $fs.Length; [void]$fs.Read($buf, 0, $buf.Length) } finally { $fs.Close() }
-        } catch { $skipped += "$($f.FullName) (cannot read: in use?)"; continue }
-        $files++
-        $hay = $latin1.GetString($buf)
-        foreach ($n in $needles) {
-            if ($hay.IndexOf($n.Text, [StringComparison]::Ordinal) -ge 0) { $hits++; Write-Host "[FOUND] secret #$($n.Id) ($($n.Enc)) in $($f.FullName)" }
+        Search-File $f $f.FullName
+        # Diagnostics packages are zips: compressed text cannot be searched, so unpack them first.
+        if ($f.Extension -ieq '.zip') {
+            $tmp = Join-Path $env:TEMP "sg-secret-scan-$([guid]::NewGuid().ToString('N'))"
+            try {
+                Expand-Archive -Path $f.FullName -DestinationPath $tmp -Force
+                foreach ($z in @(Get-ChildItem $tmp -File -Recurse -Force)) { Search-File $z "$($f.FullName) > $($z.FullName.Substring($tmp.Length + 1))" }
+            } catch { $skipped += "$($f.FullName) (cannot unpack)" }
+            finally { Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue }
         }
     }
 }

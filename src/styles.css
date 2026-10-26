@@ -136,6 +136,16 @@ body {
   background: var(--surface-2);
 }
 
+.nav-badge {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
 .nav-item.active {
   background: var(--accent-soft);
   color: var(--accent-ink);
@@ -388,7 +398,7 @@ textarea {
   margin-bottom: 12px;
 }
 
-.field input:not([type="file"]):not([type="checkbox"]),
+.field input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
 .field textarea {
   width: 100%;
 }
@@ -626,4 +636,174 @@ button.link {
   flex-direction: column;
   gap: 16px;
   max-width: 760px;
+}
+
+.conn-head {
+  justify-content: space-between;
+}
+
+.conn-head h2 {
+  margin: 0;
+}
+
+.traffic {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.traffic .tag {
+  font-family: var(--mono);
+}
+
+.table-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.conn-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.conn-table th,
+.conn-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conn-table th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.conn-table th:nth-child(1) { width: 15%; }
+.conn-table th:nth-child(2) { width: 27%; }
+.conn-table th:nth-child(3) { width: 8%; }
+.conn-table th:nth-child(4) { width: 15%; }
+.conn-table th:nth-child(5) { width: 14%; }
+.conn-table th:nth-child(6) { width: 8%; }
+.conn-table th:nth-child(7) { width: 13%; }
+
+/* 拦截提示页：5 列，网址和原因要能看全，换行而不是截断。 */
+.blocked-table th:nth-child(1) { width: 30%; }
+.blocked-table th:nth-child(2) { width: 30%; }
+.blocked-table th:nth-child(3) { width: 15%; }
+.blocked-table th:nth-child(4) { width: 10%; }
+.blocked-table th:nth-child(5) { width: 15%; }
+
+.blocked-table td.wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.blocked-table td.wrap .tag {
+  margin-left: 0;
+  margin-right: 6px;
+}
+
+.conn-table .num {
+  text-align: right;
+}
+
+.conn-table .target .tag {
+  margin-left: 6px;
+}
+
+.conn-table .actions {
+  text-align: right;
+}
+
+.conn-table .actions .btn + .btn {
+  margin-left: 4px;
+}
+
+.conn-table tbody tr:hover {
+  background: var(--accent-soft);
+}
+
+.field-hint button.link {
+  margin-left: 8px;
+}
+
+.btn.small {
+  padding: 2px 8px;
+}
+
+/* 流量画布（React Flow，只用它的 base.css，颜色都用这里的变量，跟着主题走） */
+.canvas-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-wrap {
+  height: calc(100vh - 230px);
+  min-height: 360px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  position: relative;
+}
+
+.canvas-empty {
+  padding: 16px;
+}
+
+.canvas-wrap .react-flow {
+  --xy-background-pattern-color: var(--line);
+  --xy-edge-stroke: var(--muted);
+  --xy-edge-label-background-color: var(--surface);
+  --xy-edge-label-color: var(--muted);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--text);
+  --xy-controls-button-border-color: var(--line);
+  --xy-attribution-background-color: transparent;
+}
+
+.flow-node {
+  width: 220px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.flow-node.vpn {
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+
+.flow-node.exit {
+  font-weight: 600;
+}
+
+.flow-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.flow-edge.vpn .react-flow__edge-path {
+  stroke: var(--good);
+}
+
+.react-flow__handle {
+  width: 6px;
+  height: 6px;
+  background: var(--muted);
+  border: 0;
 }

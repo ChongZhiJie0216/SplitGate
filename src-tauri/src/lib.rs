@@ -1,8 +1,10 @@
 mod autostart;
+mod block_detect;
 mod cleanup;
 mod commands;
 mod config;
 mod credentials;
+mod diagnostics;
 mod exits;
 mod logs;
 mod paths;
@@ -12,6 +14,7 @@ mod rules;
 mod settings;
 mod singbox;
 mod supervisor;
+mod traffic;
 mod tray;
 
 use tauri::Manager;
@@ -90,6 +93,13 @@ pub fn run() {
             commands::get_settings,
             commands::save_settings,
             commands::set_autostart,
+            commands::get_connections,
+            commands::close_connection,
+            commands::list_blocked,
+            commands::dismiss_blocked,
+            commands::clear_blocked,
+            commands::export_diagnostics,
+            commands::show_diagnostics,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SplitGate");

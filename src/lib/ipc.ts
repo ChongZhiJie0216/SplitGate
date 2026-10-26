@@ -9,9 +9,11 @@ export type Step = "prepare" | "cleanup" | "check" | "start" | "tunnel" | "probe
 export type Status =
   | { state: "disconnected" }
   | { state: "connecting"; profile_name: string; step: Step }
-  | { state: "connected"; profile_name: string; exit: ExitType; since_ms: number; probe_ms: number }
+  /** warnings：连上了，但有地方不会照预期工作（例如家里内网和本地网络撞号）。 */
+  | { state: "connected"; profile_name: string; exit: ExitType; since_ms: number; probe_ms: number; warnings: string[] }
   | { state: "disconnecting" }
-  | { state: "error"; message: string };
+  /** retrying：连接中断后正在等待自动重新连接。 */
+  | { state: "error"; message: string; retrying: boolean };
 
 export interface LogLine {
   time: string;
@@ -68,6 +70,8 @@ export interface Profile {
   type: ExitType;
   name: string;
   ruleset_ids: string[];
+  /** 家里内网网段（IPv4 CIDR），一律走这个出口。 */
+  home_cidrs: string[];
   cisco?: CiscoProfile;
   pangolin?: PangolinProfile;
   wireguard?: WireguardProfile;
@@ -129,6 +133,7 @@ export const listRunningProcesses = () => invoke<RunningProcess[]>("list_running
 export interface Settings {
   version: number;
   auto_connect: boolean;
+  auto_reconnect: boolean;
   singbox_log_level: "info" | "debug" | "trace";
   tun_ipv4: string;
 }
@@ -148,3 +153,61 @@ export interface SettingsView {
 export const getSettings = () => invoke<SettingsView>("get_settings");
 export const saveSettings = (settings: Settings) => invoke<Settings>("save_settings", { settings });
 export const setAutostart = (enabled: boolean) => invoke<AutostartState>("set_autostart", { enabled });
+
+/** 每秒的流量（字节/秒），连接期间由后端推送 `traffic` 事件。 */
+export interface Traffic {
+  vpn_up: number;
+  vpn_down: number;
+  direct_up: number;
+  direct_down: number;
+}
+
+export interface Connection {
+  id: string;
+  network: string;
+  /** 域名；只知道 IP 时为空。 */
+  host: string;
+  ip: string;
+  port: string;
+  /** Windows 不告诉的（系统服务）为空。 */
+  process_path: string;
+  /** "vpn" 或 "direct" */
+  outbound: string;
+  rule: string;
+  upload: number;
+  download: number;
+  start: string;
+}
+
+export interface ConnectionsSnapshot {
+  connections: Connection[];
+  traffic: Traffic;
+  upload_total: number;
+  download_total: number;
+}
+
+export const getConnections = () => invoke<ConnectionsSnapshot>("get_connections");
+export const closeConnection = (id: string) => invoke<void>("close_connection", { id });
+export const onTraffic = (f: (t: Traffic) => void): Promise<UnlistenFn> => listen<Traffic>("traffic", (e) => f(e.payload));
+
+/** 拦截检测（block_detect.rs）：直连的 HTTPS 域名证书被换掉、不受信任或握手失败。 */
+export type BlockReason = "fortinet" | "untrusted" | "handshake";
+
+export interface Blocked {
+  host: string;
+  reason: BlockReason;
+  /** 证书签发者或错误信息。 */
+  detail: string;
+  process_path: string;
+  /** 最后一次检测到的时间 HH:MM:SS。 */
+  time: string;
+}
+
+/** 诊断包：返回 zip 的完整路径（设置文件夹的 diagnostics 里）。 */
+export const exportDiagnostics = () => invoke<string>("export_diagnostics");
+export const showDiagnostics = (path: string) => invoke<void>("show_diagnostics", { path });
+
+export const listBlocked = () => invoke<Blocked[]>("list_blocked");
+export const dismissBlocked = (host: string) => invoke<Blocked[]>("dismiss_blocked", { host });
+export const clearBlocked = () => invoke<Blocked[]>("clear_blocked");
+export const onBlocked = (f: (b: Blocked) => void): Promise<UnlistenFn> => listen<Blocked>("blocked_detected", (e) => f(e.payload));

@@ -1,6 +1,7 @@
 @echo off
 rem Double-click to build the portable SplitGate (runs tests first; stops if any fail).
 rem Output: portable\SplitGate\ and portable\SplitGate-<version>-portable.zip
+rem Also copies SplitGate.exe + sing-box.exe to this folder for quick testing.
 rem Usage: build.bat [--no-pause]
 setlocal
 pushd "%~dp0"

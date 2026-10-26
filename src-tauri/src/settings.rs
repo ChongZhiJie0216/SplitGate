@@ -21,6 +21,9 @@ pub struct Settings {
     /// Connect to the active profile right after the app starts.
     #[serde(default)]
     pub auto_connect: bool,
+    /// After a broken connection (sleep / wake, dead tunnel, sing-box stopped): reconnect on our own.
+    #[serde(default = "yes")]
+    pub auto_reconnect: bool,
     #[serde(default = "default_level")]
     pub singbox_log_level: String,
     /// TUN adapter address with prefix, e.g. 172.19.0.1/30.
@@ -28,6 +31,9 @@ pub struct Settings {
     pub tun_ipv4: String,
 }
 
+fn yes() -> bool {
+    true
+}
 fn default_level() -> String {
     "info".into()
 }
@@ -37,7 +43,7 @@ fn default_tun() -> String {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { version: SETTINGS_VERSION, auto_connect: false, singbox_log_level: default_level(), tun_ipv4: default_tun() }
+        Self { version: SETTINGS_VERSION, auto_connect: false, auto_reconnect: true, singbox_log_level: default_level(), tun_ipv4: default_tun() }
     }
 }
 
@@ -98,6 +104,7 @@ mod tests {
         let s: Settings = serde_json::from_str(r#"{ "version": 1 }"#).unwrap();
         assert_eq!(s, Settings::default());
         assert!(validate(&s).is_ok());
+        assert!(s.auto_reconnect, "settings.json from v0.5 / v0.6 gets automatic reconnect");
     }
 
     #[test]

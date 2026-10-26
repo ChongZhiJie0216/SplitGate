@@ -29,6 +29,10 @@ pub fn logs_dir() -> PathBuf {
     data_dir().join("logs")
 }
 
+pub fn diagnostics_dir() -> PathBuf {
+    data_dir().join("diagnostics")
+}
+
 /// Folder of the running exe; Tauri puts the sing-box sidecar next to it.
 pub fn exe_dir() -> PathBuf {
     std::env::current_exe()

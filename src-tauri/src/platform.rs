@@ -159,6 +159,52 @@ pub fn hidden_command(exe: &Path) -> Command {
     cmd
 }
 
+/// IPv4 addresses of this PC as ("192.168.1.23/24", adapter name), without loopback, link-local
+/// and our own SplitGate* adapters. Empty when it cannot be read.
+pub fn local_ipv4_networks() -> Vec<(String, String)> {
+    let Ok(out) = powershell(LOCAL_NETS_SCRIPT).output() else { return Vec::new() };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| l.trim().split_once('|').map(|(c, a)| (c.to_string(), a.to_string())))
+        .collect()
+}
+
+const LOCAL_NETS_SCRIPT: &str = r#"
+Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.InterfaceAlias -notlike 'SplitGate*' -and $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
+    ForEach-Object { "$($_.IPAddress)/$($_.PrefixLength)|$($_.InterfaceAlias)" }
+"#;
+
+/// Windows PowerShell 5.1 running `script` (pure ASCII) without profile or window.
+/// Inputs go in through environment variables set by the caller, so nothing needs quoting.
+pub fn powershell(script: &str) -> Command {
+    let mut cmd = hidden_command(Path::new("powershell.exe"));
+    cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", &encode_command(script)]);
+    cmd
+}
+
+/// powershell -EncodedCommand takes base64 of UTF-16LE.
+fn encode_command(script: &str) -> String {
+    let bytes: Vec<u8> = script.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+    base64(&bytes)
+}
+
+fn base64(data: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for c in data.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for i in 0..4 {
+            if i <= c.len() {
+                out.push(T[(n >> (18 - 6 * i) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
 #[cfg(windows)]
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
@@ -211,3 +257,22 @@ pub fn on_show_request(show: impl Fn() + Send + 'static) {
 
 #[cfg(not(windows))]
 pub fn on_show_request(_show: impl Fn() + Send + 'static) {}
+
+#[cfg(test)]
+mod encode_tests {
+    use super::*;
+
+    #[test]
+    fn local_nets_script_is_ascii() {
+        assert!(LOCAL_NETS_SCRIPT.is_ascii());
+    }
+
+    #[test]
+    fn base64_matches_known_values() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foo"), "Zm9v");
+        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+    }
+}

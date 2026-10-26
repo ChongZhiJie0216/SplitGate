@@ -74,7 +74,7 @@ pub fn update(app: &AppHandle, status: &Status) {
     let status = status.clone();
     let _ = app.run_on_main_thread(move || {
         let Some(t) = TRAY.get() else { return };
-        let idle = matches!(status, Status::Disconnected | Status::Error { .. });
+        let idle = matches!(status, Status::Disconnected | Status::Error { retrying: false, .. });
         let _ = t.connect.set_enabled(idle && platform::is_admin());
         let _ = t.disconnect.set_enabled(!idle && status != Status::Disconnecting);
         let _ = t.icon.set_icon(Some(with_dot(&t.base, &status)));
@@ -88,15 +88,16 @@ fn tooltip(status: &Status) -> String {
         Status::Connecting { profile_name, .. } => format!("SplitGate：连接中（{profile_name}）"),
         Status::Connected { profile_name, .. } => format!("SplitGate：已连接（{profile_name}）"),
         Status::Disconnecting => "SplitGate：断开中".into(),
+        Status::Error { retrying: true, .. } => "SplitGate：连接中断，等待自动重新连接".into(),
         Status::Error { .. } => "SplitGate：错误，打开窗口看详情".into(),
     }
 }
 
-/// Grey = disconnected, amber = busy, green = connected, red = error.
+/// Grey = disconnected, amber = busy (also waiting to reconnect), green = connected, red = error.
 fn dot_color(status: &Status) -> [u8; 3] {
     match status {
         Status::Disconnected => [0x9a, 0xa0, 0xa6],
-        Status::Connecting { .. } | Status::Disconnecting => [0xf2, 0xa9, 0x00],
+        Status::Connecting { .. } | Status::Disconnecting | Status::Error { retrying: true, .. } => [0xf2, 0xa9, 0x00],
         Status::Connected { .. } => [0x1e, 0xa4, 0x4f],
         Status::Error { .. } => [0xd9, 0x30, 0x25],
     }
@@ -137,7 +138,7 @@ mod tests {
         let px = |x: u32, y: u32| img.rgba()[((y * 32 + x) * 4) as usize..][..4].to_vec();
         assert_eq!(px(0, 0), vec![0, 0, 0, 0], "top-left untouched");
         assert_eq!(px(24, 24), vec![0x9a, 0xa0, 0xa6, 255], "grey dot when disconnected");
-        let img = with_dot(&base, &Status::Error { message: String::new() });
+        let img = with_dot(&base, &Status::Error { message: String::new(), retrying: false });
         assert_eq!(img.rgba()[((24 * 32 + 24) * 4) as usize], 0xd9);
     }
 }

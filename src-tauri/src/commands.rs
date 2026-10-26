@@ -7,7 +7,7 @@ use crate::exits::wireguard;
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, logs, paths, platform, supervisor};
+use crate::{autostart, block_detect, diagnostics, logs, paths, platform, supervisor, traffic};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -188,4 +188,44 @@ pub fn set_autostart(enabled: bool) -> Result<autostart::AutostartState, String>
     let r = autostart::set(enabled)?;
     logs::info(if r.enabled { "已开启开机自启（任务计划程序）" } else { "已关闭开机自启" });
     Ok(r)
+}
+
+#[tauri::command]
+pub fn get_connections() -> traffic::Snapshot {
+    traffic::snapshot()
+}
+
+#[tauri::command]
+pub fn close_connection(id: String) -> Result<(), String> {
+    traffic::close(&id)
+}
+
+#[tauri::command]
+pub fn list_blocked() -> Vec<block_detect::Blocked> {
+    block_detect::list()
+}
+
+#[tauri::command]
+pub fn dismiss_blocked(host: String) -> Vec<block_detect::Blocked> {
+    block_detect::dismiss(&host)
+}
+
+#[tauri::command]
+pub fn clear_blocked() -> Vec<block_detect::Blocked> {
+    block_detect::clear()
+}
+
+/// Returns the zip path. Runs PowerShell (network state, zip), so it takes a few seconds.
+#[tauri::command]
+pub async fn export_diagnostics(app: tauri::AppHandle) -> Result<String, String> {
+    let version = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || diagnostics::export(&version, singbox_version()))
+        .await
+        .map_err(|e| e.to_string())?
+        .map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+pub fn show_diagnostics(path: String) -> Result<(), String> {
+    diagnostics::show(&path)
 }
