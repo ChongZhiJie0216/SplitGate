@@ -240,7 +240,7 @@ export const T = {
       bindHint: "VPN 外层连接固定走这张网卡，例：Wi-Fi；留空 = 系统自动",
     },
     pangolin: {
-      note: "Pangolin 由官方客户端负责登录：先在官方客户端连接，并在 Pangolin 后台开启 Exit Node。这个出口第 2 阶段才能连接。",
+      note: "Pangolin 是备用出口，现在还不能连接（排在整个项目最后才做）。可以先保存设置。",
       iface: "官方客户端的网卡名称",
       vpnDns: "规则域名用的 DNS（逗号分隔）",
       vpnDnsHint: "不要用 1.1.1.1：Pangolin 会让它绕过隧道",

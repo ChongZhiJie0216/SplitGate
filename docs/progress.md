@@ -18,7 +18,7 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
-| 0.14.0 | — | 关于页“更新记录”（`CHANGELOG.md` 打包时 `include_str!` 编进程序，`get_changelog`，当前版本默认展开）；README 重写 |
+| 0.14.0 | — | 关于页“更新记录”（`CHANGELOG.md` 打包时 `include_str!` 编进程序，`get_changelog`，当前版本默认展开）；README 改成使用说明，开发与发布搬到 `docs/development.md`；Profile 页 Pangolin 说明改正 |
 | 0.13.0 | — | 检查更新（`update.rs`：GitHub 最新 Release + 那个 tag 的 CHANGELOG；关于页按钮 + 启动时检查，设置可关；导航提示点）；`scripts\publish-release.ps1`。维护者定：会在别的电脑上用，在线升级排在 Windows 服务后。云端用假数据看过界面 |
 | 0.12.0 | — | 设置 / 日志 / 诊断包改放 `SplitGate.exe` 旁的 `data\`（维护者定），启动时从 `%APPDATA%\SplitGate` 复制缺少的三个设置文件；打包保留 `data\`、zip 不含；phase1 脚本跟着改。**还没在 Windows 上跑过** |
 | 0.11.1 | — | 网络变化时（sing-box 日志 “default interface”）马上测出口，30 秒内不通就断线重连；`build.bat` 依赖变化时自动 `npm ci`。测试清单 A8 诊断包维护者实测通过 |
@@ -58,7 +58,7 @@
 
 ## 下一步（照顺序）
 
-- **v0.13.0 已发布到 GitHub Release**（2026-10-26，维护者用 `scripts\publish-release.ps1 -Yes`；PR #2、#3 已合并进 `main`）。README 已按 v0.13.0 重写（给使用者看的安装、设置位置、更新、出问题时 + 开发与发布）。
+- **v0.13.0 已发布到 GitHub Release**（2026-10-26，维护者用 `scripts\publish-release.ps1 -Yes`；PR #2、#3 已合并进 `main`）。README 改成给使用者看的使用说明（v0.14.0 分支），开发与发布步骤在 `docs/development.md`。
 - **测试清单：`docs/test-plan.md`**：A 部分（热点，A1–A9）**2026-10-26 全部通过（v0.11.1）**，可以合并 PR #2；B 部分（学校有线 + Cisco）之后补测。合并后开始做 Windows 服务（v0.13 起；注意 v0.12 的 `data\` 放在程序旁边，装进 Program Files 时要重新决定）。
 - **第 3 阶段（维护者 2026-10-26 定进入）**：顺序 openconnect 评估（✅ 不需要，见 SPEC 第 3 阶段）→ React Flow 流量画布 v0.11（✅ 完成，`@xyflow/react` 12.12.0）→ Windows 服务（做法见 SPEC 组件 5，维护者已同意 6 点设计）。Duo / SAML 定跳过。第 2 阶段 v0.7.0–v0.10.0 的 Windows 实测和 PR [#2](https://github.com/ChongZhiJie0216/SplitGate/pull/2) 合并同时进行。
 0. **流程（维护者 2026-10-26 定）**：Pangolin 只是备用出口，**移到整个项目的最后**（SPEC“最后：Pangolin”）。做法已定：不用 Exit Node，经 Pangolin 连到家里 VPN-Server 虚拟机上的 SOCKS5 代理；V8 脚本已备好（`phase0/v8-pangolin-socks/`），到时再测。第 2 阶段的“访问家里内网”v0.10.0 完成（Profile 的“家里内网网段” + 撞号检查）。**第 2 阶段功能全部完成，等维护者实测 v0.7.0–v0.10.0 后再进第 3 阶段。**
