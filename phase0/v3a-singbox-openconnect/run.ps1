@@ -6,6 +6,8 @@
 param(
     [string]$Server = 'https://sslvpn.jiecloud.net:8443',
     [string]$User = '',
+    # Preselect the login GROUP (AnyLink shows: Master Network / Test Network / All Tunnel / ...). Empty = ask.
+    [string]$AuthGroup = '',
     [string[]]$VpnDomains = @('ifconfig.me'),
     # Empty = use the DNS servers the VPN pushes (sing-box "openconnect" DNS server). Or give an IP, e.g. 1.1.1.1
     [string]$VpnDns = '',
@@ -37,6 +39,7 @@ try {
         username = $User
         password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
     }
+    if ($AuthGroup) { $oc.auth_group = $AuthGroup }
     if ($NoUdp) { $oc.no_udp = $true }
 
     if ($VpnDns) { $vpnDnsServer = [ordered]@{ type = 'udp'; tag = 'vpn-dns'; server = $VpnDns; detour = 'vpn' } }
@@ -80,7 +83,7 @@ try {
     $oc.password = $null; $config = $null
 
     if (-not $CheckOnly) { & (Join-Path $Phase0Dir 'snapshot.ps1') -Label 'v3a-before' | Out-Null }
-    Write-Host "[config] server $Server, user $User, via VPN: $($VpnDomains -join ', ')"
+    Write-Host "[config] server $Server, user $User, group $(if ($AuthGroup) { $AuthGroup } else { '(ask)' }), via VPN: $($VpnDomains -join ', ')"
     Write-Host ("[config] vpn-dns: " + $(if ($VpnDns) { "$VpnDns through the tunnel" } else { 'servers pushed by the VPN' }) + $(if ($NoUdp) { '; DTLS off' } else { '' }))
 
     $ErrorActionPreference = 'Continue'

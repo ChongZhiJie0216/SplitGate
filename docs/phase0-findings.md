@@ -169,7 +169,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 - 坑：PowerShell 管道和 .NET Framework 的 `Process.StandardInput` 都会在开头加 UTF-8 BOM，sing-box 会报 `invalid character 'ï'`。`phase0/stdin-run.ps1` 的做法：启动前暂时把 `[Console]::InputEncoding` 设成不带 BOM 的 UTF-8，写完就关闭 stdin，再逐行读 stderr，同时显示和写进日志。
 - **对 SPEC 的影响**：第 1 阶段的 Rust 端可以把 sing-box 配置直接写进子进程的 stdin。这样密码、WireGuard 私钥都不用写进 `runtime/singbox.json`，只有去掉凭据的版本才需要保存（用来诊断）。SPEC 第 3 节“生成 runtime/singbox.json”要相应修改。
 
-## V3a sing-box 自带 OpenConnect — 进行中
+## V3a sing-box 自带 OpenConnect — ✅ 通过（学校网络，有线）
 
 文件：`phase0/v3a-singbox-openconnect/`（run.ps1、test.ps1、cleanup.ps1）；共用检查脚本 `phase0/split-test.ps1`（V2 的 test.ps1 也改成调用它）。
 
@@ -191,3 +191,18 @@ cleanup-all.ps1（检查模式）：nothing left over
 - API 服务正常启动（`service/api[api]: tcp server started at 127.0.0.1:<随机端口>`），但没有在第二个窗口执行 `status` / `auth`，所以表单没人回答。
 - 结束进程后 **1.4 秒**恢复上网（第 1 次的 12.3 秒没有再出现，当作偶发）；没有残留。
 - 修改：run.ps1 运行期间把 API 地址和本次随机密钥写进 `phase0/runtime/v3a-api.env`（被 .gitignore 忽略，退出时删除，cleanup-all 也会删 runtime 文件）；新增只读的 `status.ps1`，读这个文件后执行 `sing-box api openconnect status`。这个密钥是程序每次随机生成的，不是 VPN 凭据。
+### 第 3 次（2026-10-26 13:51）— ✅ 分流成功
+
+- 表单（`sing-box api openconnect auth` 显示）：提示语「请输入你的用户名和密码」，只问了 **GROUP** 一个下拉选项（Master Network [默认] / Test Network / All Tunnel / China Domain / Public Network）。用户名和密码已由配置自动带入，没有再问。选 1 后显示 `vpn: connected`。
+  - 结论：前两次卡住是因为 **GROUP 下拉没人选**，不是账号密码的问题。配置加 `auth_group` 就能全自动（run.ps1 新增 `-AuthGroup`，`-CheckOnly` 通过，待实测）。
+- 日志：`WARN DTLS unavailable; retrying while CSTP remains active: ... handshake error: context deadline exceeded`，随后 `anyconnect tunnel established using cstp`。**学校网络挡 DTLS（UDP）**，自动退回 TLS（TCP）。从回答表单到 established 大约等了 DTLS 超时的时间；学校网络下建议 `no_udp`。
+- `dns/openconnect[vpn-dns]: updated 0 DNS routes and 2 resolvers`：VPN 推送了 2 个 DNS；ifconfig.me 的查询经 `endpoint/openconnect[vpn]` 发到 1.1.1.1:53。
+- 测试：api.ipify.org → 219.92.246.113（本地），ifconfig.me → **202.186.213.216（家里）**，www.microsoft.com：True。没有另建 VPN 网卡，默认路由没有变化。
+- 结束 sing-box 后恢复时间：**6.0 秒**（目标 5 秒以内）。V3a 四次的数字是 12.3 / 1.4 / 6.0 秒，波动很大，V1/V2 都是 0.7 秒。待查：可能和 OpenConnect 连接中的 TCP 连接、或 Windows 检测网络状态有关。第 1 阶段要有“结束后主动清理 + 检查”的步骤，不能只靠进程退出。
+- 残留检查：干净。
+
+### 对 SPEC 的影响
+
+- Cisco 出口可以**不用 openconnect.exe**：sing-box 自带的 OpenConnect endpoint 在 AnyLink（ocserv 兼容）上实测可用，不需要 wintun 网卡、不需要 vpnc-script，也不会改系统路由。
+- Profile 要有“组别（auth_group）”和“只用 TCP（no_udp）”两个选项。
+- 服务器额外要求的表单（MFA、组别等）通过 sing-box API 服务（gRPC）回答，对应 SPEC 的 prompt 事件。
