@@ -251,3 +251,26 @@ V3a 已证明 sing-box 自带的 OpenConnect 可用，不需要另建 VPN 网卡
 www.xbox.com、xboxlive.com、user.auth.xboxlive.com、xsts.auth.xboxlive.com、title.mgt.xboxlive.com、login.live.com、assets1.xboxlive.com、xbl.io、gamepass.com、store-images.s-microsoft.com。
 
 → 至少这些域名，学校**不是靠 DNS 屏蔽**。如果 Xbox 在学校用不了，比较可能是按 IP / SNI 阻挡，或者挡了某些端口（例如 Xbox Live 的 UDP 3074 / Teredo）。SPEC 的 V5 前提（“学校 DNS 屏蔽 Xbox 域名”）要先向维护者确认实际症状。
+### 维护者说明的症状（2026-10-26）
+
+Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam 这类会被学校的 **Fortinet 防火墙**挡住。
+
+### 阻挡方式探测（2026-10-26 14:06，只读，`phase0/v5-block-probe/probe.ps1`）
+
+同一批网址，分别从有线（学校，192.168.0.x）和 Wi-Fi（手机热点）的地址各做一次 TLS 握手和 HTTPS 请求：
+
+| 结果 | 网址 |
+|---|---|
+| **有线被拦截**：证书换成 Fortinet 设备自签的（Windows 不信任，curl exit 60）；热点上是正常证书 | user.auth.xboxlive.com、xsts.auth.xboxlive.com、title.mgt.xboxlive.com、www.xbox.com、session.minecraft.net、textures.minecraft.net、libraries.minecraft.net、resources.download.minecraft.net、store / login / api.steampowered.com、steamcommunity.com |
+| 两边都正常 | login.live.com、login.microsoftonline.com、api.minecraftservices.com、sessionserver.mojang.com、piston-meta.mojang.com、steamcdn-a.akamaihd.net、www.microsoft.com、www.google.com |
+
+结论：
+- 学校用的是 **FortiGate SSL 深度检测 + 按网址分类拦截**：DNS 正常、TCP 正常，TLS 握手时按 SNI 把证书换掉。这正好解释“Microsoft 能登录，PrismLauncher 不能”：Microsoft 登录（login.live.com）没被挡，但下一步的 Xbox Live 认证（user.auth / xsts.auth.xboxlive.com）被挡了。
+- 对 SPEC 的影响：V5 的重点**不是 DNS**，而是**按域名（SNI）分流**。sing-box 的 `sniff` + `domain_suffix` 正好可以处理；vpn-dns 不是必须的（但保留，避免以后学校改用 DNS 屏蔽）。
+- 内置规则集的第一版至少要有：`xboxlive.com`、`xbox.com`、`minecraft.net`、`steampowered.com`、`steamcommunity.com`（加上 Steam 客户端用的 `steamserver.net`、`steamstatic.com`，待实测）。
+- 判断“被拦截”的方法可以做进程序：证书签发者是 Fortinet / 证书链不受信任 → 提示“这个网址被当前网络拦截，建议加进规则”。
+
+### V5 验证准备
+
+- `phase0/v5-block-probe/run.ps1`：调用 V3a 的 run.ps1，只把上表中被拦截的域名（加上 ifconfig.me）送进 VPN，`-AuthGroup "Master Network" -NoUdp`。`-CheckOnly` 通过。
+- `probe.ps1 -ViaTun`：经过 sing-box 再探测一次。预期：被拦截的网址变成正常证书，其他网址结果不变。
