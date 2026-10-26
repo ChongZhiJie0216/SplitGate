@@ -351,3 +351,13 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 ### 方向 A：官方 Pangolin 客户端 — 准备观察
 
 做法：维护者照平常方式在官方 App 里连接；连上后用 `observe.ps1`（只读、不需管理员）看它建了哪张网卡、加了哪些路由、有没有改 DNS、出口 IP 是什么。再根据结果决定 sing-box 怎么接（`bind_interface` 到它的网卡）。SplitGate 不碰 Pangolin 的凭据。
+### A 观察第 1 次（2026-10-26，官方客户端已连接，没有选 Exit Node，只读）
+
+- 服务 `PangolinTunnel$olm` 变成 Running；网卡名 **`Pangolin`**（WireGuard Tunnel，ifIndex 45），地址 100.90.128.14/20，**接口跃点 5**（有线 25、Wi-Fi 30）。
+- 路由只加了 site 资源：100.90.128.0/20、100.96.128.0/20、192.168.1.0/24、192.168.2.0/24、几个 /32（192.168.2.2/8/9、192.168.100.1）。**没有默认路由**，系统默认路由和基准一样。
+- DNS：`Pangolin` 网卡上静态设了 **100.96.128.1**（Olm 的 DNS 代理）。因为它的跃点最小，Windows 会优先用它解析所有域名（不在 Pangolin 资源里的域名再转发到上游）。没有 NRPT 规则。
+- 出口 IP：api.ipify.org 仍是 219.92.246.113（本地）。
+- 推论：
+  1. 只连 site 时，Pangolin 网卡只通到 site 资源（WireGuard AllowedIPs 只有这些网段），sing-box `bind_interface: Pangolin` 送上网流量**不会通**。要当“上网出口”，必须在 App 里选 Exit Node（会装 gateway 路由，见源码分析）。
+  2. sing-box 的 TUN 用 0/0 拆分路由，Pangolin 的 /24、/32 更具体，所以 site 资源流量会绕过 sing-box 直接走 Pangolin，两者可以共存（待实测）。
+  3. sing-box 的 hijack-dns 会接管 DNS，Pangolin 的 DNS 代理会被绕过：开着 SplitGate 时，**Pangolin 资源的别名（alias）可能解析不到**。第 1 阶段要处理（例如把 Pangolin 的域名后缀交给 100.96.128.1 解析）。
