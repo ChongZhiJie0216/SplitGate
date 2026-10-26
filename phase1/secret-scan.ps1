@@ -1,8 +1,9 @@
-# Phase 1 acceptance: "the password cannot be found in logs or %APPDATA%\SplitGate". READ-ONLY.
+# Phase 1 acceptance: "the password cannot be found in logs or the settings folder". READ-ONLY.
 # You type each secret (VPN password, WireGuard private key, ...) at a hidden prompt; empty line ends.
 # Secrets stay in memory only: never printed, never written to the log or any file.
-# Searched, as UTF-8 and as UTF-16: every file under the data folder (%APPDATA%\SplitGate or
+# Searched, as UTF-8 and as UTF-16: every file under the data folder (data\ next to SplitGate.exe or
 # SPLITGATE_HOME, zips such as diagnostics packages are unpacked to %TEMP% and searched too),
+# the old settings folder %APPDATA%\SplitGate (up to v0.11),
 # %LOCALAPPDATA%\SplitGate (WebView2 data, old tunnel.json), any -Extra folder,
 # plus the command lines of running SplitGate / sing-box and the SplitGate scheduled task.
 # Usage: powershell -ExecutionPolicy Bypass -File phase1\secret-scan.ps1 [-Extra C:\path\portable]
@@ -28,7 +29,7 @@ for ($i = 0; $i -lt $secrets.Count; $i++) {
     $needles += [pscustomobject]@{ Id = $i + 1; Enc = 'UTF-16'; Text = $latin1.GetString([Text.Encoding]::Unicode.GetBytes($secrets[$i])) }
 }
 
-$roots = @((Get-DataDir), (Join-Path $env:LOCALAPPDATA 'SplitGate')) + $Extra
+$roots = @((Get-DataDir), $OldDataDir, (Join-Path $env:LOCALAPPDATA 'SplitGate')) + $Extra
 $hits = 0; $files = 0; $skipped = @()
 
 function Search-File($f, [string]$label) {

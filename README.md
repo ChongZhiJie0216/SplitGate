@@ -24,7 +24,7 @@ npx tauri build                                                       # 安装�
 build.bat                                                             # 便携版（双击也可以；先跑测试，失败就停）
 ```
 
-便携版输出在 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe` + `licenses\`），另有同名 zip。两个 exe 要放在同一个文件夹；双击 `SplitGate.exe` 会要求管理员权限。设置和日志仍保存在 `%APPDATA%\SplitGate\`。
+便携版输出在 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe` + `licenses\`），另有同名 zip。两个 exe 要放在同一个文件夹；双击 `SplitGate.exe` 会要求管理员权限。设置、日志、诊断包都保存在 `SplitGate.exe` 旁边的 `data\` 文件夹（每一份 SplitGate 各有自己的 `data\`）；重新打包时 `data\` 会保留，zip 里不会有它。v0.11 以前的设置在 `%APPDATA%\SplitGate\`，v0.12 第一次启动时会自动复制过来。密码和私钥一直在 Windows 凭据管理器里，不在这些文件里。
 
 为了方便测试，`SplitGate.exe` 和 `sing-box.exe` 也会复制一份到仓库根目录（不进 git），直接双击根目录的 `SplitGate.exe` 就行。打包前要先从托盘“退出”SplitGate，否则 exe 被占用，脚本会一开始就停下并提示。
 

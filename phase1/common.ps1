@@ -5,11 +5,18 @@ $Phase1Dir = $PSScriptRoot
 $Phase1LogDir = Join-Path $Phase1Dir 'logs'
 $TunName = 'SplitGate-TUN'
 
-# Same rule as src-tauri/src/paths.rs: SPLITGATE_HOME wins, else %APPDATA%\SplitGate.
+# Same rule as src-tauri/src/paths.rs: SPLITGATE_HOME wins, else the data folder next to
+# SplitGate.exe (v0.12.0). The exe is found from the running SplitGate, else the copy that
+# build.bat puts in the repo root.
 function Get-DataDir {
     if ($env:SPLITGATE_HOME) { return $env:SPLITGATE_HOME }
-    return (Join-Path $env:APPDATA 'SplitGate')
+    $p = Get-Process -Name 'SplitGate' -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1
+    if ($p) { return (Join-Path (Split-Path $p.Path -Parent) 'data') }
+    return (Join-Path $RepoRoot 'data')
 }
+
+# Up to v0.11 settings lived here; v0.12 copies them to data\ and leaves this folder as it was.
+$OldDataDir = Join-Path $env:APPDATA 'SplitGate'
 
 # TUN network from settings.json (default 172.19.0.1/30), as "a.b.c." prefix for route matching.
 function Get-TunPrefix {

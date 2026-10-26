@@ -238,7 +238,12 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 
 ## 数据模型
 
-配置存放在 `%APPDATA%\SplitGate\`，均为 JSON，并带 `version` 字段，方便以后迁移。
+配置存放在 `SplitGate.exe` 旁边的 `data\` 文件夹（维护者 2026-10-26 定，v0.12.0 起；之前是 `%APPDATA%\SplitGate\`），均为 JSON，并带 `version` 字段，方便以后迁移。日志（`data\logs\`）、诊断包（`data\diagnostics\`）也在这里；`SPLITGATE_HOME` 环境变量可以改到别处（开发和测试用）。
+
+- 搬家：v0.12 启动时，`data\` 里还没有的 `profiles.json` / `rules.json` / `settings.json` 从 `%APPDATA%\SplitGate\` 复制过来；旧文件夹不动、不删，日志会记下复制了哪些。
+- 不在 `data\` 的：密码 / 私钥（Windows 凭据管理器）；WebView2 的缓存和界面主题（`%LOCALAPPDATA%\SplitGate\`，由 Tauri 管）；开机自启（任务计划程序）。
+- 每一份 SplitGate.exe 各有自己的 `data\`（例如仓库根目录那份和 `portable\SplitGate\` 那份是两套设置）。打包脚本重建便携版时保留 `data\`，zip 不包含它。
+- 以后改成 Windows 服务 + 安装到 Program Files 时，普通权限写不进程序文件夹，到时要重新决定位置（见组件 5）。
 
 **profiles.json**：VPN 连接配置（不含密码）
 
@@ -460,7 +465,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [ ] 连接期间，非规则流量的出口 IP 仍是学校网络
 - [x] 在任务管理器中结束 SplitGate 进程后，网络能在 5 秒内恢复正常（v0.6.0，手机热点 + WireGuard，1.6 秒，2026-10-26）
 - [x] 断开再连接 20 次，没有残留进程、网卡或路由（v0.6.0，手机热点 + WireGuard，每次断开后 0.7–1.1 秒清干净，2026-10-26）
-- [x] 日志、诊断包和 `%APPDATA%\SplitGate\` 中搜索不到密码（v0.6.0 日志、设置、WebView2 数据、便携版文件夹、命令行、任务计划都搜不到 Cisco 密码和 WireGuard 私钥；v0.11.1 诊断包解开后也搜不到，2026-10-26，`phase1\secret-scan.ps1`）
+- [x] 日志、诊断包和设置文件夹（v0.11 以前 `%APPDATA%\SplitGate\`，v0.12 起 `data\`）中搜索不到密码（v0.6.0 日志、设置、WebView2 数据、便携版文件夹、命令行、任务计划都搜不到 Cisco 密码和 WireGuard 私钥；v0.11.1 诊断包解开后也搜不到，2026-10-26，`phase1\secret-scan.ps1`）
 - [x] 用任务管理器核实 Xbox App 的进程，补进预设（`XboxPcApp.exe`、`XboxPcAppFT.exe`，v0.6.1）
 
 ### 第 2 阶段：可观测性与家里内网
