@@ -1,7 +1,7 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-26，版本 v0.5.0。
+> 最后更新：2026-10-26，版本 v0.5.0（之后加了 `phase1\` 验收脚本）。
 
 ## 现在在哪一步
 
@@ -42,6 +42,18 @@
 
 1. ~~第一次真正连接测试~~（2026-10-26 完成，Cisco 和 WireGuard 都通过，见上）。回滚方法仍是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。
 2. 按 SPEC 第 1 阶段验收逐条测：Xbox App / PrismLauncher / Steam 能登录；非规则流量出口仍是学校网络；任务管理器结束 SplitGate 后 5 秒内恢复；断开再连接 20 次没有残留；日志和 `%APPDATA%\SplitGate\` 搜不到密码；核实 Xbox App 进程名补进预设。
+   辅助脚本在 `phase1\`（2026-10-26 写好，**还没在 Windows 上跑过**，第一次用时留意报错）。除 `kill-recovery.ps1 -KillNow` 会结束 SplitGate 外都只读；回滚一律是 `phase0\cleanup-all.ps1 -Apply`。先在断开状态跑一次 `phase0\snapshot.ps1 -Baseline` 当基准。
+
+   | 验收项 | 脚本 | 怎么用 |
+   |---|---|---|
+   | 非规则流量出口仍是学校网络 | `exit-ip.ps1` | 断开时跑一次（记下公网 IP），连接后再跑一次，相同就 PASS |
+   | 结束 SplitGate 后 5 秒内恢复 | `kill-recovery.ps1` | 连接后启动，再到任务管理器“详细信息”结束 `SplitGate.exe`（或加 `-KillNow`，要管理员）；从进程消失算起，到没有残留且直连 DNS + TCP 成功 |
+   | 断开再连接 20 次没有残留 | `reconnect-watch.ps1` | 断开时启动，然后自己按 20 次连接 / 断开；每次断开后 10 秒内要清干净 |
+   | 搜不到密码 | `secret-scan.ps1` | 隐藏输入密码 / 私钥（不显示、不落盘），按 UTF-8 和 UTF-16 搜设置文件夹、`%LOCALAPPDATA%\SplitGate`（WebView2 数据）、`-Extra` 指定的文件夹，以及 SplitGate / sing-box 命令行和任务计划 |
+   | Xbox App 进程名 | `find-process.ps1` | 打开 Xbox App 进商店后跑；列出名字含 xbox / gaming 的进程和它们的联网数，建议填 `process_name`（商店应用路径带版本号，不能用 `process_path`） |
+   | 随时检查残留 | `residue-check.ps1` | 断开后跑，0 = 干净 |
+
+   结果日志在 `phase1\logs\`（不进 git）。
 3. ~~第 1 阶段剩下的页面~~（v0.5.0 完成）。还没验证：托盘右键菜单实际点一次、以管理员身份开 / 关开机自启（会建立 / 删除任务计划 `SplitGate`）、注销再登录后是否在托盘启动。
 4. 第 1 阶段全部验收后，等维护者确认才进入第 2 阶段（Pangolin、诊断包）。
 

@@ -41,7 +41,7 @@ fn changelog_first_release_is_current_version() {
 fn scripts_are_ascii_crlf() {
     let mut bad = Vec::new();
     let mut files = vec![repo().join("build.bat")];
-    for dir in ["scripts", "phase0", "third_party"] {
+    for dir in ["scripts", "phase0", "phase1", "third_party"] {
         visit(&repo().join(dir), &mut |p| {
             if matches!(p.extension().and_then(|e| e.to_str()), Some("ps1" | "bat")) {
                 files.push(p.to_path_buf());
