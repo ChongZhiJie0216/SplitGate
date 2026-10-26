@@ -422,7 +422,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 ---
 
-## V8 Pangolin 经家里 SOCKS5 代理（不用 Exit Node）— 准备好，待测
+## V8 Pangolin 经家里 SOCKS5 代理（不用 Exit Node）— 准备好，延后（Pangolin 移到整个项目最后，维护者 2026-10-26 定）
 
 维护者定（2026-10-26）：
 - Pangolin 出口不用 Exit Node，改成经 Pangolin 连到家里的 SOCKS5 代理，省掉 V7 的“删全隧道路由 + 低优先级默认路由 + 监视”。

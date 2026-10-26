@@ -31,7 +31,7 @@ SplitGate（暂定名）是一个 Windows 桌面客户端：连接一个 VPN 出
 - **Cisco 出口**：sing-box 自带的 OpenConnect endpoint（`endpoints: [{type: "openconnect"}]`），不打包 openconnect.exe，不另建 VPN 网卡，不改系统路由。
 - **WireGuard 出口**：sing-box 自带的 WireGuard endpoint。
 - **Pangolin 出口**：~~“外部客户端”类型。官方 Pangolin 客户端负责登录、凭据和隧道；SplitGate 删掉它的全隧道路由、加一条最低优先级默认路由，再让 sing-box 的 `direct` 出口用 `bind_interface` 绑定它的网卡。~~
-  **改法（维护者 2026-10-26 同意，待第 0 阶段 V8 实测）**：不用 Exit Node。官方 Pangolin 客户端照常只连 site（负责登录和凭据）；家里 VPN-Server 虚拟机（newt 所在的那台，PVE 上）跑一个 SOCKS5 代理（sing-box 1.14.4，用户名 + 密码）；SplitGate 的 `vpn` 出口 = sing-box `socks` 出口，用 `bind_interface: Pangolin` 经 Pangolin 网卡连到这个代理。不删、不加任何路由，组件 2 的 route_guard 不再需要。代理密码存凭据管理器。限制：经 SOCKS5 + Pangolin 的 UDP 不一定通（Xbox 联机 / 语音），登录、商店、Steam、Minecraft 登录都是 TCP。
+  **改法（维护者 2026-10-26 同意，待第 0 阶段 V8 实测；整个项目最后才做）**：不用 Exit Node。官方 Pangolin 客户端照常只连 site（负责登录和凭据）；家里 VPN-Server 虚拟机（newt 所在的那台，PVE 上）跑一个 SOCKS5 代理（sing-box 1.14.4，用户名 + 密码）；SplitGate 的 `vpn` 出口 = sing-box `socks` 出口，用 `bind_interface: Pangolin` 经 Pangolin 网卡连到这个代理。不删、不加任何路由，组件 2 的 route_guard 不再需要。代理密码存凭据管理器。限制：经 SOCKS5 + Pangolin 的 UDP 不一定通（Xbox 联机 / 语音），登录、商店、Steam、Minecraft 登录都是 TCP。
 - **所有出口都要能访问家里内网的设备**（维护者 2026-10-26 补充；例如 PVE 管理网页）：Cisco、WireGuard 用一个含家里网段的规则集（`ip_cidr`）送进 `vpn`，要服务器那一端允许访问内网；Pangolin 不开 Exit Node 时，官方客户端本来就有到 site 资源的路由。连接时要检查家里网段和本地网络有没有撞号（例如学校也用同一个 192.168.x.0/24）。
 
 &#91;embedded content: 架构总览 · 主程序、sing-box sidecar、三种出口\]
@@ -454,13 +454,14 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [ ] 日志、诊断包和 `%APPDATA%\SplitGate\` 中搜索不到密码（v0.6.0 日志、设置、WebView2 数据、便携版文件夹、命令行、任务计划都搜不到 Cisco 密码和 WireGuard 私钥，2026-10-26；诊断包 v0.9.0 才有，`phase1\secret-scan.ps1` 已会解开 zip 再搜，待测）
 - [x] 用任务管理器核实 Xbox App 的进程，补进预设（`XboxPcApp.exe`、`XboxPcAppFT.exe`，v0.6.1）
 
-### 第 2 阶段：可观测性与 Pangolin
+### 第 2 阶段：可观测性与家里内网
+
+（维护者 2026-10-26 定：AnyLink 和 WireGuard 都能通，Pangolin 只是备用，移到整个项目的最后。）
 
 - [x] 连接列表页（Clash API）、流量统计、从连接列表一键加规则（v0.6.0；维护者 2026-10-26 同意在第 1 阶段验收前先做；`find_process` 改成一直开，才能显示每条连接的程序）
 - [x] 拦截检测与拦截提示页（v0.7.0；主动 TLS 握手，见组件 8；**还没在学校网络下实测**）
 - [x] 睡眠唤醒检测与自动重连（v0.8.0；**还没实测睡眠唤醒**）
-- [ ] Pangolin 出口（改为“经 Pangolin 连到家里 SOCKS5 代理”，不用 Exit Node；先做第 0 阶段 V8）
-- [ ] 所有出口都能访问家里内网设备（家里网段规则 + 撞号检查）
+- [ ] 所有出口都能访问家里内网设备（Cisco、WireGuard：家里网段规则 + 撞号检查）
 
 ### 第 3 阶段：增强
 
@@ -468,6 +469,13 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [ ] 用 Windows 服务取代整个应用以管理员身份运行
 - [ ] React Flow 流量画布
 - [ ] 评估备用做法（openconnect.exe）是否还需要
+
+### 最后：Pangolin（备用出口）
+
+维护者 2026-10-26 定：放到整个项目最后做；在那之前 Profile 页的 Pangolin 类型维持“还不能连接”。
+
+- [ ] 第 0 阶段 V8：经 Pangolin 连到家里 SOCKS5 代理，不用 Exit Node（脚本已备好：`phase0/v8-pangolin-socks/`）
+- [ ] Pangolin 出口（`socks` 出口 + `bind_interface: Pangolin`，代理密码存凭据管理器）；Pangolin 下也能访问家里内网
 
 ## 待确认事项
 
