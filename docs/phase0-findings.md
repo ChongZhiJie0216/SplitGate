@@ -206,3 +206,9 @@ cleanup-all.ps1（检查模式）：nothing left over
 - Cisco 出口可以**不用 openconnect.exe**：sing-box 自带的 OpenConnect endpoint 在 AnyLink（ocserv 兼容）上实测可用，不需要 wintun 网卡、不需要 vpnc-script，也不会改系统路由。
 - Profile 要有“组别（auth_group）”和“只用 TCP（no_udp）”两个选项。
 - 服务器额外要求的表单（MFA、组别等）通过 sing-box API 服务（gRPC）回答，对应 SPEC 的 prompt 事件。
+### 第 4 次（2026-10-26 13:55）— ✅ 全自动连接（`-AuthGroup "Master Network" -NoUdp`）
+
+- 只输入账号密码，没有弹出任何表单；`sing-box started` 和 `anyconnect tunnel established using cstp` 在**同一秒**（13:55:48）。第 3 次因为等 DTLS 超时，慢了大约 50 秒以上。
+- 分流结果和第 3 次相同：api.ipify.org → 219.92.246.113，ifconfig.me → 202.186.213.216，网页 True，无残留。
+- 结束后恢复时间 **5.1 秒**（V3a 五次：12.3 / 1.4 / 6.0 / 5.1 秒）。仍然待查，第 1 阶段处理。
+- 结论：学校网络下的 Cisco profile 默认用 `auth_group` + `no_udp`，就能一键连接。
