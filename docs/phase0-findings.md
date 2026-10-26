@@ -290,7 +290,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 ---
 
-## V6 按程序分流 — 准备好，等维护者执行
+## V6 按程序分流 — ✅ 测试通过（PrismLauncher 实测待回报）
 
 本机看到的程序（2026-10-26）：`prismlauncher.exe`（D:\PrismLauncher\），Minecraft 本体是 `javaw.exe`（PrismLauncher 自带的 Java，D:\PrismLauncher\java\...）。`javaw.exe` 这个名字很常见（别的 Java 程序也叫这个），所以**规则要支持完整路径**（sing-box `process_path`），不能只靠程序名。
 
@@ -299,3 +299,9 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - `phase0/v6-process-rules/run.ps1`：默认只把 `curl.exe` 的流量全部送进 VPN。
 - `test.ps1`：同一个网址 api.ipify.org（不在域名规则里），curl.exe 取得的 IP 应该是 VPN 的，PowerShell 自己请求取得的应该是本地的；再从日志看两者各走了哪个出口。
 - `-CheckOnly` 通过（含 PrismLauncher 两个路径）。
+### 第 1 次（2026-10-26 14:17，有线，`-NoUdp`，规则：curl.exe + PrismLauncher 两个路径）— ✅ 通过
+
+- 同一个网址 api.ipify.org：curl.exe → **202.186.213.216（VPN）**，powershell.exe → **219.92.246.113（本地）**。
+- 日志：14:17:16 `endpoint/openconnect[vpn]: outbound connection to 172.67.74.152:443`（curl），14:17:17 `outbound/direct[direct]` 同一个 IP（PowerShell）。同一个目标 IP，按程序分到不同出口。
+- 结论：Windows 上 sing-box 的 `process_name` / `process_path` 可用（TUN 模式下能认出连接是哪个程序发的）。
+- 修正：test.ps1 原本在 sing-box 还开着的时候做残留检查，列出的都是正在使用的网卡和路由，不是残留。已拿掉，改成提示关闭后再检查。

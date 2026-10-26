@@ -22,6 +22,4 @@ Start-Sleep -Milliseconds 500
 $ips = @([Net.Dns]::GetHostAddresses('api.ipify.org') | ForEach-Object { $_.IPAddressToString })
 Select-String -Path $log.FullName -Pattern 'outbound connection to (\S+):443' |
     Where-Object { $ips -contains $_.Matches[0].Groups[1].Value } | Select-Object -Last 4 | ForEach-Object { $_.Line }
-
-Write-Host '--- leftover check ---'
-& (Join-Path $Phase0Dir 'cleanup-all.ps1')
+Write-Host '(sing-box keeps running. After Ctrl+C in its window, check leftovers with: phase0\cleanup-all.ps1)'
