@@ -50,11 +50,11 @@ SplitGate（暂定名）是一个 Windows 桌面客户端：连接一个 VPN 出
 | Cisco 出口 | sing-box OpenConnect endpoint | 第 0 阶段 V3a 实测可用（AnyLink 服务器，账号密码 + 组别） |
 | Pangolin 出口 | 官方 Pangolin 客户端（用户自己安装） | 需 Pangolin 服务器 1.24 及以上（Exit Node）；SplitGate 不打包它 |
 | WireGuard 出口 | sing-box WireGuard endpoint | 不需要额外 sidecar |
-| 虚拟网卡驱动 | sing-box TUN | 第 1 阶段打包时核实 sing-box.exe 单独即可建立 TUN，是否还要另附 wintun.dll |
+| 虚拟网卡驱动 | sing-box TUN | 已核实（第 1 阶段实测）：便携版只附 `sing-box.exe` 就能建立 TUN，**不用另附 wintun.dll** |
 | 凭据存储 | `keyring` crate | 对应 Windows 凭据管理器 |
 | 安装包 | Tauri bundler，NSIS | 安装时以管理员身份写入程序目录 |
 
-**备用做法**：sing-box 的 OpenConnect endpoint 遇到不支持的服务器时，退回打包 openconnect.exe + 自定义连接脚本（原规格做法 A，第 0 阶段跳过 V3b，**未实测**）。
+**备用做法**：sing-box 的 OpenConnect endpoint 遇到不支持的服务器时，退回打包 openconnect.exe + 自定义连接脚本（原规格做法 A，第 0 阶段跳过 V3b，**未实测**）。第 3 阶段评估结论（2026-10-26）：**现在不需要，不打包**，只在下面“第 3 阶段”列出的情况再考虑。
 
 ## 目录结构
 
@@ -466,10 +466,16 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 
 ### 第 3 阶段：增强
 
-- [ ] Duo push 和 SAML 登录
+维护者 2026-10-26 定：进入第 3 阶段（第 2 阶段 v0.7.0–v0.10.0 的 Windows 实测和 PR 合并同时进行）。顺序：openconnect 评估 → Windows 服务 → React Flow 流量画布。
+
+- [ ] ~~Duo push 和 SAML 登录~~（维护者 2026-10-26 定跳过：现在的 AnyLink 只要账号密码 + 组别；服务器以后改用 MFA 再做）
 - [ ] 用 Windows 服务取代整个应用以管理员身份运行
 - [ ] React Flow 流量画布
-- [ ] 评估备用做法（openconnect.exe）是否还需要
+- [x] 评估备用做法（openconnect.exe）是否还需要 —— **不需要**（2026-10-26）：
+  - sing-box 1.14.4 的 OpenConnect endpoint 已经实测可用：第 0 阶段 V3a 全自动连上 AnyLink（`auth_group` + `no_udp`），v0.4.0 起 SplitGate 用它连接，6 秒连上，断开 2.7 秒恢复。
+  - openconnect.exe 的代价：官方没有发布 Windows 版（只有 GitLab CI 产物，没有签名，CI 产物还会过期）；要另附 wintun.dll、GnuTLS 等 DLL 和它们的许可证（LGPL）；要写 JScript 连接脚本；它会自己建网卡、改路由，和 sing-box 的 TUN 抢流量（Pangolin Exit Node 那一类麻烦，见组件 2）。
+  - 什么时候再考虑：sing-box 升级后 OpenConnect endpoint 被移除或不能用；服务器换成 sing-box 不支持的类型或登录方式；需要 sing-box 不支持的 MFA。
+  - 连带的改变：`third_party/fetch.ps1` 默认只下载 sing-box（不再需要 7-Zip）；openconnect、Wintun、Olm 只给第 0 阶段脚本用，`fetch.ps1 -All` 才下载。
 
 ### 最后：Pangolin（备用出口）
 

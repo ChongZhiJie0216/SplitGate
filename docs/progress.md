@@ -53,6 +53,7 @@
 
 ## 下一步（照顺序）
 
+- **第 3 阶段（维护者 2026-10-26 定进入）**：顺序 openconnect 评估（✅ 不需要，见 SPEC 第 3 阶段）→ Windows 服务 → React Flow 流量画布（维护者已同意新增 `@xyflow/react`）。Duo / SAML 定跳过。第 2 阶段 v0.7.0–v0.10.0 的 Windows 实测和 PR [#2](https://github.com/ChongZhiJie0216/SplitGate/pull/2) 合并同时进行。
 0. **流程（维护者 2026-10-26 定）**：Pangolin 只是备用出口，**移到整个项目的最后**（SPEC“最后：Pangolin”）。做法已定：不用 Exit Node，经 Pangolin 连到家里 VPN-Server 虚拟机上的 SOCKS5 代理；V8 脚本已备好（`phase0/v8-pangolin-socks/`），到时再测。第 2 阶段的“访问家里内网”v0.10.0 完成（Profile 的“家里内网网段” + 撞号检查）。**第 2 阶段功能全部完成，等维护者实测 v0.7.0–v0.10.0 后再进第 3 阶段。**
 1. ~~第一次真正连接测试~~（2026-10-26 完成，Cisco 和 WireGuard 都通过，见上）。回滚方法仍是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。
 2. 按 SPEC 第 1 阶段验收逐条测（2026-10-26 热点下能测的都通过，见上；剩学校网络两项）：Xbox App / PrismLauncher / Steam 能登录；非规则流量出口仍是学校网络；任务管理器结束 SplitGate 后 5 秒内恢复；断开再连接 20 次没有残留；日志和 `%APPDATA%\SplitGate\` 搜不到密码；核实 Xbox App 进程名补进预设。

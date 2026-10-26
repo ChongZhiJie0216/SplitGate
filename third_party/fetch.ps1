@@ -1,6 +1,9 @@
 # Download pinned third-party binaries, verify SHA256, extract to third_party\bin.
 # Versions and sources: third_party\VERSIONS.md (keep both in sync).
-# Usage: powershell -ExecutionPolicy Bypass -File third_party\fetch.ps1
+# Default: only sing-box (all SplitGate needs; unpacked with Expand-Archive, no 7-Zip).
+# -All: also openconnect, Wintun and Olm, used only by the phase 0 scripts (needs 7-Zip).
+# Usage: powershell -ExecutionPolicy Bypass -File third_party\fetch.ps1 [-All]
+param([switch]$All)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $dl = Join-Path $root 'downloads'
@@ -22,7 +25,8 @@ $items = @(
        Sha = '7ca1ca7f3e64d4590e9c93e57f99039727117f9ac403025f2f386af897e23563' }
 )
 
-if (-not (Test-Path $sevenZip)) { throw "7-Zip not found at $sevenZip (needed to unpack the openconnect NSIS installer)." }
+if (-not $All) { $items = @($items | Where-Object { $_.Name -eq 'sing-box' }) }
+elseif (-not (Test-Path $sevenZip)) { throw "7-Zip not found at $sevenZip (needed by -All to unpack the openconnect NSIS installer)." }
 New-Item -ItemType Directory -Force $dl, $bin | Out-Null
 
 foreach ($i in $items) {
@@ -41,7 +45,7 @@ foreach ($i in $items) {
     New-Item -ItemType Directory -Force $out | Out-Null
     switch ($i.Name) {
         'sing-box' {
-            & $sevenZip x -y -bso0 "-o$out" $path
+            Expand-Archive -Path $path -DestinationPath $out -Force
             $inner = Get-ChildItem $out -Directory | Select-Object -First 1
             Move-Item (Join-Path $inner.FullName '*') $out -Force
             Remove-Item $inner.FullName

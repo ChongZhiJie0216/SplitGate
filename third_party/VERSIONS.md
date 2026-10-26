@@ -1,6 +1,8 @@
 # 第三方组件版本（锁定）
 
 二进制文件不进 git。用 `third_party/fetch.ps1` 下载到 `third_party/downloads/`、校验 SHA256、解压到 `third_party/bin/`。
+
+SplitGate 只用 sing-box（默认只下载它）。openconnect、Wintun、Olm 只给第 0 阶段脚本用（第 3 阶段评估：不打包 openconnect.exe；sing-box 不需要另附 wintun.dll），要 `fetch.ps1 -All` 才下载。
 核实日期：2026-10-26。
 
 | 组件 | 版本 | 下载文件 | 来源 | SHA256 | 校验依据 | 签名 |

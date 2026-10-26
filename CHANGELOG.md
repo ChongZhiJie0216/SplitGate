@@ -4,6 +4,9 @@
 
 ## 未发布
 
+### 改变
+- `third_party\fetch.ps1` 默认只下载 sing-box，不再需要 7-Zip。openconnect、Wintun、Olm 只有第 0 阶段脚本用得到，要加 `-All` 才下载（第 3 阶段评估结论：不打包 openconnect.exe）。
+
 ## 0.10.0 — 2026-10-26（访问家里内网）
 
 ### 新增

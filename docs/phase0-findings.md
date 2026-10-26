@@ -445,6 +445,12 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 ---
 
+## 第 3 阶段补记：openconnect.exe 备用做法 — 不需要（2026-10-26）
+
+V3b 没做（维护者定跳过）。第 3 阶段评估后结论是不再需要，理由和“什么时候再考虑”写在 SPEC 第 3 阶段。另外第 1 阶段已经实测：便携版只附 `sing-box.exe` 就能建 TUN，Wintun 不用另附。所以 `third_party/fetch.ps1` 默认只下载 sing-box，openconnect / Wintun / Olm 改成 `-All` 才下载。
+
+---
+
 # 第 0 阶段总结（2026-10-26）
 
 | 项 | 结果 |
