@@ -2,7 +2,7 @@
 import { create } from "zustand";
 import { AppInfo, getAppInfo } from "../lib/ipc";
 
-export type Page = "connect" | "rules" | "logs" | "profiles" | "settings" | "about";
+export type Page = "connect" | "rules" | "connections" | "logs" | "profiles" | "settings" | "about";
 
 interface AppState {
   page: Page;

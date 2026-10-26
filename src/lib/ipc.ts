@@ -148,3 +148,39 @@ export interface SettingsView {
 export const getSettings = () => invoke<SettingsView>("get_settings");
 export const saveSettings = (settings: Settings) => invoke<Settings>("save_settings", { settings });
 export const setAutostart = (enabled: boolean) => invoke<AutostartState>("set_autostart", { enabled });
+
+/** 每秒的流量（字节/秒），连接期间由后端推送 `traffic` 事件。 */
+export interface Traffic {
+  vpn_up: number;
+  vpn_down: number;
+  direct_up: number;
+  direct_down: number;
+}
+
+export interface Connection {
+  id: string;
+  network: string;
+  /** 域名；只知道 IP 时为空。 */
+  host: string;
+  ip: string;
+  port: string;
+  /** Windows 不告诉的（系统服务）为空。 */
+  process_path: string;
+  /** "vpn" 或 "direct" */
+  outbound: string;
+  rule: string;
+  upload: number;
+  download: number;
+  start: string;
+}
+
+export interface ConnectionsSnapshot {
+  connections: Connection[];
+  traffic: Traffic;
+  upload_total: number;
+  download_total: number;
+}
+
+export const getConnections = () => invoke<ConnectionsSnapshot>("get_connections");
+export const closeConnection = (id: string) => invoke<void>("close_connection", { id });
+export const onTraffic = (f: (t: Traffic) => void): Promise<UnlistenFn> => listen<Traffic>("traffic", (e) => f(e.payload));

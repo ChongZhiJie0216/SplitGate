@@ -18,7 +18,8 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
-| 0.5.0 | — | 设置页（开机自启用任务计划程序、自动连接、主题、sing-box 日志级别、TUN 网段，`settings.json`）、系统托盘（状态圆点 + 右键菜单）、关窗口缩到托盘、只能开一个、关于页补充 |
+| 0.6.0 | — | 连接列表页（Clash API，每秒刷新、搜索 / 筛选、关闭单条、一键加规则 + 重新连接）、VPN / 直连速率；`find_process` 一直开。第 2 阶段项目，维护者同意提前做；**还没在真正连接下看过** |
+| 0.5.0 | `cb05976` | 设置页（开机自启用任务计划程序、自动连接、主题、sing-box 日志级别、TUN 网段，`settings.json`）、系统托盘（状态圆点 + 右键菜单）、关窗口缩到托盘、只能开一个、关于页补充 |
 
 ### 已验证（不改网络的部分）
 - v0.5.0：`cargo test` 36 项通过；开发版实测：设置页保存 / 拒绝错误 TUN 网段、关于页、关窗口后进程仍在且窗口隐藏、再开一次只叫出原窗口（仍是 1 个进程），console 无错误。
@@ -53,7 +54,14 @@
 - 便携版是文件夹（SplitGate.exe + sing-box.exe），不是单一 exe：sing-box 本身 78 MB，单一 exe 要每次解压。设置仍在 `%APPDATA%\SplitGate\`。
 - Cisco 服务器要求额外登录信息时，目前只提示“请填写组别”，还不能在界面里回答（留到之后）。
 
+## 分支
+
+- `main`：v0.5.0（`cb05976`）。
+- `feature/connections-page`：v0.6.0 连接列表页。**维护者在 Windows 上实测通过后再合并进 `main`**。要测：连接页速率、连接列表（VPN / 直连标示、搜索、关闭单条、加规则 + 现在重新连接）。
+
 ## 接着做时要记得
+
+- 编辑含反斜杠的内容（Rust / TS 字符串转义、Windows 路径）用编辑工具，不要用 Bash heredoc 里的 python / sed：本机的 Bash 会吞掉 `\\`。
 
 - 提交用 gpg 签名，密码缓存过期会卡住：用 20 秒超时的 job 提交，超时就请维护者自己 `git commit`，之后用 `git log` 核对。
 - 开发时看界面：`SPLITGATE_HOME` 指向临时文件夹，`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` 再用 CDP 操作，不动真正的 `%APPDATA%\SplitGate\`。
