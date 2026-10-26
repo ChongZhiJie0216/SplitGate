@@ -1,0 +1,77 @@
+# 第 0 阶段验证结果
+
+每一项写明：结果、实际命令、关键输出、和 SPEC 不符的地方。
+验证顺序（维护者同意，2026-10-26）：V0 环境 → V1 TUN 全直连 → V2 WireGuard → V3 openconnect → V4 Cisco + sing-box → V5 DNS → V6 Xbox 进程名 → V7 Pangolin。
+
+---
+
+## V0 环境准备 — ✅ 完成（2026-10-26）
+
+### 版本锁定
+
+详见 `third_party/VERSIONS.md`。sing-box 1.14.4、openconnect v9.21、Wintun 0.14.1、Olm 1.10.1。
+重新下载并校验：`powershell -ExecutionPolicy Bypass -File third_party\fetch.ps1`。
+
+- sing-box、Wintun、Olm 的 SHA256 和官方公布值一致。
+- openconnect 官方**没有发布 Windows 的 Release 文件**，只有 CI 产物。这次用的是 tag `v9.21` 那次 CI 的 `MinGW64/GnuTLS` 任务（job 14877945030）。它是 NSIS 安装包，用 7-Zip 解压，**不运行安装程序**。安装包没有数字签名；GitLab CI 产物可能过期，所以下载的文件要自己留一份备份。
+- openconnect 安装包自带的 `wintun.dll` 和 wintun.net 的 0.14.1 amd64 版本相同（SHA256 一致）。
+
+实际输出：
+
+```
+sing-box version 1.14.4  (go1.26.10 windows/amd64)
+Tags: with_gvisor,with_quic,with_dhcp,with_wireguard,...,with_clash_api,with_tailscale,...,with_openvpn,with_openconnect,...
+OpenConnect version v9.21  (GnuTLS 3.8.11)
+Default vpnc-script (override with --script): ...\third_party\bin\openconnect\vpnc-script-win.js
+wintun.dll FileVersion 0.14.1, signed by WireGuard LLC
+olm.exe signed by Fossorial Inc. (Valid)
+```
+
+### 许可证
+
+详见 `third_party/VERSIONS.md` 的“许可证”一节。和 SPEC 不同或需要补充的地方：
+
+- sing-box 除了 GPL-3.0-or-later，还有**附加条款**：衍生作品不得使用 sing-box 的名字，也不得暗示和它有关联。SplitGate 这个名字没问题，但界面和文档里不要写成“基于 sing-box 的 XX”这类宣传语（“关于”页按许可证要求注明组件来源可以）。
+- Olm 确认是 **AGPL-3.0 + Fossorial Commercial** 双授权。
+- Wintun 只能随“只通过 wintun.h API 使用它的软件”一起分发，不能修改。
+
+### 网络快照与清理脚本
+
+- `phase0/snapshot.ps1`：只读，把路由、网卡、DNS、NRPT 保存到 `phase0/logs/`（不进 git）。第一次运行时写 `baseline.json`。
+- `phase0/cleanup-all.ps1`：默认是检查模式，只列出要做的事；加 `-Apply`（要管理员）才真的执行。执行内容：结束进程 → 删除 `SplitGate*` 网卡上的路由 → 删除残留的 `SplitGate*` 网卡 → DNS 和 baseline 不同就还原 → 新出现的默认路由和 NRPT 规则只提示、不删 → 删除运行时配置 → 清空 DNS 缓存。
+- 约定：SplitGate 建的所有网卡名都以 `SplitGate` 开头（`SplitGate-TUN`、`SplitGate-OC`、`SplitGate-Olm`），清理脚本靠这个前缀找它们。
+
+baseline（2026-10-26 13:03）：
+
+```
+0.0.0.0/0  172.20.10.1    Wi-Fi     metric 30
+0.0.0.0/0  192.168.0.254  Ethernet  metric 25
+::/0       fe80::...      Wi-Fi
+所有网卡的 DNS 都是自动获取（没有手动设置），NRPT 规则 0 条
+cleanup-all.ps1（检查模式）：nothing left over
+```
+
+注意：这台电脑同时连着有线和 Wi-Fi，`172.20.10.x` 看起来是手机热点。V5（学校 DNS 屏蔽）一定要在只连学校网络的时候测。
+
+### V0 期间发现的重要事实（会影响 SPEC）
+
+1. **sing-box 1.14 自带 OpenConnect 客户端**（`endpoints` 的 `type: "openconnect"`，从 1.14.0 开始）。字段有 `server`、`flavor`（默认 anyconnect）、`username`、`password`、`auth_group`、`cookie`、`token`（totp / hotp / stoken / oidc）、`form_entries`、`tls.peer_fingerprint`（支持 `pin-sha256:`），还有 `system`（用系统网卡，默认是用户态网卡）。另外有 `type: "openconnect"` 的 DNS server，可以直接用 VPN 推送的 DNS。
+   → 如果能用，Cisco 出口可以和 WireGuard 一样做成 sing-box endpoint：**不需要 openconnect.exe、wintun、oc-script、tunnel.json、bind_interface**。这相当于 SPEC 的“做法 B”，而且不用自己写。V3 会两条路都测。
+   来源：https://sing-box.sagernet.org/configuration/endpoint/openconnect/
+2. **Windows 版 openconnect 调用 `--script` 的方式**（源码 `script.c`，v9.21）：固定执行 `cscript.exe "<脚本>"`，`.js` 文件会加 `/e:JScript`。所以脚本**必须是 Windows Script Host 脚本**（JScript / VBScript），不能直接指定 exe 或 cmd。要用 exe，就让 JScript 再去调用它。V3 实测确认。
+3. **Olm 的 README 写明“Pangolin CLI 正在取代 Olm，Olm 不应作为独立的机器客户端使用”**。Pangolin CLI 0.19.0 已经有 Windows exe（`pangolin-cli_windows_amd64.exe`）。SPEC 的方案 B 原本假设 Pangolin CLI 只能在 WSL2 里跑，现在可能可以直接在 Windows 上跑。
+4. Olm 支持用环境变量传参（源码 `config.go`）：`OLM_SECRET`、`OLM_ID`、`PANGOLIN_ENDPOINT`、`INTERFACE`（网卡名）、`DISABLE_ROUTES_AND_ALIASES`、`OVERRIDE_DNS`、`TUNNEL_DNS`、`ENABLE_API`、`HTTP_ADDR` 等。所以 **Secret 可以用环境变量传，不必放在命令行参数里**（官方例子 `olm debug --secret ...` 会让 Secret 出现在进程列表里）。Olm 在 Windows 上改的是**它自己网卡的 DNS**（写注册表），不碰物理网卡。
+5. Olm 1.10.1 不加参数运行时会去连 Windows 服务管理器，非管理员会报 `Access is denied`。
+6. sing-box 1.14 配置格式（官方 migration 文档）：DNS server 写成 `{"type":"udp","server":"..."}` 这种对象（1.12 起）；`sniff`、`hijack-dns` 是 route rule 的 action（1.11 起）；WireGuard 是 `endpoints`，不再是 outbound（1.11 起）；`route.default_domain_resolver`（1.12 起）。SPEC 第 3 节的描述大致吻合，第 1 阶段生成配置时照新格式写。
+7. sing-box 的 WireGuard endpoint 里，peer 的 `allowed_ips` 决定 sing-box 会往隧道送哪些目标地址。要让“规则决定一切”，生成配置时这一项要写 `0.0.0.0/0, ::/0`，不能照抄 `.conf` 里的 AllowedIPs（SPEC 写的“忽略”应改成“固定为全部”）。V2 实测确认。
+
+### 未完成
+
+- Pangolin CLI 0.19.0 的下载和 `--help` 被本机权限设置拦下，留到 V7 再处理。
+
+---
+
+## V1 TUN 全直连 — 准备好，等维护者同意执行
+
+文件：`phase0/v1-tun-direct/`（config.json、run.ps1、test.ps1、cleanup.ps1）。
+`sing-box check -c phase0\v1-tun-direct\config.json`：通过（exit 0，没有警告）。
