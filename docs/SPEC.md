@@ -294,7 +294,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 
 - 第 0 阶段 V5 实测：`xboxlive.com`、`xbox.com`、`minecraft.net`、Steam 这几项都被学校拦截，加进规则后 PrismLauncher 和 Steam 都能登录。`steamcdn-a.akamaihd.net` 只放这一个主机名，**不要放整个 `akamaihd.net`**。
 - 程序规则优先用 **`process_path`（完整路径）**：`javaw.exe` 这类名字很多程序共用，按名字会误伤（V6 实测只用路径就能让 PrismLauncher 登录）。预设里不放路径（每台电脑不同），由用户在界面上从正在运行的程序里挑。
-- Xbox App 的进程名还没核实，预设先留空；第 1 阶段验收时用任务管理器确认后补上。
+- Xbox App 的进程名（2026-10-26 实测）：`XboxPcApp.exe`（主程序）、`XboxPcAppFT.exe`，已补进预设。都在 `C:\Program Files\WindowsApps\Microsoft.GamingApp_<版本>\` 下，路径带版本号，所以用程序名不用路径。`gamingservices.exe`（下载和安装游戏）、`GameBar.exe` 没有放进预设。
 
 **settings.json**：设置页（v0.5.0 起）
 
@@ -432,10 +432,10 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 
 - [ ] 点一次按钮完成连接，Xbox App 能登录、浏览商店、打开 Game Pass；PrismLauncher、Steam 能登录
 - [ ] 连接期间，非规则流量的出口 IP 仍是学校网络
-- [ ] 在任务管理器中结束 SplitGate 进程后，网络能在 5 秒内恢复正常
-- [ ] 断开再连接 20 次，没有残留进程、网卡或路由
-- [ ] 日志、诊断包和 `%APPDATA%\SplitGate\` 中搜索不到密码
-- [ ] 用任务管理器核实 Xbox App 的进程，补进预设
+- [x] 在任务管理器中结束 SplitGate 进程后，网络能在 5 秒内恢复正常（v0.6.0，手机热点 + WireGuard，1.6 秒，2026-10-26）
+- [x] 断开再连接 20 次，没有残留进程、网卡或路由（v0.6.0，手机热点 + WireGuard，每次断开后 0.7–1.1 秒清干净，2026-10-26）
+- [ ] 日志、诊断包和 `%APPDATA%\SplitGate\` 中搜索不到密码（v0.6.0 日志、设置、WebView2 数据、便携版文件夹、命令行、任务计划都搜不到 Cisco 密码和 WireGuard 私钥，2026-10-26；诊断包第 2 阶段才有，到时再测）
+- [x] 用任务管理器核实 Xbox App 的进程，补进预设（`XboxPcApp.exe`、`XboxPcAppFT.exe`，v0.6.1）
 
 ### 第 2 阶段：可观测性与 Pangolin
 

@@ -1,11 +1,11 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-26，版本 v0.5.0（之后加了 `phase1\` 验收脚本）。
+> 最后更新：2026-10-26，版本 v0.6.1。
 
 ## 现在在哪一步
 
-**第 1 阶段（MVP），页面和托盘都写完了，还没做第一次真正的连接测试。**（维护者 2026-10-26 定：先做页面，连接测试之后再做）
+**第 1 阶段验收：不靠学校网络的项目都在手机热点下通过了；剩下要在学校有线网络测的两项（App 登录、非规则流量出口）。** 维护者 2026-10-26 同意学校那两项延后，先做第 2 阶段（连接列表页 v0.6.0 已做，在 `feature/connections-page`）。
 
 ## 已完成
 
@@ -18,6 +18,7 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
+| 0.6.1 | — | Xbox 预设补上程序名 `XboxPcApp.exe`、`XboxPcAppFT.exe`（实测核实） |
 | 0.6.0 | — | 连接列表页（Clash API，每秒刷新、搜索 / 筛选、关闭单条、一键加规则 + 重新连接）、VPN / 直连速率；`find_process` 一直开。第 2 阶段项目，维护者同意提前做；**还没在真正连接下看过** |
 | 0.5.0 | `cb05976` | 设置页（开机自启用任务计划程序、自动连接、主题、sing-box 日志级别、TUN 网段，`settings.json`）、系统托盘（状态圆点 + 右键菜单）、关窗口缩到托盘、只能开一个、关于页补充 |
 
@@ -34,15 +35,22 @@
   - `SplitGate-TUN` 是虚拟网卡，任务管理器“性能”页不显示，属正常；`ncpa.cpl` / `Get-NetAdapter` 可以看到。
   - 断开 1.4 秒；之后没有 sing-box 进程、没有 `SplitGate*` 网卡、没有 172.19 路由，默认路由和 DNS 回到 Wi-Fi，IPv4 / IPv6 都恢复。日志里搜不到私钥。
 
+### 第 1 阶段验收（2026-10-26，v0.6.0 便携版，手机热点 + WireGuard，用 `phase1\` 脚本）
+- 断开再连接 20 次：PASS，每次断开后 0.7–1.1 秒没有残留，默认路由和 DNS 回到热点。
+- 任务管理器结束 SplitGate：PASS，1.6 秒网络恢复（limit 5 秒）。
+- 搜密码：PASS，365 个文件（设置文件夹、`%LOCALAPPDATA%\SplitGate`、便携版文件夹）+ SplitGate / sing-box 命令行 + 任务计划，搜不到 Cisco 密码和 WireGuard 私钥。SplitGate 开着时 WebView2 的 `Cookies` 和几个空 `LOCK` 文件被锁住没搜到。
+- Xbox App 进程名：`XboxPcApp.exe`（49 条连接）、`XboxPcAppFT.exe`，v0.6.1 补进预设。
+- 之前用清理脚本在**已连接**时结束了 sing-box：SplitGate 断线，之后能重新连接，不是 bug。
+
 ### 还没有验证
-- PrismLauncher / Steam / Xbox App 实际登录；Xbox App 进程名。
-- 学校有线网络下的 Cisco（非规则流量出口仍是学校网络）。
-- 任务管理器结束 SplitGate 后 5 秒内恢复；断开再连接 20 次没有残留。
+- 在学校有线网络下：Xbox App（登录、商店、Game Pass）、PrismLauncher、Steam 登录；非规则流量出口仍是学校网络（`phase1\exit-ip.ps1`）。到学校先重新做基准 `phase0\snapshot.ps1 -Baseline`。
+- 托盘右键菜单实际点一次；开机自启建立 / 删除、注销再登录在托盘启动。
+- v0.6.1 的 Xbox 预设：要在“规则”页对 Xbox 规则集按“恢复预设”才会加上程序名，之后在连接列表里看 Xbox App 的连接是不是走 VPN。
 
 ## 下一步（照顺序）
 
 1. ~~第一次真正连接测试~~（2026-10-26 完成，Cisco 和 WireGuard 都通过，见上）。回滚方法仍是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。
-2. 按 SPEC 第 1 阶段验收逐条测：Xbox App / PrismLauncher / Steam 能登录；非规则流量出口仍是学校网络；任务管理器结束 SplitGate 后 5 秒内恢复；断开再连接 20 次没有残留；日志和 `%APPDATA%\SplitGate\` 搜不到密码；核实 Xbox App 进程名补进预设。
+2. 按 SPEC 第 1 阶段验收逐条测（2026-10-26 热点下能测的都通过，见上；剩学校网络两项）：Xbox App / PrismLauncher / Steam 能登录；非规则流量出口仍是学校网络；任务管理器结束 SplitGate 后 5 秒内恢复；断开再连接 20 次没有残留；日志和 `%APPDATA%\SplitGate\` 搜不到密码；核实 Xbox App 进程名补进预设。
    辅助脚本在 `phase1\`（2026-10-26 写好，**还没在 Windows 上跑过**，第一次用时留意报错）。除 `kill-recovery.ps1 -KillNow` 会结束 SplitGate 外都只读；回滚一律是 `phase0\cleanup-all.ps1 -Apply`。先在断开状态跑一次 `phase0\snapshot.ps1 -Baseline` 当基准。
 
    | 验收项 | 脚本 | 怎么用 |
@@ -56,7 +64,7 @@
 
    结果日志在 `phase1\logs\`（不进 git）。
 3. ~~第 1 阶段剩下的页面~~（v0.5.0 完成）。还没验证：托盘右键菜单实际点一次、以管理员身份开 / 关开机自启（会建立 / 删除任务计划 `SplitGate`）、注销再登录后是否在托盘启动。
-4. 第 1 阶段全部验收后，等维护者确认才进入第 2 阶段（Pangolin、诊断包）。
+4. ~~第 1 阶段全部验收后才进入第 2 阶段~~：维护者 2026-10-26 同意学校网络两项延后，先做第 2 阶段（连接列表 v0.6.0 已做；接下来是拦截检测、睡眠唤醒重连、Pangolin、诊断包）。
 
 ## 与 SPEC 不完全一样的地方（要告诉维护者）
 
