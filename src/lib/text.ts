@@ -35,6 +35,7 @@ export const T = {
     speed: "速率",
     noProfile: "还没有 Profile。先到“Profile”页新建一个。",
     idle: "点上面的“连接”：只有命中规则的流量走 VPN 出口，其他照常走本地网络。",
+    homeWarnTitle: "注意",
     errorTitle: "连接失败",
     retryingTitle: "连接中断",
     stopRetry: "停止自动重连",
@@ -177,6 +178,9 @@ export const T = {
   profile: {
     rulesets: "使用的规则集",
     rulesetsHint: "关掉的规则集即使勾选也不生效",
+    homeCidrs: "家里内网网段",
+    homeCidrsHint:
+      "连上后要访问的家里设备所在的网段，多个用逗号分开，例如 192.168.1.0/24, 192.168.2.0/24。这些网段一律走这个出口；服务器那一端要允许访问内网。和你所在网络撞号时，连接后会提示。",
     pick: "出口",
     none: "（没有 Profile）",
     list: "全部 Profile",

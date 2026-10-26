@@ -159,6 +159,22 @@ pub fn hidden_command(exe: &Path) -> Command {
     cmd
 }
 
+/// IPv4 addresses of this PC as ("192.168.1.23/24", adapter name), without loopback, link-local
+/// and our own SplitGate* adapters. Empty when it cannot be read.
+pub fn local_ipv4_networks() -> Vec<(String, String)> {
+    let Ok(out) = powershell(LOCAL_NETS_SCRIPT).output() else { return Vec::new() };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| l.trim().split_once('|').map(|(c, a)| (c.to_string(), a.to_string())))
+        .collect()
+}
+
+const LOCAL_NETS_SCRIPT: &str = r#"
+Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.InterfaceAlias -notlike 'SplitGate*' -and $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
+    ForEach-Object { "$($_.IPAddress)/$($_.PrefixLength)|$($_.InterfaceAlias)" }
+"#;
+
 /// Windows PowerShell 5.1 running `script` (pure ASCII) without profile or window.
 /// Inputs go in through environment variables set by the caller, so nothing needs quoting.
 pub fn powershell(script: &str) -> Command {
@@ -245,6 +261,11 @@ pub fn on_show_request(_show: impl Fn() + Send + 'static) {}
 #[cfg(test)]
 mod encode_tests {
     use super::*;
+
+    #[test]
+    fn local_nets_script_is_ascii() {
+        assert!(LOCAL_NETS_SCRIPT.is_ascii());
+    }
 
     #[test]
     fn base64_matches_known_values() {

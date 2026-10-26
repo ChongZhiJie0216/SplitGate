@@ -9,7 +9,8 @@ export type Step = "prepare" | "cleanup" | "check" | "start" | "tunnel" | "probe
 export type Status =
   | { state: "disconnected" }
   | { state: "connecting"; profile_name: string; step: Step }
-  | { state: "connected"; profile_name: string; exit: ExitType; since_ms: number; probe_ms: number }
+  /** warnings：连上了，但有地方不会照预期工作（例如家里内网和本地网络撞号）。 */
+  | { state: "connected"; profile_name: string; exit: ExitType; since_ms: number; probe_ms: number; warnings: string[] }
   | { state: "disconnecting" }
   /** retrying：连接中断后正在等待自动重新连接。 */
   | { state: "error"; message: string; retrying: boolean };
@@ -69,6 +70,8 @@ export interface Profile {
   type: ExitType;
   name: string;
   ruleset_ids: string[];
+  /** 家里内网网段（IPv4 CIDR），一律走这个出口。 */
+  home_cidrs: string[];
   cisco?: CiscoProfile;
   pangolin?: PangolinProfile;
   wireguard?: WireguardProfile;

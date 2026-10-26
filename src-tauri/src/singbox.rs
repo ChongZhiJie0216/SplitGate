@@ -54,8 +54,10 @@ impl MergedRules {
     }
 }
 
+/// Rule sets plus the profile's own home LAN networks (those always go through the exit).
 pub fn merge_rules(profile: &Profile, rulesets: &[RuleSet]) -> MergedRules {
     let mut m = MergedRules::default();
+    add_unique(&mut m.ip_cidr, &profile.home_cidrs);
     for r in rulesets.iter().filter(|r| r.enabled && profile.ruleset_ids.contains(&r.id)) {
         add_unique(&mut m.domain_suffix, &r.domain_suffix);
         add_unique(&mut m.domain_keyword, &r.domain_keyword);
@@ -414,6 +416,18 @@ mod tests {
         assert!(m.domain_suffix.contains(&"xboxlive.com".to_string()));
         assert!(!m.domain_suffix.iter().any(|d| d.contains("steam")), "disabled set must not apply");
         assert!(!m.domain_suffix.contains(&"minecraft.net".to_string()), "unselected set must not apply");
+    }
+
+    #[test]
+    fn home_lan_goes_to_vpn_even_without_rule_sets() {
+        let mut p = cisco("a");
+        p.ruleset_ids = vec![];
+        p.home_cidrs = vec!["192.168.1.0/24".into()];
+        let m = merge_rules(&p, &presets());
+        assert_eq!(m.ip_cidr, vec!["192.168.1.0/24"]);
+        let c = build_config(&p, &m, &secrets(), &ClashApi { port: 9090, secret: "s".into() }, &Settings::default()).unwrap();
+        let rule = c["route"]["rules"].as_array().unwrap().iter().find(|r| r["ip_cidr"] == json!(["192.168.1.0/24"])).expect("home LAN rule");
+        assert_eq!(rule["outbound"], VPN_TAG);
     }
 
     #[test]

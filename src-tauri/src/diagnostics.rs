@@ -261,6 +261,7 @@ mod tests {
             kind: ExitType::Cisco,
             name: "学校".into(),
             ruleset_ids: vec![],
+            home_cidrs: vec![],
             cisco: Some(CiscoProfile {
                 server: "https://vpn.example.com:8443".into(),
                 user: "student01".into(),
@@ -277,6 +278,7 @@ mod tests {
             kind: ExitType::Wireguard,
             name: "家里".into(),
             ruleset_ids: vec![],
+            home_cidrs: vec![],
             cisco: None,
             pangolin: None,
             wireguard: Some(WireguardProfile {

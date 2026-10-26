@@ -244,6 +244,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
       "type": "cisco",
       "name": "Cisco 出口",
       "ruleset_ids": ["xbox", "minecraft", "steam"],
+      "home_cidrs": ["192.168.1.0/24"],
       "cisco": { "server": "vpn.example.com", "user": "user01", "auth_group": "Master Network", "no_udp": true, "bind_interface": null, "mfa": "none" }
     },
     {
@@ -264,7 +265,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 }
 ```
 
-`type` 决定使用哪个 ExitAdapter，并只读取同名的子对象。Cisco 的 `mfa` 取值为 `none` / `duo-push` / `saml`（MVP 只有 `none`）；`bind_interface` 为 `null` 表示系统自动。Cisco 密码、WireGuard 私钥存在 keyring；Pangolin 没有要存的凭据。同一时间只有 `active` 指向的出口生效。
+`type` 决定使用哪个 ExitAdapter，并只读取同名的子对象。`home_cidrs`（v0.10.0，可省略）：家里内网网段，一律送进这个出口；只能是内网 IPv4 网段（/8 到 /32，写网段第一个地址）；连接时和本机各网卡的 IPv4 网段比较，重叠就在“已连接”状态里带 `warnings` 提示（那时流量会留在本地网络）。Cisco 的 `mfa` 取值为 `none` / `duo-push` / `saml`（MVP 只有 `none`）；`bind_interface` 为 `null` 表示系统自动。Cisco 密码、WireGuard 私钥存在 keyring；Pangolin 没有要存的凭据。同一时间只有 `active` 指向的出口生效。
 
 **rules.json**：规则集（内置预设首次运行时复制进来，用户可改）
 
@@ -461,7 +462,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [x] 连接列表页（Clash API）、流量统计、从连接列表一键加规则（v0.6.0；维护者 2026-10-26 同意在第 1 阶段验收前先做；`find_process` 改成一直开，才能显示每条连接的程序）
 - [x] 拦截检测与拦截提示页（v0.7.0；主动 TLS 握手，见组件 8；**还没在学校网络下实测**）
 - [x] 睡眠唤醒检测与自动重连（v0.8.0；**还没实测睡眠唤醒**）
-- [ ] 所有出口都能访问家里内网设备（Cisco、WireGuard：家里网段规则 + 撞号检查）
+- [x] 所有出口都能访问家里内网设备（v0.10.0：Profile 的 `home_cidrs` + 连接时撞号检查；维护者 2026-10-26 实测手动 IP 段规则可以访问）
 
 ### 第 3 阶段：增强
 

@@ -55,6 +55,13 @@ export default function ConnectPage() {
           </tbody>
         </table>
       )}
+      {status.state === "connected" &&
+        status.warnings.map((w) => (
+          <div key={w} className="banner warn">
+            <b>{L.homeWarnTitle}：</b>
+            {w}
+          </div>
+        ))}
 
       {status.state === "connecting" && (
         <ol className="steps">

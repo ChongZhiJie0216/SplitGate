@@ -55,7 +55,8 @@ pub enum Step {
 pub enum Status {
     Disconnected,
     Connecting { profile_name: String, step: Step },
-    Connected { profile_name: String, exit: ExitType, since_ms: u64, probe_ms: u32 },
+    /// `warnings`: connected, but something will not work as expected (e.g. home LAN overlaps).
+    Connected { profile_name: String, exit: ExitType, since_ms: u64, probe_ms: u32, warnings: Vec<String> },
     Disconnecting,
     /// `retrying`: the connection broke and an automatic reconnect is waiting.
     Error { message: String, retrying: bool },
@@ -221,6 +222,10 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     cleanup::run(true)?;
 
     step(generation, &name, Step::Check)?;
+    let warnings = home_overlaps(&profile.home_cidrs, &platform::local_ipv4_networks());
+    for w in &warnings {
+        logs::warn(w);
+    }
     let exe = paths::singbox_exe();
     let api = ClashApi { port: singbox::free_port()?, secret: singbox::random_secret() };
     let config = singbox::build_config(&profile, &merged, &Secrets { main, preshared_key: psk }, &api, &settings::load_or_default())?;
@@ -274,7 +279,7 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     })?;
 
     let since_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-    if !set_if_current(generation, Status::Connected { profile_name: name.clone(), exit: profile.kind, since_ms, probe_ms }) {
+    if !set_if_current(generation, Status::Connected { profile_name: name.clone(), exit: profile.kind, since_ms, probe_ms, warnings }) {
         return Err(Failure::Cancelled);
     }
     logs::info(format!("已连接：{name}，经 VPN 测试 {probe_ms} ms"));
@@ -286,6 +291,23 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
         traffic::start(app.clone(), api, move || is_connected(generation));
     }
     Ok(())
+}
+
+/// A home network that overlaps this PC's own network never reaches home: Windows keeps that
+/// traffic on the local link (it is more specific than the TUN routes).
+fn home_overlaps(home: &[String], local: &[(String, String)]) -> Vec<String> {
+    let mut out = Vec::new();
+    for h in home {
+        let Some(hn) = config::parse_v4_cidr(h) else { continue };
+        for (addr, adapter) in local {
+            if config::parse_v4_cidr(addr).is_some_and(|ln| config::v4_overlap(hn, ln)) {
+                out.push(format!(
+                    "家里内网 {h} 和这台电脑现在的网络（{adapter}：{addr}）重叠：去这个网段的流量会留在本地网络，连不到家里的设备。换一个网络，或把家里的网段改成少见的（例如 192.168.77.0/24）。"
+                ));
+            }
+        }
+    }
+    out
 }
 
 fn is_connected(generation: u64) -> bool {
@@ -564,5 +586,14 @@ mod tests {
         let s = Status::Connecting { profile_name: "a".into(), step: Step::Probe };
         assert_eq!(serde_json::to_value(&s).unwrap(), serde_json::json!({"state": "connecting", "profile_name": "a", "step": "probe"}));
         assert_eq!(serde_json::to_value(Status::Disconnected).unwrap(), serde_json::json!({"state": "disconnected"}));
+    }
+
+    #[test]
+    fn home_lan_overlap_is_reported() {
+        let local = vec![("192.168.1.23/24".to_string(), "Wi-Fi".to_string()), ("172.20.10.2/28".to_string(), "Ethernet".to_string())];
+        let w = home_overlaps(&["192.168.1.0/24".into(), "192.168.2.0/24".into()], &local);
+        assert_eq!(w.len(), 1);
+        assert!(w[0].contains("192.168.1.0/24") && w[0].contains("Wi-Fi"));
+        assert!(home_overlaps(&[], &local).is_empty());
     }
 }
