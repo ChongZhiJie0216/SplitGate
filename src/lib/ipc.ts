@@ -223,6 +223,8 @@ export interface UpdateInfo {
 }
 
 export const checkUpdate = () => invoke<UpdateInfo>("check_update");
+/** 这个版本自带的 CHANGELOG（打包时编进程序），最新的在前面。 */
+export const getChangelog = () => invoke<UpdateSection[]>("get_changelog");
 export const openReleasePage = (url: string) => invoke<void>("open_release_page", { url });
 
 /** 诊断包：返回 zip 的完整路径（设置文件夹的 diagnostics 里）。 */

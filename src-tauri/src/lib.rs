@@ -107,6 +107,7 @@ pub fn run() {
             commands::export_diagnostics,
             commands::show_diagnostics,
             commands::check_update,
+            commands::get_changelog,
             commands::open_release_page,
         ])
         .build(tauri::generate_context!())

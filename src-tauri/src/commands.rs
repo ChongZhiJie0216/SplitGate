@@ -237,6 +237,12 @@ pub async fn check_update(app: tauri::AppHandle) -> Result<update::UpdateInfo, S
     tauri::async_runtime::spawn_blocking(move || update::check(&version)).await.map_err(|e| e.to_string())?
 }
 
+/// The CHANGELOG built into this exe, for the About page.
+#[tauri::command]
+pub fn get_changelog() -> Vec<update::Section> {
+    update::own_changelog()
+}
+
 #[tauri::command]
 pub fn open_release_page(url: String) -> Result<(), String> {
     update::open_release_page(&url)

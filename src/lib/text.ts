@@ -130,7 +130,7 @@ export const T = {
   about: {
     version: "版本",
     components: "组件版本",
-    licenses: "许可证与第三方声明见安装目录的 licenses 文件夹。",
+    licenses: "SplitGate 以 MIT 许可证发布；许可证与第三方声明见程序旁边的 licenses 文件夹。",
     dataDir: "设置文件夹",
     admin: "管理员身份",
     yes: "是",
@@ -143,10 +143,13 @@ export const T = {
     checking: "正在检查…",
     newVersion: (v: string) => `有新版本 v${v}`,
     upToDate: (v: string) => `已经是最新版本（GitHub 上最新是 v${v}）`,
+    ahead: (v: string) => `你用的这一版比 GitHub 上最新的 v${v} 还新（这一版还没发布）`,
     noRelease: "GitHub 上还没有发布任何版本。",
     openPage: "打开下载页",
     updateHint: "只提示，不会自动下载或安装。下载后关掉 SplitGate，用新的文件替换，旁边的 data 文件夹留着就行。",
     changes: "更新内容",
+    changelog: "更新记录",
+    changelogHint: "这一版自带的更新记录，不用联网。",
   },
   theme: { auto: "跟随系统", light: "亮", dark: "暗", label: "主题" },
   settings: {
@@ -237,7 +240,7 @@ export const T = {
       bindHint: "VPN 外层连接固定走这张网卡，例：Wi-Fi；留空 = 系统自动",
     },
     pangolin: {
-      note: "Pangolin 由官方客户端负责登录：先在官方客户端连接，并在 Pangolin 后台开启 Exit Node。这个出口第 2 阶段才能连接。",
+      note: "Pangolin 是备用出口，现在还不能连接（排在整个项目最后才做）。可以先保存设置。",
       iface: "官方客户端的网卡名称",
       vpnDns: "规则域名用的 DNS（逗号分隔）",
       vpnDnsHint: "不要用 1.1.1.1：Pangolin 会让它绕过隧道",

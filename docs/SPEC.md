@@ -421,7 +421,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 
 | 组件 | 许可证 | 要求 |
 | --- | --- | --- |
-| SplitGate 自身 | 自定（建议 MIT） | 无 |
+| SplitGate 自身 | MIT（维护者 2026-10-26 定，仓库根目录 `LICENSE`） | 便携版 zip 附在 `licenses\SplitGate-LICENSE.txt` |
 | sing-box | GPL-3.0-or-later，**附加条款：不得使用 sing-box 的名称或暗示与它有关联** | 作为独立进程分发；附带许可证文本，注明来源和版本，提供源码链接；产品名、安装包、界面文字不用 sing-box 的名字 |
 | Wintun | WireGuard LLC 的预编译二进制许可 | 只有在需要另附 wintun.dll 时适用：不修改 DLL，随使用它的软件一起分发 |
 | openconnect | LGPL-2.1 | 只在启用备用做法时适用 |

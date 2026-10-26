@@ -1,39 +1,215 @@
-# SplitGate（暂定名）
+# SplitGate 使用说明
 
-Windows 上按域名 / 程序分流的 VPN 客户端：只有命中规则的流量（Xbox、Minecraft、Steam）走 VPN 出口，其他流量照常走本地网络。
+SplitGate（暂定名）是 Windows 上按网址 / 程序分流的 VPN 客户端：**只有你指定的流量走 VPN，其他流量照常走本地网络**。
 
-目前在第 1 阶段（MVP 开发中），还不能连接。
+例如在学校网络里，只让 Xbox、Minecraft、Steam 经家里的 VPN 出去，绕过学校防火墙的拦截；上课用的网站、视频照样走学校网络，不会变慢。
 
-- 规格：`docs/SPEC.md`
-- 第 0 阶段验证结果：`docs/phase0-findings.md`
-- 更新记录：`CHANGELOG.md`
-- 第三方组件版本：`third_party/VERSIONS.md`（二进制不进 git，用 `third_party/fetch.ps1` 下载）
-- 网络出问题时：用管理员 PowerShell 执行 `powershell -ExecutionPolicy Bypass -File phase0\cleanup-all.ps1 -Apply`
+- 下载：[最新版本](https://github.com/ChongZhiJie0216/SplitGate/releases/latest)
+- 更新记录：[CHANGELOG.md](CHANGELOG.md)（软件“关于”页也看得到）
+- 要自己编译或发布：[docs/development.md](docs/development.md)
 
-## 开发
+## 目录
 
-需要：Node 22+、Rust（MSVC 工具链）、Visual Studio 2022 C++ 生成工具、WebView2。（7-Zip 只有重跑第 0 阶段脚本、用 `fetch.ps1 -All` 时才需要。）
+1. [安装](#1-安装)
+2. [第一次使用](#2-第一次使用)
+3. [各页面说明](#3-各页面说明)
+4. [常见问题](#4-常见问题)
+5. [设置存在哪里](#5-设置存在哪里)
+6. [更新](#6-更新)
+7. [网络出问题时](#7-网络出问题时)
+8. [卸载](#8-卸载)
+9. [许可证与声明](#9-许可证与声明)
 
-```
-powershell -ExecutionPolicy Bypass -File third_party\fetch.ps1        # 下载并校验 sing-box
-powershell -ExecutionPolicy Bypass -File scripts\prepare-sidecar.ps1  # 复制 sing-box 到 src-tauri\binaries
-npm install
-npx tauri dev                                                         # 开发版（不要求管理员，不能连接）
-cd src-tauri; cargo test                                              # 测试
-npx tauri build                                                       # 安装包（要求管理员运行）
-build.bat                                                             # 便携版（双击也可以；先跑测试，失败就停）
-```
+## 1. 安装
 
-便携版输出在 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe` + `licenses\`），另有同名 zip。两个 exe 要放在同一个文件夹；双击 `SplitGate.exe` 会要求管理员权限。设置、日志、诊断包都保存在 `SplitGate.exe` 旁边的 `data\` 文件夹（每一份 SplitGate 各有自己的 `data\`）；重新打包时 `data\` 会保留，zip 里不会有它。v0.11 以前的设置在 `%APPDATA%\SplitGate\`，v0.12 第一次启动时会自动复制过来。密码和私钥一直在 Windows 凭据管理器里，不在这些文件里。
+**电脑要求**
+- Windows 10 / 11，64 位。
+- WebView2：Windows 11 自带；Windows 10 没有的话，装 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。
+- 管理员权限：建立虚拟网卡要用，每次打开 SplitGate 时 Windows 会问一次。
 
-为了方便测试，`SplitGate.exe` 和 `sing-box.exe` 也会复制一份到仓库根目录（不进 git），直接双击根目录的 `SplitGate.exe` 就行。打包前要先从托盘“退出”SplitGate，否则 exe 被占用，脚本会一开始就停下并提示。
+**步骤**
+1. 从 [Releases](https://github.com/ChongZhiJie0216/SplitGate/releases/latest) 下载 `SplitGate-<版本>-portable.zip`。
+2. 解压到任意文件夹，例如 `D:\Apps\SplitGate\`。`SplitGate.exe` 和 `sing-box.exe` 要放在一起。
+3. 双击 `SplitGate.exe`，同意管理员权限。
 
-## 发布新版本（给别的电脑“检查更新”用）
+不用安装。设置会存在 `SplitGate.exe` 旁边的 `data\` 文件夹（第一次打开时自动建立）。
 
-1. 改好版本号和 `CHANGELOG.md`，合并进 `main`，在 `main` 上双击 `build.bat`。
-2. 先检查：`powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1`（只显示要做什么）。
-3. 再发布：同一个指令加 `-Yes`。需要 GitHub CLI（`gh auth login` 登录过）。仓库是公开的，Release 谁都看得到。
+## 2. 第一次使用
 
-SplitGate 的关于页“检查更新”（启动时也会自动查一次，设置里可以关）只提示有新版本和更新内容，不会自动下载或安装：下载 zip 后关掉 SplitGate，用新的文件替换，旁边的 `data\` 留着就行。
+1. **Profile 页 → 新建**一个出口：
+   - **Cisco**：填服务器、账号、密码；服务器的登录页有“组别”下拉框的话，组别也要填。
+   - **WireGuard**：按“导入 .conf 文件”，选家里 WireGuard 服务器给你的 `.conf`，再按“保存”。
+2. 在同一页勾选要走 VPN 的**规则集**（默认已勾 Xbox、Minecraft、Steam）。要访问家里的设备，再填**家里内网网段**（见下面 Profile 页）。
+3. 按“保存”。第一个保存的 Profile 会自动设为“使用中”；有好几个时，在顶部的“出口”下拉框选。
+4. 按顶部的**连接**。连接页会显示每一步，最后显示“已连接”和“经 VPN 测试 xx ms”就成功了。
+5. 打开 Xbox App / Steam 等试试。想确认哪些流量走了 VPN，看“连接列表”或“流量画布”。
 
-关闭窗口只是缩到托盘（连接不断开）；要完全退出，右键托盘图标 →“退出”。开机自启、自动连接等在“设置”页。
+关闭窗口只是缩到托盘，**连接不会断开**。要完全退出：右键托盘图标 →“退出”（会先断开）。
+
+## 3. 各页面说明
+
+### 连接
+
+- 大按钮：连接 / 断开。连接中会显示正在做哪一步，可以按“取消”。
+- 已连接时显示：用哪个出口、已连接多久、经 VPN 测试的延迟、VPN 和直连的速率。
+- 连接失败时显示原因，例如“没有保存密码”“可能被当前网络阻挡（学校网络挡 WireGuard UDP）”。详细情况点“详细情况看‘日志’页”。
+- 黄色“等待重新连接”：连接中断了（电脑睡眠唤醒、断网、VPN 断线），SplitGate 已经先清理让网络恢复，几秒后会自己重连，最多 5 次。可以按“立即重新连接”或“停止自动重连”。
+- 黄色“注意”：家里内网网段和你现在所在的网络撞号，见[常见问题](#4-常见问题)。
+
+### Profile（出口）
+
+每个 Profile 是一个 VPN 出口，加上要用的规则集。
+
+**Cisco（AnyLink / OpenConnect）**
+
+| 栏位 | 说明 |
+|---|---|
+| 服务器 | 例：`vpn.example.com` 或 `vpn.example.com:8443` |
+| 账号、密码 | 密码存在 Windows 凭据管理器；之后要改才填，留空表示不改 |
+| 组别 | 登录页面的组别下拉框（例：`Master Network`）；没有就留空。该填没填时，连接会提示“请填写组别” |
+| 只用 TCP | 学校网络挡 DTLS（UDP），建议勾选，否则连接会慢很多 |
+| 出口网卡 | VPN 本身的连接固定走这张网卡（例：学校有线不通时选 Wi-Fi 热点）；留空 = 系统自动 |
+
+**WireGuard**
+- “导入 .conf 文件”或把内容贴进去按“读取”，再按“保存”。私钥存在 Windows 凭据管理器，不留在设置文件里。
+- `.conf` 里的 AllowedIPs 会被忽略：哪些流量走 VPN 由规则决定。
+- 学校有线网络会挡 WireGuard（UDP），在学校请改用 Cisco 出口或手机热点。
+
+**Pangolin**：备用出口，现在还不能连接（排在整个项目最后才做）。
+
+**家里内网网段**（所有出口都有）
+- 填家里设备所在的网段，多个用逗号分开，例：`192.168.1.0/24, 192.168.2.0/24`。连上后这些网段一律走这个出口，可以直接打开家里的 PVE、NAS 等。
+- 只能填内网地址（10.x、172.16–31.x、192.168.x、100.64–127.x），要写网段的第一个地址（写 `192.168.1.5/24` 会提示改成 `192.168.1.0/24`）。
+- 服务器那一端（AnyLink / WireGuard）要允许 VPN 进来的流量访问内网。
+
+**删除 Profile** 会同时删除凭据管理器里它的密码 / 私钥（要按两次确认）。
+
+### 规则
+
+规则集决定哪些流量走 VPN。**规则集要“启用”，而且在使用中的 Profile 里勾选，才会生效**；命中任何一条规则的流量走 VPN，其他直连。改了规则要重新连接才生效。
+
+| 规则 | 说明 | 例子 |
+|---|---|---|
+| 域名（含子域名） | 最常用 | `xboxlive.com`（也包含 `login.xboxlive.com`） |
+| 域名关键字 | 域名里含这段文字就算；容易误伤，少用 | `xbox` |
+| 程序（完整路径） | 只认这一个程序文件，最准 | `D:\PrismLauncher\prismlauncher.exe` |
+| 程序名 | 同名的程序都会命中；`javaw.exe` 这类很多程序共用的不要用 | `XboxPcApp.exe` |
+| IP 段 | 单个 IP 也可以 | `20.0.0.0/8` |
+
+- **内置预设**：Xbox（含 Xbox App 的程序名）、Minecraft、Steam。可以改、可以关，不能删；改坏了按“恢复预设”。
+- **从正在运行的程序里挑**：先打开那个程序（例如 PrismLauncher），再按这个按钮选，会自动填完整路径。
+- 不知道某个网站要加什么域名时，最方便的是用“连接列表”或“拦截提示”里的“加规则”。
+
+### 连接列表
+
+连接期间实时列出每条连接：程序、目标（域名或 IP）、走 VPN 还是直连、命中哪条规则、流量、时长。
+
+- 可以搜索、只看 VPN / 只看直连、暂停刷新、关闭单条连接。
+- **加规则**：把这条连接的域名（可以一键改成上一级域名）、程序路径或 IP 加进某个规则集，再按“现在重新连接”就生效。
+
+### 流量画布
+
+用图显示流量怎么走：**程序 → 命中哪个规则集 → 从 VPN 还是直连出去**。线越粗流量越大，会动的绿色线走 VPN。滚轮缩放，拖动空白处移动。
+
+### 拦截提示
+
+连接期间，SplitGate 会对每个直连的 HTTPS 网站检查一次证书。证书被学校防火墙（Fortinet）换掉的网站会列在这里，表示“这个网站被当前网络拦截”。
+
+- **加规则**：加进规则集，重新连接后就走 VPN。已经加过的会标“已在规则里”。
+- **忽略**：这次开着 SplitGate 期间不再提示这个网站。**清空**：清掉列表，下次连接重新检查。
+- 有新发现时，左侧导航“拦截提示”旁边会显示个数。
+- “握手失败（不一定是拦截）”可能只是那个网站自己的问题，先观察再决定要不要加。
+
+### 日志
+
+SplitGate 和 sing-box 的日志，可以筛选、暂停滚动、复制。日志也存在 `data\logs\`，保留 30 天。密码和私钥写入前会换成 `***`。
+
+**导出诊断包**：打包成一个 zip（最近 7 天日志、设置、网络状态），存在 `data\diagnostics\`，按“在文件夹中显示”找到它。密码、私钥、服务器地址、账号、Windows 用户名都已换成代号，可以直接发给别人帮你看问题。
+
+### 设置
+
+| 设置 | 说明 |
+|---|---|
+| 开机自启 | 登录 Windows 后在托盘里启动（不弹窗口、不会每次问管理员）。用的是 Windows 任务计划程序。搬了 SplitGate 的位置后，这里会提示“改成这一个” |
+| 启动后自动连接 | 打开后自动连接使用中的 Profile |
+| 启动时检查有没有新版本 | 只提示，不会自动下载或安装 |
+| 主题 | 跟随系统 / 亮 / 暗 |
+| 连接中断后自动重新连接 | 默认开；马上生效 |
+| sing-box 日志级别 | 平时用 info；排查问题时改 debug。下次连接生效 |
+| TUN 网段 | SplitGate 虚拟网卡的地址，只有和其他网络撞网段时才要改。下次连接生效 |
+
+### 关于
+
+- 版本、sing-box 版本、是否以管理员身份运行、设置文件夹的位置。
+- **检查更新**：有新版本时显示更新内容，按“打开下载页”去下载（见[更新](#6-更新)）。有新版本时，左侧导航“关于”旁会亮一个点。
+- **更新记录**：每个版本改了什么，不用联网。
+
+### 系统托盘
+
+托盘图标右下角的圆点表示状态：灰 = 已断开、黄 = 连接中 / 等待重新连接、绿 = 已连接、红 = 错误。右键菜单：连接、断开、打开主窗口、退出。
+
+## 4. 常见问题
+
+**连接按钮是灰的 / 提示“需要以管理员身份运行”**
+SplitGate 要管理员权限才能连接。关掉后右键 `SplitGate.exe` →“以管理员身份运行”，或者打开开机自启。
+
+**WireGuard 在学校连不上，提示“可能被当前网络阻挡”**
+学校有线网络挡 WireGuard 用的 UDP。在学校请用 Cisco 出口（勾“只用 TCP”），或者改连手机热点。
+
+**Cisco 提示“服务器要求额外的登录信息”**
+多半是没填组别。到 Profile 页填上登录页面的组别（例：`Master Network`）。
+
+**某个网站 / 游戏还是被挡**
+看“拦截提示”有没有它；没有的话，打开那个网站或游戏，到“连接列表”找它的连接按“加规则”，再按“现在重新连接”。
+
+**连上后打不开家里的设备**
+1. Profile 的“家里内网网段”有没有填对。
+2. 连接页有没有黄色“注意”：你现在所在的网络和家里用了同一个网段（例如都是 `192.168.1.x`），这时去那个网段的流量会留在本地。换个网络，或者把家里的网段改成少见的（例如 `192.168.77.0/24`）。
+3. 服务器那一端有没有允许 VPN 访问内网。
+
+**关掉 Wi-Fi 后，Windows 的网络图标变成“有线”**
+那是 SplitGate 的虚拟网卡，正常现象。真正断网时，SplitGate 30 秒内会发现并开始自动重连。
+
+**连接列表里有些程序显示“（系统）”**
+那是 Windows 系统服务，Windows 不告诉 SplitGate 是哪个程序。
+
+## 5. 设置存在哪里
+
+| 内容 | 位置 |
+|---|---|
+| Profile、规则、设置（`*.json`）、日志、诊断包 | `SplitGate.exe` 旁边的 `data\` 文件夹 |
+| VPN 密码、WireGuard 私钥 | Windows 凭据管理器（“Windows 凭据”里名称含 `SplitGate` 的项目），不写进任何文件 |
+| 界面主题、WebView 缓存 | `%LOCALAPPDATA%\SplitGate\` |
+| 开机自启 | Windows 任务计划程序里名为 `SplitGate` 的任务 |
+
+- 每一份 `SplitGate.exe` 各有自己的 `data\`；搬动整个文件夹，设置就跟着走。
+- v0.11 以前的设置在 `%APPDATA%\SplitGate\`，v0.12 起第一次打开时会自动复制到 `data\`（旧文件夹不动，确认没问题后可以自己删掉）。
+
+## 6. 更新
+
+“关于”页的“检查更新”（启动时也会自动查一次）只提示有新版本和更新内容，**不会自动下载或安装**。更新方法：
+
+1. 右键托盘图标 →“退出”。
+2. 下载新的 zip，用里面的 `SplitGate.exe`、`sing-box.exe`、`licenses\` 覆盖旧的。
+3. `data\` 留着，设置就都在。
+
+## 7. 网络出问题时
+
+正常情况下，断开、退出、甚至 SplitGate 被强制结束，网络都会在几秒内自己恢复。万一没有：
+
+1. 右键托盘图标 →“退出”，再重新打开 SplitGate：它每次打开都会先清理残留的虚拟网卡和路由。
+2. 还是不行就重启电脑。
+3. 再有问题，到日志页“导出诊断包”，连同发生了什么一起发给维护者。
+
+## 8. 卸载
+
+1. 设置页关掉“开机自启”（会删除任务计划里的 `SplitGate` 任务）。
+2. 右键托盘图标 →“退出”。
+3. 删除 SplitGate 的整个文件夹（含 `data\`）。
+4. 想清干净的话：删除 `%LOCALAPPDATA%\SplitGate\`、旧版留下的 `%APPDATA%\SplitGate\`，以及凭据管理器里名称含 `SplitGate` 的项目（也可以先在 Profile 页删除每个 Profile，会一起删掉它的凭据）。
+
+## 9. 许可证与声明
+
+- SplitGate 本身以 [MIT 许可证](LICENSE) 发布（zip 里是 `licenses\SplitGate-LICENSE.txt`）。
+- 附带的 [sing-box](https://github.com/SagerNet/sing-box) 是独立程序，GPL-3.0-or-later，许可证在 `licenses\` 文件夹。SplitGate 与 sing-box 项目没有关联。
+- **使用提醒**：通过 VPN 绕过学校网络限制，可能违反学校或 VPN 提供方的使用政策，使用前请自行确认。

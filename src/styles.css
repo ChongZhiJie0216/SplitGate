@@ -819,6 +819,10 @@ button.link {
   font-weight: 600;
 }
 
+summary.update-ver {
+  cursor: pointer;
+}
+
 .md h4 {
   margin: 8px 0 4px;
   font-size: 13px;
