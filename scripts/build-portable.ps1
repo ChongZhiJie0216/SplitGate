@@ -19,6 +19,16 @@ foreach ($p in @(Get-Process -Name 'SplitGate', 'sing-box' -ErrorAction Silently
     if ($targets -contains $dir) { Fail "$($p.Path) is running. Quit SplitGate first (tray icon > Quit), then build again." }
 }
 
+# npm writes node_modules\.package-lock.json on every install: older than package-lock.json (or missing)
+# means a dependency was added or changed since the last install, e.g. after git pull.
+$installed = Join-Path $root 'node_modules\.package-lock.json'
+$lock = Join-Path $root 'package-lock.json'
+if (-not (Test-Path $installed) -or (Get-Item $installed).LastWriteTime -lt (Get-Item $lock).LastWriteTime) {
+    Write-Host '      frontend dependencies changed: npm ci'
+    npm ci --no-audit --no-fund
+    if ($LASTEXITCODE -ne 0) { Fail 'npm ci failed.' }
+}
+
 Write-Host '[2/5] Prepare sing-box sidecar'
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'prepare-sidecar.ps1')
 if ($LASTEXITCODE -ne 0) { Fail 'prepare-sidecar.ps1 failed.' }
