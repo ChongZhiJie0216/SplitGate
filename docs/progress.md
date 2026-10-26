@@ -1,7 +1,7 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-26，版本 v0.15.0。
+> 最后更新：2026-10-26，版本 v0.16.0。
 
 ## 现在在哪一步
 
@@ -18,7 +18,8 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
-| 0.15.0 | — | 后台服务第一步（`service.rs`：`--service` 服务模式、命名管道 ping、设置页安装 / 启动 / 移除 / 改成这一个）；build.bat 检查服务是否在跑；云端开始做 Windows 版 clippy（`--target x86_64-pc-windows-msvc`）。**还没在 Windows 上跑过**，测试见 `docs/test-plan.md` C |
+| 0.16.0 | — | Cisco：从服务器读组别改成下拉选择、测试登录、保存前先测试（`exits/cisco.rs`，AnyConnect XML init / auth-reply，PowerShell + stdin 传密码）。维护者 2026-10-26 要求，插在 Windows 服务第 2 步之前（服务第 2、3 步顺延 v0.17.0、v0.18.0）。**还没对真正的 AnyLink 服务器试过**，测试见 `docs/test-plan.md` D |
+| 0.15.0 | — | （维护者 2026-10-26 实测 C 部分通过）后台服务第一步（`service.rs`：`--service` 服务模式、命名管道 ping、设置页安装 / 启动 / 移除 / 改成这一个）；build.bat 检查服务是否在跑；云端开始做 Windows 版 clippy（`--target x86_64-pc-windows-msvc`）。**还没在 Windows 上跑过**，测试见 `docs/test-plan.md` C |
 | 0.14.0 | — | 关于页“更新记录”（`CHANGELOG.md` 打包时 `include_str!` 编进程序，`get_changelog`，当前版本默认展开）；README 改成使用说明，开发与发布搬到 `docs/development.md`；Profile 页 Pangolin 说明改正 |
 | 0.13.0 | — | 检查更新（`update.rs`：GitHub 最新 Release + 那个 tag 的 CHANGELOG；关于页按钮 + 启动时检查，设置可关；导航提示点）；`scripts\publish-release.ps1`。维护者定：会在别的电脑上用，在线升级排在 Windows 服务后。云端用假数据看过界面 |
 | 0.12.0 | — | 设置 / 日志 / 诊断包改放 `SplitGate.exe` 旁的 `data\`（维护者定），启动时从 `%APPDATA%\SplitGate` 复制缺少的三个设置文件；打包保留 `data\`、zip 不含；phase1 脚本跟着改。**还没在 Windows 上跑过** |

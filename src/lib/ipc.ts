@@ -99,6 +99,18 @@ export const saveProfile = (profile: Profile, secrets?: SecretsInput) =>
   invoke<{ id: string; view: ProfilesView }>("save_profile", { profile, secrets: secrets ?? null });
 export const deleteProfile = (id: string) => invoke<ProfilesView>("delete_profile", { id });
 export const setActiveProfile = (id: string) => invoke<ProfilesView>("set_active_profile", { id });
+/** Cisco / AnyLink：测试登录的结果（不建立隧道）。 */
+export type CiscoLoginResult =
+  | { result: "ok" }
+  | { result: "rejected"; message: string }
+  | { result: "needs_more"; message: string }
+  | { result: "failed"; message: string };
+
+/** 服务器登录页上的组别列表；不需要选组别的服务器返回空列表。 */
+export const ciscoGroups = (server: string) => invoke<string[]>("cisco_groups", { server });
+/** password 留空 = 用凭据管理器里已保存的密码。 */
+export const testCiscoLogin = (profile: Profile, password?: string) =>
+  invoke<CiscoLoginResult>("test_cisco_login", { profile, password: password || null });
 export const importWireguardConf = (text: string) => invoke<ImportedConf>("import_wireguard_conf", { text });
 
 export interface RuleSet {

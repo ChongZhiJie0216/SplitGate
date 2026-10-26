@@ -93,6 +93,8 @@ pub fn run() {
             commands::delete_profile,
             commands::set_active_profile,
             commands::import_wireguard_conf,
+            commands::cisco_groups,
+            commands::test_cisco_login,
             commands::list_rulesets,
             commands::save_ruleset,
             commands::delete_ruleset,

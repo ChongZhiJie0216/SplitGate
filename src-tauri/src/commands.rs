@@ -3,11 +3,11 @@
 use serde::Serialize;
 
 use crate::config::{self, Profile};
-use crate::exits::wireguard;
+use crate::exits::{cisco, wireguard};
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, block_detect, diagnostics, logs, paths, platform, service, supervisor, traffic, update};
+use crate::{autostart, block_detect, credentials, diagnostics, logs, paths, platform, service, supervisor, traffic, update};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -270,4 +270,31 @@ pub async fn remove_service() -> Result<service::ServiceState, String> {
         logs::info("已移除后台服务");
     }
     r
+}
+
+/// The AnyLink / Cisco server's group list, for the Profile page's drop-down.
+#[tauri::command]
+pub async fn cisco_groups(server: String) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || cisco::groups(&server)).await.map_err(|e| e.to_string())?
+}
+
+/// Tests a login without building a tunnel. An empty password means "the saved one".
+#[tauri::command]
+pub async fn test_cisco_login(profile: Profile, password: Option<String>) -> Result<cisco::LoginResult, String> {
+    let c = profile.cisco.clone().ok_or("缺少 Cisco 设置")?;
+    let password = match password.filter(|p| !p.is_empty()) {
+        Some(p) => p,
+        None if !profile.id.is_empty() => credentials::main_account(&profile)
+            .map(|a| credentials::get(&a))
+            .transpose()?
+            .flatten()
+            .ok_or("还没有保存密码，请先填写密码")?,
+        None => return Err("请先填写密码".into()),
+    };
+    logs::info(format!("测试 Cisco 登录：{}（账号 {}，组别 {}）", c.server, c.user, c.auth_group.as_deref().unwrap_or("无")));
+    let r = tauri::async_runtime::spawn_blocking(move || cisco::test_login(&c.server, &c.user, c.auth_group.as_deref(), &password))
+        .await
+        .map_err(|e| e.to_string())?;
+    logs::info(format!("测试 Cisco 登录结果：{r:?}"));
+    Ok(r)
 }
