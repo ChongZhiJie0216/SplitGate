@@ -19,7 +19,7 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 use crate::config::{self, ExitType};
@@ -42,7 +42,7 @@ const DOWN_AFTER_WAKE: Duration = Duration::from_secs(60);
 const DOWN_AFTER_CHANGE: Duration = Duration::from_secs(30);
 const RETRIES: u32 = 5;
 
-#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Step {
     Prepare,
@@ -53,7 +53,7 @@ pub enum Step {
     Probe,
 }
 
-#[derive(Serialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum Status {
     Disconnected,
@@ -69,10 +69,18 @@ struct Inner {
     status: Status,
     child: Option<Child>,
     generation: u64,
+    /// Clash API of the running sing-box (the app's connection list reads it).
+    api: Option<ClashApi>,
 }
 
-static STATE: Mutex<Inner> = Mutex::new(Inner { status: Status::Disconnected, child: None, generation: 0 });
+static STATE: Mutex<Inner> = Mutex::new(Inner { status: Status::Disconnected, child: None, generation: 0, api: None });
 static APP: OnceLock<AppHandle> = OnceLock::new();
+/// In the background service: every status change goes to the connected app through the pipe.
+type Sink = Box<dyn Fn(&Status) + Send + Sync>;
+static SINK: OnceLock<Sink> = OnceLock::new();
+/// Secrets the app handed over for this profile (the service cannot read the user's Credential
+/// Manager). Kept in memory for automatic reconnects; dropped on disconnect.
+static GIVEN: Mutex<Option<(String, Secrets)>> = Mutex::new(None);
 /// Set when sing-box reports a new default interface (it follows the physical network for its
 /// direct traffic), so the health check does not wait for its next minute.
 static NETWORK_CHANGED: AtomicBool = AtomicBool::new(false);
@@ -89,6 +97,18 @@ enum Ev {
 
 pub fn init(app: AppHandle) {
     let _ = APP.set(app);
+    init_job();
+}
+
+/// The background service: no window and no tray; status changes go to `sink`.
+// Only the Windows background service calls this.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn init_service(sink: impl Fn(&Status) + Send + Sync + 'static) {
+    let _ = SINK.set(Box::new(sink));
+    init_job();
+}
+
+fn init_job() {
     #[cfg(windows)]
     match platform::KillOnCloseJob::new() {
         Ok(j) => {
@@ -107,6 +127,34 @@ fn emit(status: &Status) {
         let _ = app.emit("status_changed", status);
         tray::update(app, status);
     }
+    if let Some(sink) = SINK.get() {
+        sink(status);
+    }
+}
+
+/// The running sing-box's Clash API while connected.
+// Only the Windows background service calls this.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn clash_api() -> Option<ClashApi> {
+    let s = STATE.lock().ok()?;
+    matches!(s.status, Status::Connected { .. }).then(|| s.api.clone()).flatten()
+}
+
+/// The handed-over secrets are only needed while connected or reconnecting.
+fn forget_given() {
+    if let Ok(mut g) = GIVEN.lock() {
+        *g = None;
+    }
+}
+
+/// Connect with secrets supplied by the caller instead of the Credential Manager (the service).
+// Only the Windows background service calls this.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn connect_with_secrets(profile_id: String, secrets: Secrets) -> Result<(), String> {
+    if let Ok(mut g) = GIVEN.lock() {
+        *g = Some((profile_id.clone(), secrets));
+    }
+    connect(Some(profile_id))
 }
 
 /// Change the status only if `generation` is still the current attempt.
@@ -163,7 +211,8 @@ pub fn connect(profile_id: Option<String>) -> Result<(), String> {
 
 /// `only_if`: an automatic reconnect only goes ahead while nothing else happened meanwhile.
 fn begin_connect(only_if: Option<u64>) -> Result<u64, String> {
-    if !platform::is_admin() {
+    // The background service runs as SYSTEM: it has the rights, whatever IsUserAnAdmin says.
+    if !platform::is_admin() && SINK.get().is_none() {
         return Err("需要以管理员身份运行 SplitGate 才能连接。".into());
     }
     let mut s = STATE.lock().map_err(|_| "内部错误")?;
@@ -204,20 +253,27 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     let name = profile.name.clone();
     step(generation, &name, Step::Prepare)?;
     if profile.kind == ExitType::Pangolin {
-        return Err("Pangolin 出口第 2 阶段才能连接。".into());
+        return Err("Pangolin 出口还不能连接（排在整个项目最后才做）。".into());
     }
     let merged = singbox::merge_rules(&profile, &rule_sets);
     if merged.is_empty() {
         return Err("这个 Profile 没有勾选任何开着的规则集，连接了也不会有流量走 VPN。请到“Profile”页勾选规则集。".into());
     }
-    let main_acc = credentials::main_account(&profile).ok_or("缺少凭据")?;
-    let main = credentials::get(&main_acc)?.ok_or(match profile.kind {
-        ExitType::Wireguard => "还没有保存 WireGuard 私钥。请到“Profile”页重新导入 .conf 并保存。",
-        _ => "还没有保存密码。请到“Profile”页填写密码并保存。",
-    })?;
-    let psk = match credentials::psk_account(&profile) {
-        Some(a) => credentials::get(&a)?,
-        None => None,
+    let given = GIVEN.lock().ok().and_then(|g| g.as_ref().filter(|(id, _)| *id == profile.id).map(|(_, s)| s.clone()));
+    let (main, psk) = match given {
+        Some(s) => (s.main, s.preshared_key),
+        None => {
+            let main_acc = credentials::main_account(&profile).ok_or("缺少凭据")?;
+            let main = credentials::get(&main_acc)?.ok_or(match profile.kind {
+                ExitType::Wireguard => "还没有保存 WireGuard 私钥。请到“Profile”页重新导入 .conf 并保存。",
+                _ => "还没有保存密码。请到“Profile”页填写密码并保存。",
+            })?;
+            let psk = match credentials::psk_account(&profile) {
+                Some(a) => credentials::get(&a)?,
+                None => None,
+            };
+            (main, psk)
+        }
     };
     let mut redact = vec![main.clone()];
     redact.extend(psk.clone());
@@ -267,6 +323,7 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
             return Err(Failure::Cancelled);
         }
         s.child = Some(child);
+        s.api = Some(api.clone());
     }
 
     step(generation, &name, Step::Tunnel)?;
@@ -522,6 +579,7 @@ fn reconnect(mut generation: u64, profile_id: String, first: String) {
         }
     }
     let message = format!("自动重新连接 {RETRIES} 次都没有成功（{why}）。网络已恢复，可以按“重新连接”再试。");
+    forget_given();
     set_if_current(generation, Status::Error { message, retrying: false });
 }
 
@@ -563,6 +621,7 @@ fn begin_disconnect() -> Result<Option<(u64, Option<Child>)>, String> {
         Status::Disconnected | Status::Disconnecting => return Ok(None),
         Status::Error { .. } if s.child.is_none() => {
             // Also stops a waiting automatic reconnect.
+            forget_given();
             s.generation += 1;
             s.status = Status::Disconnected;
             emit(&s.status);
@@ -583,6 +642,7 @@ fn finish_disconnect(generation: u64, child: Option<Child>) {
         logs::error(e);
     }
     logs::set_redactions(Vec::new());
+    forget_given();
     logs::info(format!("已断开（{} ms）", t.elapsed().as_millis()));
     set_if_current(generation, Status::Disconnected);
 }

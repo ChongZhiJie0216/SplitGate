@@ -1,10 +1,13 @@
-//! Background Windows service (SPEC 组件 5, step 1 of 3, v0.15.0). The same exe runs as the
-//! service with `--service`: LocalSystem, automatic start. For now it only answers on a named
-//! pipe ("I am here, version x"); connecting is still done by the app itself (step 2 moves the
-//! state machine into the service). The pipe only lets in the Windows user who installed the
-//! service and Administrators.
+//! Background Windows service (SPEC 组件 5). The same exe runs as the service with `--service`:
+//! LocalSystem, automatic start. Step 1 (v0.15.0): install / remove, a named pipe that answers
+//! "ping". Step 2 (v0.17.0): the connection state machine runs here (sing-box as SYSTEM, so the
+//! app no longer needs administrator rights for it); the app (`remote.rs`) sends connect /
+//! disconnect and the secrets, and gets status and log events back. The pipe only lets in the
+//! Windows user who installed the service and Administrators.
 //!
-//! Protocol: one JSON object per line each way, e.g. {"cmd":"ping"} → {"ok":true,"version":"0.15.0"}.
+//! Protocol: one JSON object per line each way. Requests have "cmd"; replies have "ok"; events
+//! (pushed after "hello") have "event". If the app that asked to connect disconnects from the
+//! pipe (it was closed or killed), the service disconnects too, like the job object did before.
 // The service only exists on Windows; elsewhere the shared pieces are only used by the tests.
 #![cfg_attr(not(windows), allow(dead_code))]
 
@@ -30,28 +33,58 @@ pub struct ServiceState {
     pub version: Option<String>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
-enum Request {
+pub(crate) enum Request {
     Ping,
+    /// Subscribe this pipe client to status and log events.
+    Hello,
+    /// Secrets come from the app (the service cannot read the user's Credential Manager).
+    Connect {
+        profile_id: String,
+        main: String,
+        #[serde(default)]
+        preshared_key: Option<String>,
+    },
+    Disconnect,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+pub(crate) struct Reply {
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl Reply {
+    fn ok() -> Self {
+        Reply { ok: true, ..Default::default() }
+    }
+    fn err(e: impl Into<String>) -> Self {
+        Reply { ok: false, error: Some(e.into()), ..Default::default() }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct Reply {
-    ok: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
+#[serde(tag = "event", rename_all = "snake_case")]
+pub(crate) enum Event {
+    /// `api`: the Clash API while connected, so the app can show connections and traffic itself.
+    Status { status: crate::supervisor::Status, api: Option<crate::singbox::ClashApi> },
+    Log { line: crate::logs::LogLine },
 }
 
-/// The service side of one request line.
-fn handle(line: &str) -> String {
-    let reply = match serde_json::from_str::<Request>(line) {
-        Ok(Request::Ping) => Reply { ok: true, version: Some(env!("CARGO_PKG_VERSION").into()), error: None },
-        Err(_) => Reply { ok: false, version: None, error: Some("unknown request".into()) },
-    };
-    serde_json::to_string(&reply).unwrap_or_default()
+/// Requests that need no connection state; the rest are handled by the service session.
+fn simple_reply(req: &Request) -> Option<Reply> {
+    match req {
+        Request::Ping => Some(Reply { ok: true, version: Some(env!("CARGO_PKG_VERSION").into()), error: None }),
+        _ => None,
+    }
+}
+
+fn parse_request(line: &str) -> Result<Request, Reply> {
+    serde_json::from_str::<Request>(line).map_err(|_| Reply::err("unknown request"))
 }
 
 pub fn is_service_launch() -> bool {
@@ -102,7 +135,7 @@ fn service_log(text: &str) {
 }
 
 #[cfg(windows)]
-pub use win::{install, remove, run_service, state};
+pub use win::{install, open_trusted_pipe, remove, run_service, state};
 
 #[cfg(not(windows))]
 pub fn run_service() {}
@@ -118,16 +151,20 @@ pub fn install() -> Result<ServiceState, String> {
 pub fn remove() -> Result<ServiceState, String> {
     Err("后台服务只支持 Windows".into())
 }
+#[cfg(not(windows))]
+pub fn open_trusted_pipe() -> Result<std::fs::File, String> {
+    Err("后台服务只支持 Windows".into())
+}
 
 #[cfg(windows)]
 mod win {
     use std::ffi::c_void;
     use std::fs::{File, OpenOptions};
     use std::io::{BufRead, BufReader, Read, Write};
-    use std::os::windows::io::FromRawHandle;
+    use std::os::windows::io::{AsRawHandle, FromRawHandle};
     use std::ptr::{null, null_mut};
-    use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
-    use std::sync::mpsc;
+    use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering};
+    use std::sync::{mpsc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -141,12 +178,12 @@ mod win {
     use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER};
     use windows_sys::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
     use windows_sys::Win32::System::Pipes::{
-        ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
+        ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeServerProcessId, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
         PIPE_WAIT,
     };
     use windows_sys::Win32::System::Services::{
         ChangeServiceConfig2W, ChangeServiceConfigW, CloseServiceHandle, ControlService, CreateServiceW, DeleteService, OpenSCManagerW,
-        OpenServiceW, QueryServiceConfigW, QueryServiceStatus, RegisterServiceCtrlHandlerExW, SetServiceStatus, StartServiceCtrlDispatcherW,
+        OpenServiceW, QueryServiceConfigW, QueryServiceStatus, QueryServiceStatusEx, SC_STATUS_PROCESS_INFO, SERVICE_STATUS_PROCESS, RegisterServiceCtrlHandlerExW, SetServiceStatus, StartServiceCtrlDispatcherW,
         StartServiceW, QUERY_SERVICE_CONFIGW, SC_HANDLE, SC_MANAGER_CONNECT, SC_MANAGER_CREATE_SERVICE, SERVICE_ACCEPT_SHUTDOWN,
         SERVICE_ACCEPT_STOP, SERVICE_ALL_ACCESS, SERVICE_AUTO_START, SERVICE_CONFIG_DESCRIPTION, SERVICE_CONTROL_INTERROGATE,
         SERVICE_CONTROL_SHUTDOWN, SERVICE_CONTROL_STOP, SERVICE_DESCRIPTIONW, SERVICE_ERROR_NORMAL, SERVICE_NO_CHANGE,
@@ -213,11 +250,26 @@ mod win {
         set_state(SERVICE_START_PENDING);
         let sid = allowed_sid_from_args();
         service_log(&format!("后台服务启动（v{}），管道允许的用户：{}", env!("CARGO_PKG_VERSION"), sid.as_deref().unwrap_or("只有管理员")));
+        // The app's log file and the pipe get every line; status changes go to the pipe.
+        crate::logs::init_service(|line| broadcast(&Event::Log { line: line.clone() }));
+        crate::supervisor::init_service(|status| {
+            // Only a Connected status needs the API; it is emitted without the state lock held.
+            let api = matches!(status, crate::supervisor::Status::Connected { .. }).then(crate::supervisor::clash_api).flatten();
+            broadcast(&Event::Status { status: status.clone(), api });
+        });
+        // Leftovers of a crash (SPEC "错误处理与清理"), as the app does at startup.
+        thread::spawn(|| match crate::cleanup::run(true) {
+            Ok(r) if r.is_clean() => crate::logs::info("后台服务启动检查：没有残留"),
+            Ok(_) => {}
+            Err(e) => crate::logs::error(e),
+        });
         thread::spawn(move || pipe_server(sid));
         set_state(SERVICE_RUNNING);
         while !STOP.load(Ordering::SeqCst) {
             thread::sleep(Duration::from_millis(200));
         }
+        // Stopping (or Windows shutting down) must leave the network as it was.
+        crate::supervisor::shutdown();
         service_log("后台服务停止");
         set_state(SERVICE_STOPPED);
     }
@@ -277,27 +329,91 @@ mod win {
         unsafe { LocalFree(sd) };
     }
 
+    /// Clients subscribed with "hello": each has its own writer thread, so a slow or stuck app
+    /// can never block the state machine that emits.
+    static CLIENTS: Mutex<Vec<(u64, mpsc::Sender<String>)>> = Mutex::new(Vec::new());
+    static NEXT_CLIENT: AtomicU64 = AtomicU64::new(1);
+    /// The client that asked to connect; when it goes away, the connection goes too.
+    static OWNER: AtomicU64 = AtomicU64::new(0);
+
+    fn broadcast(ev: &Event) {
+        let Ok(line) = serde_json::to_string(ev) else { return };
+        if let Ok(mut c) = CLIENTS.lock() {
+            c.retain(|(_, tx)| tx.send(line.clone()).is_ok());
+        }
+    }
+
     /// One client: answer each request line until it disconnects. Closing the File closes the pipe.
     fn serve(h: HANDLE) {
         let file = unsafe { File::from_raw_handle(h) };
-        let mut writer = match file.try_clone() {
-            Ok(w) => w,
-            Err(_) => return,
-        };
-        let mut reader = BufReader::new(file.take(MAX_LINE as u64 * 64));
+        let Ok(mut writer) = file.try_clone() else { return };
+        let id = NEXT_CLIENT.fetch_add(1, Ordering::SeqCst);
+        let (tx, rx) = mpsc::channel::<String>();
+        thread::spawn(move || {
+            for line in rx {
+                if writer.write_all(line.as_bytes()).and_then(|_| writer.write_all(b"\n")).and_then(|_| writer.flush()).is_err() {
+                    return;
+                }
+            }
+        });
+        let mut reader = BufReader::new(file);
         let mut line = String::new();
         loop {
             line.clear();
-            match reader.read_line(&mut line) {
-                Ok(0) | Err(_) => return,
-                Ok(_) if line.len() > MAX_LINE => return,
+            // Each line is capped on its own: a long-lived app connection never runs out.
+            match (&mut reader).take(MAX_LINE as u64).read_line(&mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) if !line.ends_with('\n') => break, // longer than MAX_LINE
                 Ok(_) => {
-                    let reply = handle(line.trim());
-                    if writer.write_all(reply.as_bytes()).and_then(|_| writer.write_all(b"\n")).and_then(|_| writer.flush()).is_err() {
-                        return;
+                    let reply = match parse_request(line.trim()) {
+                        Ok(req) => answer(req, id, &tx),
+                        Err(r) => r,
+                    };
+                    if tx.send(serde_json::to_string(&reply).unwrap_or_default()).is_err() {
+                        break;
                     }
                 }
             }
+        }
+        if let Ok(mut c) = CLIENTS.lock() {
+            c.retain(|(cid, _)| *cid != id);
+        }
+        if OWNER.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+            crate::logs::info("SplitGate 关掉了或被结束了，后台服务断开连接");
+            let _ = crate::supervisor::disconnect();
+        }
+    }
+
+    fn answer(req: Request, id: u64, tx: &mpsc::Sender<String>) -> Reply {
+        if let Some(r) = simple_reply(&req) {
+            return r;
+        }
+        match req {
+            Request::Hello => {
+                // The current state first, then every change.
+                let status = crate::supervisor::status();
+                let api = crate::supervisor::clash_api();
+                if let Ok(line) = serde_json::to_string(&Event::Status { status, api }) {
+                    let _ = tx.send(line);
+                }
+                if let Ok(mut c) = CLIENTS.lock() {
+                    c.push((id, tx.clone()));
+                }
+                Reply { ok: true, version: Some(env!("CARGO_PKG_VERSION").into()), error: None }
+            }
+            Request::Connect { profile_id, main, preshared_key } => {
+                OWNER.store(id, Ordering::SeqCst);
+                let secrets = crate::singbox::Secrets { main, preshared_key };
+                match crate::supervisor::connect_with_secrets(profile_id, secrets) {
+                    Ok(()) => Reply::ok(),
+                    Err(e) => Reply::err(e),
+                }
+            }
+            Request::Disconnect => match crate::supervisor::disconnect() {
+                Ok(()) => Reply::ok(),
+                Err(e) => Reply::err(e),
+            },
+            Request::Ping => Reply::ok(),
         }
     }
 
@@ -384,6 +500,37 @@ mod win {
 
     fn this_exe() -> String {
         std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default()
+    }
+
+    /// The process id Windows' service manager gives for the running service.
+    fn service_pid() -> Option<u32> {
+        let svc = open(SERVICE_QUERY_STATUS)?;
+        let mut st: SERVICE_STATUS_PROCESS = unsafe { std::mem::zeroed() };
+        let mut need = 0u32;
+        let size = std::mem::size_of::<SERVICE_STATUS_PROCESS>() as u32;
+        let ok = unsafe { QueryServiceStatusEx(svc.0, SC_STATUS_PROCESS_INFO, &mut st as *mut _ as *mut u8, size, &mut need) } != 0;
+        (ok && st.dwCurrentState == SERVICE_RUNNING && st.dwProcessId != 0).then_some(st.dwProcessId)
+    }
+
+    /// Opens the pipe and makes sure the other end really is SplitGateService: any program can
+    /// create a pipe with this name first, and it must never get the secrets the app sends.
+    pub fn open_trusted_pipe() -> Result<File, String> {
+        let expected = service_pid().ok_or("后台服务没有在运行")?;
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let pipe = loop {
+            match OpenOptions::new().read(true).write(true).open(PIPE_NAME) {
+                Ok(f) => break f,
+                Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY) && Instant::now() < deadline => thread::sleep(Duration::from_millis(100)),
+                Err(e) => return Err(format!("连不上后台服务：{e}")),
+            }
+        };
+        let mut pid = 0u32;
+        let ok = unsafe { GetNamedPipeServerProcessId(pipe.as_raw_handle() as HANDLE, &mut pid) } != 0;
+        if !ok || pid != expected {
+            crate::logs::error(format!("管道 {PIPE_NAME} 的另一端不是 SplitGate 后台服务（进程 {pid}，服务是 {expected}），不使用"));
+            return Err("连到的不是 SplitGate 后台服务".into());
+        }
+        Ok(pipe)
     }
 
     pub fn state() -> ServiceState {
@@ -512,12 +659,22 @@ mod tests {
 
     #[test]
     fn ping_reply_has_version() {
-        let r: Reply = serde_json::from_str(&handle(r#"{"cmd":"ping"}"#)).unwrap();
+        let r = simple_reply(&parse_request(r#"{"cmd":"ping"}"#).unwrap()).unwrap();
         assert!(r.ok);
         assert_eq!(r.version.as_deref(), Some(env!("CARGO_PKG_VERSION")));
-        let bad: Reply = serde_json::from_str(&handle(r#"{"cmd":"format_disk"}"#)).unwrap();
-        assert!(!bad.ok && bad.version.is_none());
-        assert!(!serde_json::from_str::<Reply>(&handle("not json")).unwrap().ok);
+        assert!(!parse_request(r#"{"cmd":"format_disk"}"#).unwrap_err().ok);
+        assert!(parse_request("not json").is_err());
+    }
+
+    #[test]
+    fn protocol_shapes() {
+        let c = parse_request(r#"{"cmd":"connect","profile_id":"school","main":"pw"}"#).unwrap();
+        assert_eq!(c, Request::Connect { profile_id: "school".into(), main: "pw".into(), preshared_key: None });
+        let ev = serde_json::to_value(Event::Status { status: crate::supervisor::Status::Disconnected, api: None }).unwrap();
+        assert_eq!(ev["event"], "status");
+        assert_eq!(ev["status"]["state"], "disconnected");
+        // Replies have no "event" key: that is how the app tells them apart.
+        assert!(serde_json::to_value(Reply::ok()).unwrap().get("event").is_none());
     }
 
     #[test]

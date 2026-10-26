@@ -1,4 +1,5 @@
 mod autostart;
+mod backend;
 mod block_detect;
 mod cleanup;
 mod commands;
@@ -10,6 +11,7 @@ mod logs;
 mod paths;
 mod platform;
 mod profiles;
+mod remote;
 mod rules;
 mod service;
 mod settings;
@@ -40,6 +42,7 @@ pub fn run() {
             let migrated = paths::migrate_old_data();
             logs::init(handle.clone());
             supervisor::init(handle.clone());
+            remote::init(handle.clone());
             logs::info(format!("SplitGate v{} 启动，设置文件夹：{}", app.package_info().version, paths::data_dir().display()));
             for m in migrated {
                 logs::info(format!("已从旧的设置文件夹复制：{m}（旧文件夹没有改动，确认无误后可以自己删掉）"));
@@ -65,9 +68,9 @@ pub fn run() {
                     Err(e) => logs::error(e),
                 }
                 if settings::load_or_default().auto_connect {
-                    if !platform::is_admin() {
-                        logs::warn("设置了启动后自动连接，但没有以管理员身份运行，跳过。");
-                    } else if let Err(e) = supervisor::connect(None) {
+                    if !platform::is_admin() && !backend::can_connect_without_admin() {
+                        logs::warn("设置了启动后自动连接，但没有以管理员身份运行，也没有可用的后台服务，跳过。");
+                    } else if let Err(e) = backend::connect(None) {
                         logs::error(format!("启动后自动连接失败：{e}"));
                     }
                 }
@@ -126,7 +129,7 @@ pub fn run() {
     app.run(|_, event| {
         // Quitting (tray menu "退出") ends the app: disconnect first (sing-box restores the routes).
         if let tauri::RunEvent::Exit = event {
-            supervisor::shutdown();
+            backend::shutdown();
         }
     });
 }

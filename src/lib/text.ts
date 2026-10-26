@@ -164,7 +164,7 @@ export const T = {
     connection: "连接",
     service: "后台服务（测试中）",
     serviceHint:
-      "以后 SplitGate 会改成由一个 Windows 后台服务负责连接，界面就不用再要求管理员。现在是第一步：服务只会回答 SplitGate 的询问，连接仍由 SplitGate 自己做，装不装都不影响使用。",
+      "装了后台服务，连接就由它负责（建立虚拟网卡、启动 sing-box、断线重连）；SplitGate 只负责显示，关掉或被结束时服务会自动断开、恢复网络。没装时，照旧由 SplitGate 自己连接（要管理员）。下一版起，装了服务的 SplitGate 就不用再要求管理员。",
     serviceNone: "还没有安装。",
     serviceRunning: (v: string) => `已安装，正在运行（v${v}）`,
     serviceNoAnswer: "已安装，正在运行，但没有回应",

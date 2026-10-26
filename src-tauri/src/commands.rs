@@ -7,7 +7,7 @@ use crate::exits::{cisco, wireguard};
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, block_detect, credentials, diagnostics, logs, paths, platform, service, supervisor, traffic, update};
+use crate::{autostart, backend, block_detect, credentials, diagnostics, logs, paths, platform, service, supervisor, traffic, update};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -134,18 +134,19 @@ pub fn list_running_processes() -> Vec<platform::RunningProcess> {
 }
 
 #[tauri::command]
-pub fn connect(profile_id: Option<String>) -> Result<(), String> {
-    supervisor::connect(profile_id)
+pub async fn connect(profile_id: Option<String>) -> Result<(), String> {
+    // Through the service this talks to the pipe (a second or two): keep it off the UI thread.
+    tauri::async_runtime::spawn_blocking(move || backend::connect(profile_id)).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn disconnect() -> Result<(), String> {
-    supervisor::disconnect()
+pub async fn disconnect() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(backend::disconnect).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub fn get_status() -> supervisor::Status {
-    supervisor::status()
+    backend::status()
 }
 
 #[tauri::command]

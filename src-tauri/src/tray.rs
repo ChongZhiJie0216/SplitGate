@@ -8,7 +8,8 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 
-use crate::supervisor::{self, Status};
+use crate::backend;
+use crate::supervisor::Status;
 use crate::{logs, platform};
 
 struct Tray {
@@ -28,7 +29,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let sep = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&connect, &disconnect, &sep, &open, &quit])?;
     let base = app.default_window_icon().cloned().map(|i| i.to_owned()).unwrap_or_else(|| Image::new_owned(vec![0; 4], 1, 1));
-    let status = supervisor::status();
+    let status = backend::status();
     let icon = TrayIconBuilder::with_id("main")
         .icon(with_dot(&base, &status))
         .tooltip(tooltip(&status))
@@ -36,13 +37,13 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "connect" => {
-                if let Err(e) = supervisor::connect(None) {
+                if let Err(e) = backend::connect(None) {
                     logs::error(&e);
                     show_window(app);
                 }
             }
             "disconnect" => {
-                if let Err(e) = supervisor::disconnect() {
+                if let Err(e) = backend::disconnect() {
                     logs::error(e);
                 }
             }

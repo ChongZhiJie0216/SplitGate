@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::config::{self, ProfilesFile};
 use crate::singbox::{self, ClashApi, Secrets};
-use crate::{block_detect, cleanup, credentials, logs, paths, platform, rules, settings, supervisor};
+use crate::{block_detect, cleanup, credentials, logs, paths, platform, rules, settings};
 
 const LOG_DAYS: usize = 7;
 /// JSON keys whose values are always replaced, wherever they appear.
@@ -219,7 +219,7 @@ fn summary(app_version: &str, singbox_version: Option<String>) -> String {
         format!("sing-box {}", singbox_version.unwrap_or_else(|| "（找不到）".into())),
         format!("管理员身份：{}", if platform::is_admin() { "是" } else { "否" }),
         format!("设置文件夹：{}", paths::data_dir().display()),
-        format!("状态：{}", serde_json::to_string(&supervisor::status()).unwrap_or_default()),
+        format!("状态：{}", serde_json::to_string(&crate::backend::status()).unwrap_or_default()),
         format!("残留检查：{leftovers}"),
         format!("拦截提示：{}", if blocked.is_empty() { "没有".into() } else { blocked.join("；") }),
     ]
