@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 
 use crate::config::{ExitType, Profile};
 use crate::rules::RuleSet;
+use crate::settings::Settings;
 
 pub const TUN_NAME: &str = "SplitGate-TUN";
 pub const VPN_TAG: &str = "vpn";
@@ -167,7 +168,7 @@ pub fn build_config(
     rules: &MergedRules,
     secrets: &Secrets,
     api: &ClashApi,
-    log_level: &str,
+    settings: &Settings,
 ) -> Result<Value, String> {
     let (endpoint, vpn_dns, server_host) = exit_parts(profile, secrets)?;
 
@@ -232,7 +233,7 @@ pub fn build_config(
     }
 
     Ok(json!({
-        "log": { "level": log_level, "timestamp": true },
+        "log": { "level": settings.singbox_log_level, "timestamp": true },
         "dns": {
             // "local" (system resolver) is right for Cisco / WireGuard (phase 0 V1–V6). Pangolin will need
             // the physical adapter's own DNS instead (SPEC 组件 3), added with that exit in phase 2.
@@ -246,7 +247,7 @@ pub fn build_config(
             "tag": "tun-in",
             "interface_name": TUN_NAME,
             // Keep an IPv6 address so IPv6 traffic enters the TUN (and gets rejected) instead of bypassing it.
-            "address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+            "address": [settings.tun_ipv4, "fdfe:dcba:9876::1/126"],
             "auto_route": true,
             "strict_route": true,
         }],
@@ -397,7 +398,7 @@ mod tests {
     fn cisco_config_layout() {
         let p = cisco("school");
         let m = MergedRules { domain_suffix: vec!["xboxlive.com".into()], process_path: vec![r"C:\G\a.exe".into()], ..Default::default() };
-        let c = build_config(&p, &m, &secrets(), &api(), "info").unwrap();
+        let c = build_config(&p, &m, &secrets(), &api(), &Settings::default()).unwrap();
         let ep = &c["endpoints"][0];
         assert_eq!(ep["type"], "openconnect");
         assert_eq!(ep["server"], "https://vpn.example.com");
@@ -424,7 +425,7 @@ mod tests {
     fn wireguard_config_layout() {
         let p = wg_profile();
         let s = Secrets { main: "A".repeat(43) + "=", preshared_key: Some("C".repeat(43) + "=") };
-        let c = build_config(&p, &MergedRules::default(), &s, &api(), "info").unwrap();
+        let c = build_config(&p, &MergedRules::default(), &s, &api(), &Settings::default()).unwrap();
         let ep = &c["endpoints"][0];
         assert_eq!(ep["type"], "wireguard");
         assert_eq!(ep["peers"][0]["allowed_ips"], json!(["0.0.0.0/0", "::/0"]));
@@ -436,11 +437,26 @@ mod tests {
         assert_eq!(c["dns"]["rules"], json!([]));
     }
 
+    /// Settings page values: TUN address and sing-box log level reach the config.
+    fn debug_settings() -> Settings {
+        Settings { singbox_log_level: "debug".into(), tun_ipv4: "10.255.0.1/24".into(), ..Settings::default() }
+    }
+
+    #[test]
+    fn settings_reach_config() {
+        let c = build_config(&cisco("a"), &MergedRules::default(), &secrets(), &api(), &Settings::default()).unwrap();
+        assert_eq!(c["inbounds"][0]["address"][0], "172.19.0.1/30");
+        assert_eq!(c["log"]["level"], "info");
+        let c = build_config(&cisco("a"), &MergedRules::default(), &secrets(), &api(), &debug_settings()).unwrap();
+        assert_eq!(c["inbounds"][0]["address"][0], "10.255.0.1/24");
+        assert_eq!(c["log"]["level"], "debug");
+    }
+
     #[test]
     fn pangolin_not_yet() {
         let mut p = cisco("p");
         p.kind = ExitType::Pangolin;
-        assert!(build_config(&p, &MergedRules::default(), &secrets(), &api(), "info").is_err());
+        assert!(build_config(&p, &MergedRules::default(), &secrets(), &api(), &Settings::default()).is_err());
     }
 
     /// The generated configs must pass the pinned sing-box's own check (skipped when it is not downloaded).
@@ -459,10 +475,10 @@ mod tests {
         sets[0].ip_cidr = vec!["20.0.0.0/8".into()];
         sets[0].domain_keyword = vec!["xbox".into()];
         let m = merge_rules(&p, &sets);
-        check(&exe, &build_config(&p, &m, &secrets(), &api(), "info").unwrap()).unwrap();
+        check(&exe, &build_config(&p, &m, &secrets(), &api(), &Settings::default()).unwrap()).unwrap();
 
         let w = wg_profile();
         let s = Secrets { main: "A".repeat(43) + "=", preshared_key: None };
-        check(&exe, &build_config(&w, &MergedRules::default(), &s, &api(), "warn").unwrap()).unwrap();
+        check(&exe, &build_config(&w, &MergedRules::default(), &s, &api(), &debug_settings()).unwrap()).unwrap();
     }
 }

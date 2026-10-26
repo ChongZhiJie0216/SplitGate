@@ -21,7 +21,9 @@ npm install
 npx tauri dev                                                         # 开发版（不要求管理员，不能连接）
 cd src-tauri; cargo test                                              # 测试
 npx tauri build                                                       # 安装包（要求管理员运行）
-powershell -ExecutionPolicy Bypass -File scripts\build-portable.ps1   # 便携版（先跑测试，失败就停）
+build.bat                                                             # 便携版（双击也可以；先跑测试，失败就停）
 ```
 
 便携版输出在 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe` + `licenses\`），另有同名 zip。两个 exe 要放在同一个文件夹；双击 `SplitGate.exe` 会要求管理员权限。设置和日志仍保存在 `%APPDATA%\SplitGate\`。
+
+关闭窗口只是缩到托盘（连接不断开）；要完全退出，右键托盘图标 →“退出”。开机自启、自动连接等在“设置”页。

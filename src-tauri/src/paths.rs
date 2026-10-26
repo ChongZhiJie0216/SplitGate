@@ -21,6 +21,10 @@ pub fn rules_json() -> PathBuf {
     data_dir().join("rules.json")
 }
 
+pub fn settings_json() -> PathBuf {
+    data_dir().join("settings.json")
+}
+
 pub fn logs_dir() -> PathBuf {
     data_dir().join("logs")
 }

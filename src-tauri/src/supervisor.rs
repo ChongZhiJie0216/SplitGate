@@ -19,7 +19,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::config::{self, ExitType};
 use crate::singbox::{self, ClashApi, Secrets};
-use crate::{cleanup, credentials, logs, paths, platform, rules};
+use crate::{cleanup, credentials, logs, paths, platform, rules, settings, tray};
 
 const TUNNEL_TIMEOUT: Duration = Duration::from_secs(60);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -83,6 +83,7 @@ pub fn status() -> Status {
 fn emit(status: &Status) {
     if let Some(app) = APP.get() {
         let _ = app.emit("status_changed", status);
+        tray::update(app, status);
     }
 }
 
@@ -195,7 +196,7 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     step(generation, &name, Step::Check)?;
     let exe = paths::singbox_exe();
     let api = ClashApi { port: singbox::free_port()?, secret: singbox::random_secret() };
-    let config = singbox::build_config(&profile, &merged, &Secrets { main, preshared_key: psk }, &api, "info")?;
+    let config = singbox::build_config(&profile, &merged, &Secrets { main, preshared_key: psk }, &api, &settings::load_or_default())?;
     singbox::check(&exe, &config)?;
 
     step(generation, &name, Step::Start)?;

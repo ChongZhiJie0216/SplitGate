@@ -1,11 +1,11 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-26，版本 v0.4.0（commit `7ae99ab`）。
+> 最后更新：2026-10-26，版本 v0.5.0。
 
 ## 现在在哪一步
 
-**第 1 阶段（MVP），功能大部分写完，还没做第一次真正的连接测试。**
+**第 1 阶段（MVP），页面和托盘都写完了，还没做第一次真正的连接测试。**（维护者 2026-10-26 定：先做页面，连接测试之后再做）
 
 ## 已完成
 
@@ -18,27 +18,36 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
+| 0.5.0 | — | 设置页（开机自启用任务计划程序、自动连接、主题、sing-box 日志级别、TUN 网段，`settings.json`）、系统托盘（状态圆点 + 右键菜单）、关窗口缩到托盘、只能开一个、关于页补充 |
 
 ### 已验证（不改网络的部分）
-- `cargo test` 29 项通过（含用真正的 sing-box 检查生成的 Cisco、WireGuard 配置）；`cargo clippy -D warnings` 0 警告；`npm run build` 通过。
+- v0.5.0：`cargo test` 36 项通过；开发版实测：设置页保存 / 拒绝错误 TUN 网段、关于页、关窗口后进程仍在且窗口隐藏、再开一次只叫出原窗口（仍是 1 个进程），console 无错误。
+- v0.4.0：`cargo test` 29 项通过（含用真正的 sing-box 检查生成的 Cisco、WireGuard 配置）；`cargo clippy -D warnings` 0 警告；`npm run build` 通过。
 - 非管理员开发版：连接按钮是灰的，直接调用会提示“需要以管理员身份运行”；启动检查显示“没有残留”；日志页正常。
 - 便携版 `portable\SplitGate\`：`SplitGate.exe` 4.2 MB（清单要求管理员，属性版本 0.4.0）+ `sing-box.exe` 78.3 MB；zip 28.2 MB。
 
+### 第一次真正连接（2026-10-26，便携版，管理员）
+- Cisco（v0.4.0，16:07）：6 秒连上，经 VPN 测试 138 ms；断开 2.7 秒。维护者用 PowerShell 测规则网站都能访问。
+- WireGuard（v0.5.0，20:06，手机热点模拟外地）：4 秒连上，经 VPN 测试 351 ms，日志 0 警告 0 错误。
+  - 非规则流量出口仍是手机网络；xbox.com、Steam 商店、minecraft.net 经日志确认走 WireGuard，都能访问（minecraft.net 不回应 curl，PowerShell 可以）。IPv6 被拒绝（照设计）。
+  - `SplitGate-TUN` 是虚拟网卡，任务管理器“性能”页不显示，属正常；`ncpa.cpl` / `Get-NetAdapter` 可以看到。
+  - 断开 1.4 秒；之后没有 sing-box 进程、没有 `SplitGate*` 网卡、没有 172.19 路由，默认路由和 DNS 回到 Wi-Fi，IPv4 / IPv6 都恢复。日志里搜不到私钥。
+
 ### 还没有验证
-- **真正连接**（Cisco、WireGuard 都还没连过）。状态机的“隧道建立”和“测试隧道”两步只在第 0 阶段用脚本测过，没在程序里跑过。
+- PrismLauncher / Steam / Xbox App 实际登录；Xbox App 进程名。
+- 学校有线网络下的 Cisco（非规则流量出口仍是学校网络）。
+- 任务管理器结束 SplitGate 后 5 秒内恢复；断开再连接 20 次没有残留。
 
 ## 下一步（照顺序）
 
-1. **第一次真正连接测试**（要先得到维护者同意）
-   - 开始前列出会改动的东西：建立 `SplitGate-TUN` 网卡、加 strict_route 路由、接管 DNS。
-   - 回滚：按“断开” → 关掉 SplitGate 窗口 → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。
-   - 维护者以管理员身份启动（开发版或 `portable\SplitGate\SplitGate.exe`），**自己**在 Profile 页输入 Cisco 密码或导入 WireGuard `.conf`，再点“连接”。
-   - 待维护者决定：先测 Cisco 还是 WireGuard。
+1. ~~第一次真正连接测试~~（2026-10-26 完成，Cisco 和 WireGuard 都通过，见上）。回滚方法仍是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。
 2. 按 SPEC 第 1 阶段验收逐条测：Xbox App / PrismLauncher / Steam 能登录；非规则流量出口仍是学校网络；任务管理器结束 SplitGate 后 5 秒内恢复；断开再连接 20 次没有残留；日志和 `%APPDATA%\SplitGate\` 搜不到密码；核实 Xbox App 进程名补进预设。
-3. 第 1 阶段剩下的页面：设置页、关于页补充内容、系统托盘。
+3. ~~第 1 阶段剩下的页面~~（v0.5.0 完成）。还没验证：托盘右键菜单实际点一次、以管理员身份开 / 关开机自启（会建立 / 删除任务计划 `SplitGate`）、注销再登录后是否在托盘启动。
 4. 第 1 阶段全部验收后，等维护者确认才进入第 2 阶段（Pangolin、诊断包）。
 
 ## 与 SPEC 不完全一样的地方（要告诉维护者）
+
+- 关窗口缩到托盘后，只有托盘菜单“退出”才会断开并结束。删除便携版前，先在设置页关掉开机自启（否则任务计划里会留一个指向旧位置的任务）。
 
 - SPEC 写“ExitAdapter trait”：目前是 `singbox.rs` 里按出口类型分开生成（`match`），还没抽成 trait；第 2 阶段加 Pangolin 时再整理。
 - 便携版是文件夹（SplitGate.exe + sing-box.exe），不是单一 exe：sing-box 本身 78 MB，单一 exe 要每次解压。设置仍在 `%APPDATA%\SplitGate\`。

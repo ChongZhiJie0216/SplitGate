@@ -1,17 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Page, useApp } from "./store/app";
 import { useProfiles } from "./store/profiles";
 import { useStatus } from "./store/status";
 import { T } from "./lib/text";
-import { Theme, applyTheme, loadTheme } from "./lib/theme";
 import { setActiveProfile } from "./lib/ipc";
 import ConnectButton from "./components/ConnectButton";
 import AboutPage from "./pages/AboutPage";
 import ConnectPage from "./pages/ConnectPage";
 import LogsPage from "./pages/LogsPage";
-import PlaceholderPage from "./pages/PlaceholderPage";
 import ProfilesPage from "./pages/ProfilesPage";
 import RulesPage from "./pages/RulesPage";
+import SettingsPage from "./pages/SettingsPage";
 
 const PAGES: Page[] = ["connect", "rules", "logs", "profiles", "settings", "about"];
 
@@ -19,7 +18,6 @@ export default function App() {
   const { page, setPage, info, infoError, loadInfo } = useApp();
   const { view, load: loadProfiles, run } = useProfiles();
   const { status, start } = useStatus();
-  const [theme, setTheme] = useState<Theme>(loadTheme());
   const busy = status.state !== "disconnected" && status.state !== "error";
 
   useEffect(() => {
@@ -27,11 +25,6 @@ export default function App() {
     loadProfiles();
     start();
   }, [loadInfo, loadProfiles, start]);
-
-  const changeTheme = (t: Theme) => {
-    setTheme(t);
-    applyTheme(t);
-  };
 
   return (
     <div className="shell">
@@ -63,14 +56,6 @@ export default function App() {
             </select>
           </label>
           <div className="spacer" />
-          <label className="theme">
-            {T.theme.label}
-            <select value={theme} onChange={(e) => changeTheme(e.target.value as Theme)}>
-              <option value="auto">{T.theme.auto}</option>
-              <option value="light">{T.theme.light}</option>
-              <option value="dark">{T.theme.dark}</option>
-            </select>
-          </label>
         </header>
         {info && !info.isAdmin && <div className="banner warn">{T.notAdmin}</div>}
         {infoError && <div className="banner bad">{infoError}</div>}
@@ -86,7 +71,7 @@ export default function App() {
           ) : page === "rules" ? (
             <RulesPage />
           ) : (
-            <PlaceholderPage title={T.nav[page]} />
+            <SettingsPage />
           )}
         </section>
       </main>

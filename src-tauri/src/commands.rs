@@ -6,7 +6,8 @@ use crate::config::{self, Profile};
 use crate::exits::wireguard;
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
-use crate::{logs, paths, platform, supervisor};
+use crate::settings::{self, Settings};
+use crate::{autostart, logs, paths, platform, supervisor};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -155,4 +156,36 @@ pub fn get_logs() -> Vec<logs::LogLine> {
 #[tauri::command]
 pub fn import_wireguard_conf(text: String) -> Result<wireguard::ImportedConf, String> {
     wireguard::parse_conf(&text)
+}
+
+#[derive(Serialize)]
+pub struct SettingsView {
+    settings: Settings,
+    autostart: autostart::AutostartState,
+    /// settings.json could not be read: the page shows defaults and this message.
+    error: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_settings() -> SettingsView {
+    let (settings, error) = match settings::load() {
+        Ok(s) => (s, None),
+        Err(e) => (Settings::default(), Some(e)),
+    };
+    SettingsView { settings, autostart: autostart::state(), error }
+}
+
+#[tauri::command]
+pub fn save_settings(settings: Settings) -> Result<Settings, String> {
+    let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
+    settings::save(&settings)?;
+    logs::info("设置已保存（下次连接时生效）");
+    Ok(settings)
+}
+
+#[tauri::command]
+pub fn set_autostart(enabled: bool) -> Result<autostart::AutostartState, String> {
+    let r = autostart::set(enabled)?;
+    logs::info(if r.enabled { "已开启开机自启（任务计划程序）" } else { "已关闭开机自启" });
+    Ok(r)
 }

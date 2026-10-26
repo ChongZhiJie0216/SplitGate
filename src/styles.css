@@ -620,3 +620,10 @@ button.link {
   padding: 4px 0;
   word-break: break-all;
 }
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+}

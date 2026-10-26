@@ -4,8 +4,21 @@
 
 ## 未发布
 
+## 0.5.0 — 2026-10-26（设置页、系统托盘）
+
 ### 新增
-- 便携版：`scripts\build-portable.ps1` 先跑测试，再生成 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe`）和 zip，不用安装。
+- “设置”页：
+  - 开机自启：登录 Windows 后在托盘里启动，不弹窗口。用 Windows 任务计划程序以管理员身份启动，不会每次弹出确认框；便携版搬了位置时会提示并可以一键改过来。
+  - 启动后自动连接（使用中的 Profile）。
+  - 主题（跟随系统 / 亮 / 暗），从顶部栏搬到这里。
+  - sing-box 日志级别（info / debug / trace）和 TUN 网段，下一次连接生效；填错会指出哪里不对，不会保存。设置保存在 `%APPDATA%\SplitGate\settings.json`。
+- 系统托盘：图标右下角的圆点表示状态（灰 = 已断开、黄 = 连接中、绿 = 已连接、红 = 错误）；右键菜单有连接、断开、打开主窗口、退出。
+- “关于”页：加上管理员身份、sing-box 来源与许可证、使用提醒。
+- 便携版：`scripts\build-portable.ps1` 先跑测试，再生成 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe`）和 zip，不用安装。根目录的 `build.bat` 可以直接双击执行它。
+
+### 改变
+- 关闭窗口不再结束程序：窗口缩到托盘，连接不断开。要完全退出，右键托盘图标 →“退出”（会先断开）。
+- 同一时间只能开一个 SplitGate：再双击一次会把已经开着的窗口叫出来。
 
 ## 0.4.0 — 2026-10-26（连接与分流：Cisco、WireGuard）
 

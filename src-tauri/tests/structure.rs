@@ -1,5 +1,5 @@
 //! Structure checks (global rule 60-testing): one version source, CHANGELOG matches it,
-//! PowerShell scripts are pure ASCII + CRLF, binaries never sit in tracked folders by accident.
+//! .ps1 / .bat scripts are pure ASCII + CRLF, binaries never sit in tracked folders by accident.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -38,13 +38,18 @@ fn changelog_first_release_is_current_version() {
 }
 
 #[test]
-fn powershell_scripts_are_ascii_crlf() {
+fn scripts_are_ascii_crlf() {
     let mut bad = Vec::new();
+    let mut files = vec![repo().join("build.bat")];
     for dir in ["scripts", "phase0", "third_party"] {
         visit(&repo().join(dir), &mut |p| {
-            if p.extension().and_then(|e| e.to_str()) != Some("ps1") {
-                return;
+            if matches!(p.extension().and_then(|e| e.to_str()), Some("ps1" | "bat")) {
+                files.push(p.to_path_buf());
             }
+        });
+    }
+    for p in &files {
+        {
             let bytes = fs::read(p).unwrap();
             if bytes.iter().any(|b| *b > 127) {
                 bad.push(format!("{} has non-ASCII bytes", p.display()));
@@ -54,7 +59,7 @@ fn powershell_scripts_are_ascii_crlf() {
             if lf != crlf {
                 bad.push(format!("{} has LF-only line endings", p.display()));
             }
-        });
+        }
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

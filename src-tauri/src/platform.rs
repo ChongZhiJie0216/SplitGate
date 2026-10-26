@@ -158,3 +158,56 @@ pub fn hidden_command(exe: &Path) -> Command {
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd
 }
+
+#[cfg(windows)]
+fn wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(windows)]
+const INSTANCE_MUTEX: &str = r"Local\SplitGate-instance";
+#[cfg(windows)]
+const SHOW_EVENT: &str = r"Local\SplitGate-show-window";
+
+/// Only one copy may run: a second copy's startup cleanup would stop the first one's sing-box.
+/// Returns false when another copy runs; it is then asked to show its window.
+/// The mutex handle stays open until the process ends, which is what marks "running".
+#[cfg(windows)]
+pub fn claim_single_instance() -> bool {
+    use windows_sys::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+    use windows_sys::Win32::System::Threading::{CreateEventW, CreateMutexW, SetEvent};
+    unsafe {
+        let m = CreateMutexW(std::ptr::null(), 0, wide(INSTANCE_MUTEX).as_ptr());
+        if !m.is_null() && GetLastError() != ERROR_ALREADY_EXISTS {
+            return true;
+        }
+        let ev = CreateEventW(std::ptr::null(), 0, 0, wide(SHOW_EVENT).as_ptr());
+        if !ev.is_null() {
+            SetEvent(ev);
+        }
+        false
+    }
+}
+
+#[cfg(not(windows))]
+pub fn claim_single_instance() -> bool {
+    true
+}
+
+/// Calls `show` each time a second copy is started.
+#[cfg(windows)]
+pub fn on_show_request(show: impl Fn() + Send + 'static) {
+    use windows_sys::Win32::System::Threading::{CreateEventW, WaitForSingleObject, INFINITE};
+    std::thread::spawn(move || unsafe {
+        let ev = CreateEventW(std::ptr::null(), 0, 0, wide(SHOW_EVENT).as_ptr());
+        if ev.is_null() {
+            return;
+        }
+        while WaitForSingleObject(ev, INFINITE) == 0 {
+            show();
+        }
+    });
+}
+
+#[cfg(not(windows))]
+pub fn on_show_request(_show: impl Fn() + Send + 'static) {}

@@ -296,6 +296,17 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 - 程序规则优先用 **`process_path`（完整路径）**：`javaw.exe` 这类名字很多程序共用，按名字会误伤（V6 实测只用路径就能让 PrismLauncher 登录）。预设里不放路径（每台电脑不同），由用户在界面上从正在运行的程序里挑。
 - Xbox App 的进程名还没核实，预设先留空；第 1 阶段验收时用任务管理器确认后补上。
 
+**settings.json**：设置页（v0.5.0 起）
+
+```json
+{ "version": 1, "auto_connect": false, "singbox_log_level": "info", "tun_ipv4": "172.19.0.1/30" }
+```
+
+- `singbox_log_level` 只能是 `info` / `debug` / `trace`：状态机靠 info 级的 “tunnel established” 判断隧道建立，不能更安静。
+- `tun_ipv4` 是私有 IPv4 主机地址 + /8–/30 前缀。文件坏了或值不对时，连接照用默认值，不阻止连接。
+- 开机自启不存在这里：以任务计划程序里名为 `SplitGate` 的任务（登录时、最高权限、参数 `--autostart`）为准。
+- 主题是界面偏好，存在 WebView 的 localStorage，避免启动时闪一下。
+
 ## Tauri IPC 接口
 
 前端只通过 `src/lib/ipc.ts` 调用后端，类型和 Rust 端保持一致（建议用 `specta` 或 `ts-rs` 自动生成）。
@@ -413,7 +424,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [x] Tauri 项目骨架、sing-box sidecar 打包、管理员权限清单（v0.1.0）
 - [x] profile 与凭据管理、规则集管理、内置 Xbox / Minecraft / Steam 预设；实现 Cisco 和 WireGuard 两种出口（v0.2.0–v0.4.0；ExitAdapter trait 还没抽出，见 `docs/progress.md`）
 - [ ] 配置经 stdin 传入、连接状态机（含“出口真正可用才显示已连接”）、错误处理与清理（代码已完成 v0.4.0，待真正连接测试）
-- [ ] 连接页、规则页（含从运行中的程序挑选）、日志页、Profile 页、设置页、关于页、系统托盘（已有：连接、规则、日志、Profile、关于；未做：设置页、系统托盘）
+- [x] 连接页、规则页（含从运行中的程序挑选）、日志页、Profile 页、设置页、关于页、系统托盘（v0.5.0；托盘右键菜单待维护者实际点一次）
 
 进度记录：`docs/progress.md`。
 

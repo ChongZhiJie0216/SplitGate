@@ -124,3 +124,27 @@ export const saveRuleset = (ruleset: RuleSet) => invoke<{ id: string; rulesets: 
 export const deleteRuleset = (id: string) => invoke<RuleSetView[]>("delete_ruleset", { id });
 export const resetRulesetToPreset = (id: string) => invoke<RuleSetView[]>("reset_ruleset_to_preset", { id });
 export const listRunningProcesses = () => invoke<RunningProcess[]>("list_running_processes");
+
+/** settings.json（字段名和文件一致）。主题不在这里：存在浏览器的 localStorage（lib/theme.ts）。 */
+export interface Settings {
+  version: number;
+  auto_connect: boolean;
+  singbox_log_level: "info" | "debug" | "trace";
+  tun_ipv4: string;
+}
+
+export interface AutostartState {
+  enabled: boolean;
+  command: string | null;
+  matches_this_exe: boolean;
+}
+
+export interface SettingsView {
+  settings: Settings;
+  autostart: AutostartState;
+  error: string | null;
+}
+
+export const getSettings = () => invoke<SettingsView>("get_settings");
+export const saveSettings = (settings: Settings) => invoke<Settings>("save_settings", { settings });
+export const setAutostart = (enabled: boolean) => invoke<AutostartState>("set_autostart", { enabled });
