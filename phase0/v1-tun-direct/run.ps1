@@ -2,7 +2,8 @@
 # Stops with Ctrl+C. If anything goes wrong: phase0\v1-tun-direct\cleanup.ps1
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\common.ps1')
-if (-not (Test-IsAdmin)) { Write-Host '[ERROR] Run this in an Administrator PowerShell.'; exit 1 }
+if (-not (Test-IsAdmin)) { Write-Host '[ERROR] Not Administrator. Right-click PowerShell > Run as administrator, then run this again.'; exit 1 }
+Write-Host '[ok] running as Administrator'
 
 $singbox = Join-Path $BinDir 'sing-box\sing-box.exe'
 $config = Join-Path $PSScriptRoot 'config.json'

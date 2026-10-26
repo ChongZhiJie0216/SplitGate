@@ -75,3 +75,9 @@ cleanup-all.ps1（检查模式）：nothing left over
 
 文件：`phase0/v1-tun-direct/`（config.json、run.ps1、test.ps1、cleanup.ps1）。
 `sing-box check -c phase0\v1-tun-direct\config.json`：通过（exit 0，没有警告）。
+
+### 第 1 次尝试（2026-10-26）— 无效，要重测
+
+- test.ps1 运行时 sing-box 没有在跑：没有 `SplitGate-TUN` 网卡，默认路由和 baseline 一样，`phase0/logs` 里也没有 `v1-before` 快照和 sing-box 日志，说明 run.ps1 在快照之前就退出了（推测是没用管理员身份）。“1.1 秒恢复”不算数。
+- 发现本机有 IPv6 出口（ifconfig.me 返回 `2001:d08:…`）。原配置的 TUN 只有 IPv4 地址，IPv6 流量可能绕过分流。
+- 修改：TUN 加 IPv6 地址 `fdfe:dcba:9876::1/126`（SPEC 第 3 节的 inbounds 也要补上 IPv6）；test.ps1 在 sing-box 没运行或没有网卡时直接报错退出；test.ps1 分别测 IPv4 / IPv6 出口，并列出 TUN 网卡上的路由。
