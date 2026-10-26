@@ -156,3 +156,24 @@ cleanup-all.ps1（检查模式）：nothing left over
   1. 在这个网络上，WireGuard 出口（很可能 Pangolin/Olm 也一样，它也是 WireGuard）不能用；Cisco（TLS over TCP 443/8443）是最有希望的出口。
   2. 第 1 阶段要能清楚提示“出口握手失败”（握手超时 → 状态显示错误，并提示“可能被当前网络阻挡”），不能只看 sing-box 进程还在不在。
   3. 可以考虑在 profile 加“出口封包走指定网卡”（`bind_interface`），用来固定走手机热点。是否加入要等维护者决定。
+---
+
+## 维护者提供的环境信息（2026-10-26）
+
+- 有线网络 192.168.0.x 是**学校内网**。所以 V2 的结论是：**学校网络挡 WireGuard（UDP 51820）**。
+- Cisco 出口：`sslvpn.jiecloud.net:8443`。服务器是 **AnyLink**（兼容 ocserv 和 AnyConnect 协议，自建在家里），证书由 Let's Encrypt 签发，**只用账号密码登录**（没有 MFA、没有 authgroup）。所以 SPEC 待确认事项里的“MFA 要不要提前到 MVP”：不用。
+
+## 配置走 STDIN，凭据不写进文件（2026-10-26）
+
+- 实测：`sing-box check|run -c stdin` 可以用（报错信息写的是 `decode config at stdin`）。
+- 坑：PowerShell 管道和 .NET Framework 的 `Process.StandardInput` 都会在开头加 UTF-8 BOM，sing-box 会报 `invalid character 'ï'`。`phase0/stdin-run.ps1` 的做法：启动前暂时把 `[Console]::InputEncoding` 设成不带 BOM 的 UTF-8，写完就关闭 stdin，再逐行读 stderr，同时显示和写进日志。
+- **对 SPEC 的影响**：第 1 阶段的 Rust 端可以把 sing-box 配置直接写进子进程的 stdin。这样密码、WireGuard 私钥都不用写进 `runtime/singbox.json`，只有去掉凭据的版本才需要保存（用来诊断）。SPEC 第 3 节“生成 runtime/singbox.json”要相应修改。
+
+## V3a sing-box 自带 OpenConnect — 准备好，等维护者执行
+
+文件：`phase0/v3a-singbox-openconnect/`（run.ps1、test.ps1、cleanup.ps1）；共用检查脚本 `phase0/split-test.ps1`（V2 的 test.ps1 也改成调用它）。
+
+- endpoint：`{"type":"openconnect","tag":"vpn","server":"https://sslvpn.jiecloud.net:8443","username":…,"password":…}`。
+- vpn-dns 默认用 `{"type":"openconnect","endpoint":"vpn","accept_default_resolvers":true}`，也就是 VPN 推送的 DNS；也可以用 `-VpnDns <IP>` 改成经隧道的 UDP DNS。`-NoUdp` 可以关闭 DTLS。
+- 密码由 `Read-Host -AsSecureString` 输入，只放在内存里，经 stdin 交给 sing-box。
+- `run.ps1 -CheckOnly`（用假账号）：两种 DNS 设置都通过 `sing-box check`，`phase0/runtime` 里没有产生任何文件。
