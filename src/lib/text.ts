@@ -130,7 +130,7 @@ export const T = {
   about: {
     version: "版本",
     components: "组件版本",
-    licenses: "许可证与第三方声明见安装目录的 licenses 文件夹。",
+    licenses: "SplitGate 以 MIT 许可证发布；许可证与第三方声明见程序旁边的 licenses 文件夹。",
     dataDir: "设置文件夹",
     admin: "管理员身份",
     yes: "是",

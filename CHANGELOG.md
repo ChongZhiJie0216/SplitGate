@@ -11,6 +11,7 @@
 
 ### 改变
 - README 改成使用说明：安装、第一次使用、每一页的说明、常见问题、设置存在哪里、更新、网络出问题时、卸载。开发和发布步骤搬到 `docs/development.md`。
+- SplitGate 以 MIT 许可证发布（仓库根目录 `LICENSE`；便携版附在 `licenses\SplitGate-LICENSE.txt`），关于页也写明了。附带的 sing-box 仍是 GPL-3.0-or-later 的独立程序。
 
 ### 修正
 - Profile 页 Pangolin 的说明还写着“先在后台开启 Exit Node”“第 2 阶段才能连接”，改成“备用出口，现在还不能连接”（做法已改成不用 Exit Node，并移到项目最后）。

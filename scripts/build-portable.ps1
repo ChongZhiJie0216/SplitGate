@@ -54,6 +54,7 @@ New-Item -ItemType Directory -Force (Join-Path $out 'licenses') | Out-Null
 Copy-Item (Join-Path $rel 'splitgate.exe') (Join-Path $out 'SplitGate.exe')
 Copy-Item (Join-Path $root 'third_party\bin\sing-box\sing-box.exe') (Join-Path $out 'sing-box.exe')
 Copy-Item (Join-Path $root 'third_party\licenses\*') (Join-Path $out 'licenses')
+Copy-Item (Join-Path $root 'LICENSE') (Join-Path $out 'licenses\SplitGate-LICENSE.txt')
 $zip = Join-Path $root "portable\SplitGate-$version-portable.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 # Zip a clean copy (same layout: SplitGate\...), so data\ with someone's profiles is never shipped.
