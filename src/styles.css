@@ -627,3 +627,84 @@ button.link {
   gap: 16px;
   max-width: 760px;
 }
+
+.conn-head {
+  justify-content: space-between;
+}
+
+.conn-head h2 {
+  margin: 0;
+}
+
+.traffic {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.traffic .tag {
+  font-family: var(--mono);
+}
+
+.table-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.conn-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.conn-table th,
+.conn-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conn-table th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.conn-table th:nth-child(1) { width: 15%; }
+.conn-table th:nth-child(2) { width: 27%; }
+.conn-table th:nth-child(3) { width: 8%; }
+.conn-table th:nth-child(4) { width: 15%; }
+.conn-table th:nth-child(5) { width: 14%; }
+.conn-table th:nth-child(6) { width: 8%; }
+.conn-table th:nth-child(7) { width: 13%; }
+
+.conn-table .num {
+  text-align: right;
+}
+
+.conn-table .target .tag {
+  margin-left: 6px;
+}
+
+.conn-table .actions {
+  text-align: right;
+}
+
+.conn-table .actions .btn + .btn {
+  margin-left: 4px;
+}
+
+.conn-table tbody tr:hover {
+  background: var(--accent-soft);
+}
+
+.field-hint button.link {
+  margin-left: 8px;
+}
+
+.btn.small {
+  padding: 2px 8px;
+}

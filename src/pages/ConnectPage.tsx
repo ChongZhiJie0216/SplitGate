@@ -3,19 +3,14 @@ import { useStatus } from "../store/status";
 import { useProfiles } from "../store/profiles";
 import { useApp } from "../store/app";
 import ConnectButton from "../components/ConnectButton";
+import { TrafficBadges } from "./ConnectionsPage";
 import { T } from "../lib/text";
+import { duration } from "../lib/format";
 
 const L = T.connectPage;
 
-function duration(ms: number) {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  return `${h}:${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-}
-
 export default function ConnectPage() {
-  const { status, actionError } = useStatus();
+  const { status, actionError, traffic } = useStatus();
   const view = useProfiles((s) => s.view);
   const setPage = useApp((s) => s.setPage);
   const active = view?.profiles.find((p) => p.profile.id === view.active)?.profile;
@@ -48,6 +43,12 @@ export default function ConnectPage() {
             <tr>
               <th>{L.probe}</th>
               <td className="mono">{status.probe_ms} ms</td>
+            </tr>
+            <tr>
+              <th>{L.speed}</th>
+              <td>
+                <TrafficBadges traffic={traffic} />
+              </td>
             </tr>
           </tbody>
         </table>

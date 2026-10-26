@@ -28,6 +28,7 @@ pub struct Secrets {
     pub preshared_key: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct ClashApi {
     pub port: u16,
     pub secret: String,
@@ -228,9 +229,8 @@ pub fn build_config(
         "auto_detect_interface": true,
         "default_domain_resolver": { "server": "local" },
     });
-    if has_process {
-        route["find_process"] = json!(true);
-    }
+    // Always look up the program: the Connections page shows it and "add rule" can use its path.
+    route["find_process"] = json!(true);
 
     Ok(json!({
         "log": { "level": settings.singbox_log_level, "timestamp": true },
@@ -313,19 +313,20 @@ pub fn free_port() -> Result<u16, String> {
 impl ClashApi {
     /// Minimal HTTP/1.1 GET on loopback; returns (status, body).
     pub fn get(&self, path: &str, timeout: Duration) -> Result<(u16, String), String> {
+        self.request("GET", path, timeout)
+    }
+
+    pub fn request(&self, method: &str, path: &str, timeout: Duration) -> Result<(u16, String), String> {
         let mut s = TcpStream::connect_timeout(&([127, 0, 0, 1], self.port).into(), Duration::from_secs(2)).map_err(|e| e.to_string())?;
         s.set_read_timeout(Some(timeout)).ok();
         let req = format!(
-            "GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {}\r\nConnection: close\r\n\r\n",
+            "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {}\r\nConnection: close\r\n\r\n",
             self.secret
         );
         s.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
         let mut buf = Vec::new();
         s.read_to_end(&mut buf).map_err(|e| e.to_string())?;
-        let text = String::from_utf8_lossy(&buf);
-        let status = text.split_whitespace().nth(1).and_then(|c| c.parse().ok()).ok_or("bad HTTP response")?;
-        let body = text.split_once("\r\n\r\n").map(|(_, b)| b.to_string()).unwrap_or_default();
-        Ok((status, body))
+        parse_response(&buf)
     }
 
     /// Delay test through the VPN endpoint: Some(ms) when a request made it through the tunnel.
@@ -344,6 +345,27 @@ impl ClashApi {
         }
         serde_json::from_str::<Value>(body.trim()).ok()?["delay"].as_u64().map(|d| d as u32)
     }
+}
+
+/// (status, body) of an HTTP/1.1 response; large bodies may come chunked.
+fn parse_response(buf: &[u8]) -> Result<(u16, String), String> {
+    let text = String::from_utf8_lossy(buf);
+    let status = text.split_whitespace().nth(1).and_then(|c| c.parse().ok()).ok_or("bad HTTP response")?;
+    let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
+    if !head.to_ascii_lowercase().contains("transfer-encoding: chunked") {
+        return Ok((status, body.to_string()));
+    }
+    let mut out = String::new();
+    let mut rest = body;
+    while let Some((size, after)) = rest.split_once("\r\n") {
+        let n = usize::from_str_radix(size.split(';').next().unwrap_or("").trim(), 16).map_err(|_| "bad chunk")?;
+        if n == 0 || after.len() < n {
+            break;
+        }
+        out.push_str(&after[..n]);
+        rest = after[n..].strip_prefix("\r\n").unwrap_or(&after[n..]);
+    }
+    Ok((status, out))
 }
 
 #[cfg(test)]
@@ -433,7 +455,7 @@ mod tests {
         assert_eq!(ep["peers"][0]["port"], 51820);
         assert!(ep["peers"][0]["pre_shared_key"].is_string());
         assert_eq!(c["dns"]["servers"][1]["server"], "10.8.0.1");
-        assert!(c["route"].get("find_process").is_none(), "no process rules, no process lookup");
+        assert_eq!(c["route"]["find_process"], true, "the Connections page shows the program");
         assert_eq!(c["dns"]["rules"], json!([]));
     }
 
@@ -450,6 +472,15 @@ mod tests {
         let c = build_config(&cisco("a"), &MergedRules::default(), &secrets(), &api(), &debug_settings()).unwrap();
         assert_eq!(c["inbounds"][0]["address"][0], "10.255.0.1/24");
         assert_eq!(c["log"]["level"], "debug");
+    }
+
+    #[test]
+    fn http_plain_and_chunked() {
+        let plain = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}";
+        assert_eq!(parse_response(plain).unwrap(), (200, "{}".into()));
+        let chunked = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\n{\"a\"\r\n3\r\n:1}\r\n0\r\n\r\n";
+        assert_eq!(parse_response(chunked).unwrap(), (200, "{\"a\":1}".into()));
+        assert_eq!(parse_response(b"HTTP/1.1 204 No Content\r\n\r\n").unwrap().0, 204);
     }
 
     #[test]

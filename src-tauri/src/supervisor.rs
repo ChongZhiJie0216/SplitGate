@@ -19,7 +19,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::config::{self, ExitType};
 use crate::singbox::{self, ClashApi, Secrets};
-use crate::{cleanup, credentials, logs, paths, platform, rules, settings, tray};
+use crate::{cleanup, credentials, logs, paths, platform, rules, settings, traffic, tray};
 
 const TUNNEL_TIMEOUT: Duration = Duration::from_secs(60);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -252,7 +252,14 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     }
     logs::info(format!("已连接：{name}，经 VPN 测试 {probe_ms} ms"));
     thread::spawn(move || watch_exit(generation, rx));
+    if let Some(app) = APP.get() {
+        traffic::start(app.clone(), api, move || is_connected(generation));
+    }
     Ok(())
+}
+
+fn is_connected(generation: u64) -> bool {
+    STATE.lock().map(|s| s.generation == generation && matches!(s.status, Status::Connected { .. })).unwrap_or(false)
 }
 
 /// Forward every stderr line to the log; report the few lines the state machine needs.

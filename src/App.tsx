@@ -7,12 +7,13 @@ import { setActiveProfile } from "./lib/ipc";
 import ConnectButton from "./components/ConnectButton";
 import AboutPage from "./pages/AboutPage";
 import ConnectPage from "./pages/ConnectPage";
+import ConnectionsPage from "./pages/ConnectionsPage";
 import LogsPage from "./pages/LogsPage";
 import ProfilesPage from "./pages/ProfilesPage";
 import RulesPage from "./pages/RulesPage";
 import SettingsPage from "./pages/SettingsPage";
 
-const PAGES: Page[] = ["connect", "rules", "logs", "profiles", "settings", "about"];
+const PAGES: Page[] = ["connect", "rules", "connections", "logs", "profiles", "settings", "about"];
 
 export default function App() {
   const { page, setPage, info, infoError, loadInfo } = useApp();
@@ -70,6 +71,8 @@ export default function App() {
             <ProfilesPage />
           ) : page === "rules" ? (
             <RulesPage />
+          ) : page === "connections" ? (
+            <ConnectionsPage />
           ) : (
             <SettingsPage />
           )}

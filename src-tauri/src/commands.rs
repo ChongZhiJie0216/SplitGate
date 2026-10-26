@@ -7,7 +7,7 @@ use crate::exits::wireguard;
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, logs, paths, platform, supervisor};
+use crate::{autostart, logs, paths, platform, supervisor, traffic};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -188,4 +188,14 @@ pub fn set_autostart(enabled: bool) -> Result<autostart::AutostartState, String>
     let r = autostart::set(enabled)?;
     logs::info(if r.enabled { "已开启开机自启（任务计划程序）" } else { "已关闭开机自启" });
     Ok(r)
+}
+
+#[tauri::command]
+pub fn get_connections() -> traffic::Snapshot {
+    traffic::snapshot()
+}
+
+#[tauri::command]
+pub fn close_connection(id: String) -> Result<(), String> {
+    traffic::close(&id)
 }
