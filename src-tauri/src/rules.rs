@@ -152,7 +152,7 @@ fn clean(items: &[String], f: impl Fn(&str) -> Result<String, String>) -> Result
     Ok(out)
 }
 
-fn valid_domain(d: &str) -> bool {
+pub(crate) fn valid_domain(d: &str) -> bool {
     d.len() <= 253
         && d.contains('.')
         && d.split('.').all(|l| {

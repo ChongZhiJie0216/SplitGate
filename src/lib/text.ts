@@ -5,6 +5,7 @@ export const T = {
     connect: "连接",
     rules: "规则",
     connections: "连接列表",
+    blocked: "拦截提示",
     logs: "日志",
     profiles: "Profile",
     settings: "设置",
@@ -52,6 +53,20 @@ export const T = {
     empty: "没有符合条件的连接。",
     tooMany: (n: number) => `只显示最新的 ${n} 条，请用搜索缩小范围。`,
     finalRule: "（没命中，直连）",
+  },
+  blockedPage: {
+    intro: "连接期间，每个直连的 HTTPS 网址都会检查一次证书。证书被换掉（例如学校的 Fortinet 防火墙）的网址会列在这里：这个网址被当前网络拦截，要不要加进规则？",
+    notConnected: "连接之后才会检查。下面是之前发现的。",
+    empty: "还没有发现被拦截的网址。",
+    clear: "清空",
+    dismiss: "忽略",
+    covered: "已在规则里，重新连接后走 VPN",
+    cols: { host: "网址", reason: "原因", program: "程序", time: "时间" },
+    reasons: {
+      fortinet: "证书被 Fortinet 换掉",
+      untrusted: "证书不受信任",
+      handshake: "握手失败（不一定是拦截）",
+    },
   },
   addRule: {
     title: "加进规则",

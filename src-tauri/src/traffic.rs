@@ -1,6 +1,7 @@
 //! Connection list and traffic rates (SPEC "连接列表" / `traffic` event; phase 2 item, done early
 //! by the maintainer's decision 2026-10-26). While connected, a thread reads sing-box's Clash API
-//! once a second, keeps the latest snapshot for the Connections page and emits `traffic`.
+//! once a second, keeps the latest snapshot for the Connections page, emits `traffic` and hands
+//! the connections to block detection.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -11,6 +12,7 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 
+use crate::block_detect;
 use crate::singbox::{ClashApi, VPN_TAG};
 
 const POLL: Duration = Duration::from_secs(1);
@@ -64,6 +66,7 @@ pub fn start(app: AppHandle, api: ClashApi, still_current: impl Fn() -> bool + S
     if let Ok(mut l) = LIVE.lock() {
         *l = Some(Live { api: api.clone(), snapshot: Snapshot::default() });
     }
+    block_detect::start_session();
     thread::spawn(move || {
         let mut rates = Rates::default();
         while still_current() {
@@ -73,6 +76,7 @@ pub fn start(app: AppHandle, api: ClashApi, still_current: impl Fn() -> bool + S
                     let mut snap = parse(&v);
                     snap.traffic = rates.update(&snap, Instant::now());
                     let _ = app.emit("traffic", snap.traffic);
+                    block_detect::observe(&app, &snap.connections);
                     if let Ok(mut l) = LIVE.lock() {
                         if let Some(live) = l.as_mut() {
                             live.snapshot = snap;
@@ -83,6 +87,7 @@ pub fn start(app: AppHandle, api: ClashApi, still_current: impl Fn() -> bool + S
             thread::sleep(POLL.saturating_sub(t.elapsed()));
         }
         stop();
+        block_detect::end_session();
         let _ = app.emit("traffic", Traffic::default());
     });
 }

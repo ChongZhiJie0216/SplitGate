@@ -184,3 +184,21 @@ export interface ConnectionsSnapshot {
 export const getConnections = () => invoke<ConnectionsSnapshot>("get_connections");
 export const closeConnection = (id: string) => invoke<void>("close_connection", { id });
 export const onTraffic = (f: (t: Traffic) => void): Promise<UnlistenFn> => listen<Traffic>("traffic", (e) => f(e.payload));
+
+/** 拦截检测（block_detect.rs）：直连的 HTTPS 域名证书被换掉、不受信任或握手失败。 */
+export type BlockReason = "fortinet" | "untrusted" | "handshake";
+
+export interface Blocked {
+  host: string;
+  reason: BlockReason;
+  /** 证书签发者或错误信息。 */
+  detail: string;
+  process_path: string;
+  /** 最后一次检测到的时间 HH:MM:SS。 */
+  time: string;
+}
+
+export const listBlocked = () => invoke<Blocked[]>("list_blocked");
+export const dismissBlocked = (host: string) => invoke<Blocked[]>("dismiss_blocked", { host });
+export const clearBlocked = () => invoke<Blocked[]>("clear_blocked");
+export const onBlocked = (f: (b: Blocked) => void): Promise<UnlistenFn> => listen<Blocked>("blocked_detected", (e) => f(e.payload));

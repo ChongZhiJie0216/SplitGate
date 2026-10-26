@@ -1,4 +1,5 @@
 mod autostart;
+mod block_detect;
 mod cleanup;
 mod commands;
 mod config;
@@ -93,6 +94,9 @@ pub fn run() {
             commands::set_autostart,
             commands::get_connections,
             commands::close_connection,
+            commands::list_blocked,
+            commands::dismiss_blocked,
+            commands::clear_blocked,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SplitGate");

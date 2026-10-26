@@ -2,10 +2,12 @@ import { useEffect } from "react";
 import { Page, useApp } from "./store/app";
 import { useProfiles } from "./store/profiles";
 import { useStatus } from "./store/status";
+import { useBlocked } from "./store/blocked";
 import { T } from "./lib/text";
 import { setActiveProfile } from "./lib/ipc";
 import ConnectButton from "./components/ConnectButton";
 import AboutPage from "./pages/AboutPage";
+import BlockedPage from "./pages/BlockedPage";
 import ConnectPage from "./pages/ConnectPage";
 import ConnectionsPage from "./pages/ConnectionsPage";
 import LogsPage from "./pages/LogsPage";
@@ -13,19 +15,21 @@ import ProfilesPage from "./pages/ProfilesPage";
 import RulesPage from "./pages/RulesPage";
 import SettingsPage from "./pages/SettingsPage";
 
-const PAGES: Page[] = ["connect", "rules", "connections", "logs", "profiles", "settings", "about"];
+const PAGES: Page[] = ["connect", "rules", "connections", "blocked", "logs", "profiles", "settings", "about"];
 
 export default function App() {
   const { page, setPage, info, infoError, loadInfo } = useApp();
   const { view, load: loadProfiles, run } = useProfiles();
   const { status, start } = useStatus();
+  const { unseen, start: startBlocked } = useBlocked();
   const busy = status.state !== "disconnected" && status.state !== "error";
 
   useEffect(() => {
     loadInfo();
     loadProfiles();
     start();
-  }, [loadInfo, loadProfiles, start]);
+    startBlocked();
+  }, [loadInfo, loadProfiles, start, startBlocked]);
 
   return (
     <div className="shell">
@@ -34,6 +38,7 @@ export default function App() {
         {PAGES.map((p) => (
           <button key={p} className={p === page ? "nav-item active" : "nav-item"} onClick={() => setPage(p)}>
             {T.nav[p]}
+            {p === "blocked" && unseen > 0 && page !== "blocked" && <span className="nav-badge">{unseen}</span>}
           </button>
         ))}
         <div className="nav-foot">{info ? `v${info.version}` : ""}</div>
@@ -73,6 +78,8 @@ export default function App() {
             <RulesPage />
           ) : page === "connections" ? (
             <ConnectionsPage />
+          ) : page === "blocked" ? (
+            <BlockedPage />
           ) : (
             <SettingsPage />
           )}

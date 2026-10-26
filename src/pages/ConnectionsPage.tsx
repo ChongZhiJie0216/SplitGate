@@ -164,7 +164,7 @@ function parentDomains(host: string): string[] {
   return out;
 }
 
-function AddRuleModal({ conn, onClose }: { conn: ipc.Connection; onClose: () => void }) {
+export function AddRuleModal({ conn, onClose }: { conn: ipc.Connection; onClose: () => void }) {
   const A = T.addRule;
   const { rulesets, load, run } = useRules();
   const view = useProfiles((s) => s.view);

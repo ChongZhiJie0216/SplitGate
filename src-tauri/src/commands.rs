@@ -7,7 +7,7 @@ use crate::exits::wireguard;
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, logs, paths, platform, supervisor, traffic};
+use crate::{autostart, block_detect, logs, paths, platform, supervisor, traffic};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -198,4 +198,19 @@ pub fn get_connections() -> traffic::Snapshot {
 #[tauri::command]
 pub fn close_connection(id: String) -> Result<(), String> {
     traffic::close(&id)
+}
+
+#[tauri::command]
+pub fn list_blocked() -> Vec<block_detect::Blocked> {
+    block_detect::list()
+}
+
+#[tauri::command]
+pub fn dismiss_blocked(host: String) -> Vec<block_detect::Blocked> {
+    block_detect::dismiss(&host)
+}
+
+#[tauri::command]
+pub fn clear_blocked() -> Vec<block_detect::Blocked> {
+    block_detect::clear()
 }

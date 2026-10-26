@@ -136,6 +136,16 @@ body {
   background: var(--surface-2);
 }
 
+.nav-badge {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
 .nav-item.active {
   background: var(--accent-soft);
   color: var(--accent-ink);
@@ -388,7 +398,7 @@ textarea {
   margin-bottom: 12px;
 }
 
-.field input:not([type="file"]):not([type="checkbox"]),
+.field input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
 .field textarea {
   width: 100%;
 }
@@ -680,6 +690,23 @@ button.link {
 .conn-table th:nth-child(5) { width: 14%; }
 .conn-table th:nth-child(6) { width: 8%; }
 .conn-table th:nth-child(7) { width: 13%; }
+
+/* 拦截提示页：5 列，网址和原因要能看全，换行而不是截断。 */
+.blocked-table th:nth-child(1) { width: 30%; }
+.blocked-table th:nth-child(2) { width: 30%; }
+.blocked-table th:nth-child(3) { width: 15%; }
+.blocked-table th:nth-child(4) { width: 10%; }
+.blocked-table th:nth-child(5) { width: 15%; }
+
+.blocked-table td.wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.blocked-table td.wrap .tag {
+  margin-left: 0;
+  margin-right: 6px;
+}
 
 .conn-table .num {
   text-align: right;
