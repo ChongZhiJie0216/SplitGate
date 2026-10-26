@@ -373,3 +373,9 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - `drop-routes.ps1`：不带参数只显示要删的两条路由；`-Apply`（管理员）删除后每 5 秒检查一次，共 60 秒，看 App 会不会加回来；`-Restore` 把路由加回去（或在 App 断开重连）。
 - `run-singbox.ps1`：TUN + 两个 direct 出口，`vpn` 出口 `bind_interface: Pangolin`；vpn-dns 用 1.1.1.1 经该出口。没有任何凭据。`-CheckOnly` 通过。
 - cleanup-all：新增 `$ForeignAdapterNames = @('Pangolin')`，**永远不改官方 Pangolin 客户端的网卡**（只会提示它的路由，不会删除）。check 模式确认：只提示两条 Pangolin 路由。
+### V7 第 2 步：删除全隧道路由（2026-10-26 14:53，维护者同意并执行）— ✅
+
+- `drop-routes.ps1 -Apply` 删除 `Pangolin` 网卡上的 0.0.0.0/1 和 128.0.0.0/1；出口 IP 立刻回到 219.92.246.113（本地）。
+- 每 5 秒检查一次、共 60 秒：**官方客户端没有把路由加回来**（之后再查仍然没有）。
+- 结论：SPEC 方案 A 的前提成立 —— 删掉 Exit Node 的路由不会被客户端立刻还原。（隧道本身是否还通，由第 3 步 sing-box 绑定网卡来验证。）
+- 注意：客户端重连 / 切换 Exit Node 时会重新加路由。第 1 阶段要监视路由表，看到 `Pangolin` 网卡上出现 0/1、128/1 就再删一次（或提示用户关掉 Exit Node 改用 SplitGate）。
