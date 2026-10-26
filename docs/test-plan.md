@@ -1,14 +1,14 @@
 # 测试清单：PR #2（v0.6.0–v0.11.0）
 
-> 2026-10-26 写。全部通过后合并 PR #2，再开始 Windows 服务。
+> 2026-10-26 写。全部通过后合并 PR #2，再开始 Windows 服务。现在是 v0.11.1（A7 断网检测改进）。
 > 打 `[x]` 记录结果；不通过的写一句发生了什么，连同日志 / 截图发给 Claude。
 > 指令都在**管理员 PowerShell**、仓库根目录下执行。
 
 ## 0. 准备（每次换版本都做）
 
 - [ ] 拉下最新版：`git fetch origin claude/modest-bell-xe9osa` → `git merge --ff-only origin/claude/modest-bell-xe9osa`
-- [ ] 从托盘“退出”SplitGate，双击 `build.bat`。第一次会自动执行 `npm ci`（装 `@xyflow/react`），最后显示 `[ok] SplitGate v0.11.0`
-- [ ] 以管理员身份运行根目录的 `SplitGate.exe`，关于页显示 v0.11.0
+- [ ] 从托盘“退出”SplitGate，双击 `build.bat`。第一次会自动执行 `npm ci`（装 `@xyflow/react`），最后显示 `[ok] SplitGate v0.11.1`
+- [ ] 以管理员身份运行根目录的 `SplitGate.exe`，关于页显示 v0.11.1
 - [ ] 连上手机热点，SplitGate **已断开**时记基准：`powershell -ExecutionPolicy Bypass -File phase0\snapshot.ps1 -Baseline`
 
 出问题时的回滚：按“断开” → 托盘“退出” → `powershell -ExecutionPolicy Bypass -File phase0\cleanup-all.ps1 -Apply`。
@@ -52,18 +52,21 @@
 - [ ] 连接后随便开 5–10 个网站，“拦截提示”页应该**一直是空的**（热点不拦截；有东西 = 误报，截图）
 - [ ] 日志里**没有**“拦截检测无法执行”
 
-### A7. 自动重连（v0.8.0）
+### A7. 自动重连（v0.8.0；第 ② 项要 v0.11.1）
+
+关掉 Wi-Fi 后，Windows 右下角的网络图标会从“无线”变成“有线”：那是 SplitGate-TUN 虚拟网卡，正常现象。
 
 - [ ] 已连接时，任务管理器 →“详细信息”只结束 `sing-box.exe`（不要结束 SplitGate）：连接页变成黄色“等待重新连接”，约 2 秒后自动连回去；托盘圆点等待时是黄色
-- [ ] 停止自动重连：先关掉电脑的 Wi-Fi，再结束 `sing-box.exe`。重连会失败，间隔会变成 4、8、16 秒。在黄色“等待重新连接”时按“停止自动重连”（或者重连进行中按顶部按钮的“取消”），应变成“已断开”，之后不再重连。再打开 Wi-Fi
-- [ ] 设置页关掉“连接中断后自动重新连接”，再结束 `sing-box.exe`：停在红色“错误”，不重连。**测完打开**
+- [ ] 断网检测（v0.11.1）：已连接时**只关掉 Wi-Fi**（不结束任何程序）。日志马上出现“网络有变化……检查 VPN 出口”，**30 秒内**变成黄色“等待重新连接”（v0.11.0 以前要等大约 80 秒）
+- [ ] 停止自动重连：接着上一项，Wi-Fi 保持关着，重连会一直失败，等待时间变成 4、8、16 秒。在黄色“等待重新连接”时按“停止自动重连”（或者重连进行中按顶部按钮的“取消”），应变成“已断开”，之后不再重连。最后打开 Wi-Fi，按“连接”
+- [ ] 不自动重连：Wi-Fi 开着、已连接时，设置页关掉“连接中断后自动重新连接”并保存，再到任务管理器只结束 `sing-box.exe`：停在红色“错误”，不重连。**测完打开这个设置**
 - [ ] 睡眠唤醒：已连接时让电脑睡眠 1 分钟以上再唤醒，日志出现“电脑从睡眠中恢复”，接着“睡眠唤醒后 VPN 出口正常”，或者“连接中断”后自动连回去
 
 ### A8. 诊断包（v0.9.0）
 
-- [ ] 日志页“导出诊断包” → “在文件夹中显示”，资源管理器选中 zip
-- [ ] 解开 zip 看一眼：没有 Cisco 服务器地址、账号、WireGuard 对端地址、你的 Windows 用户名（应该是 `<cisco-server-1>`、`%USERPROFILE%` 这类代号）
-- [ ] `powershell -ExecutionPolicy Bypass -File phase1\secret-scan.ps1` 输入 Cisco 密码和 WireGuard 私钥，结果 `[PASS]`，而且输出里有 `...zip > ...`（表示解开 zip 搜过）
+- [x] 日志页“导出诊断包” → “在文件夹中显示”，资源管理器选中 zip（2026-10-26 通过）
+- [x] 解开 zip 看一眼：没有 Cisco 服务器地址、账号、WireGuard 对端地址、你的 Windows 用户名（应该是 `<cisco-server-1>`、`%USERPROFILE%` 这类代号）
+- [x] `powershell -ExecutionPolicy Bypass -File phase1\secret-scan.ps1` 输入 Cisco 密码和 WireGuard 私钥，结果 `[PASS]`，而且输出里有 `...zip > ...`（表示解开 zip 搜过）
 
 ### A9. 第 1 阶段剩下的（热点就能测）
 

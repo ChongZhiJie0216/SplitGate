@@ -14,6 +14,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::process::Child;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -37,6 +38,8 @@ const WAKE_GAP: Duration = Duration::from_secs(20);
 /// waking, Wi-Fi first has to come back, so that window is longer.
 const DOWN_AFTER: Duration = Duration::from_secs(20);
 const DOWN_AFTER_WAKE: Duration = Duration::from_secs(60);
+/// After the network changed (Wi-Fi off, cable plugged in): check at once, give it this long.
+const DOWN_AFTER_CHANGE: Duration = Duration::from_secs(30);
 const RETRIES: u32 = 5;
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq)]
@@ -70,6 +73,9 @@ struct Inner {
 
 static STATE: Mutex<Inner> = Mutex::new(Inner { status: Status::Disconnected, child: None, generation: 0 });
 static APP: OnceLock<AppHandle> = OnceLock::new();
+/// Set when sing-box reports a new default interface (it follows the physical network for its
+/// direct traffic), so the health check does not wait for its next minute.
+static NETWORK_CHANGED: AtomicBool = AtomicBool::new(false);
 #[cfg(windows)]
 static JOB: OnceLock<platform::KillOnCloseJob> = OnceLock::new();
 
@@ -285,6 +291,8 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     logs::info(format!("已连接：{name}，经 VPN 测试 {probe_ms} ms"));
     let id = profile.id.clone();
     thread::spawn(move || watch_exit(generation, rx, id));
+    // Interface lines printed while starting are not a change.
+    NETWORK_CHANGED.store(false, Ordering::Relaxed);
     let (id, health_api) = (profile.id.clone(), api.clone());
     thread::spawn(move || watch_health(generation, health_api, id));
     if let Some(app) = APP.get() {
@@ -321,6 +329,10 @@ fn spawn_reader(child: &mut Child) -> Result<Receiver<Ev>, String> {
     thread::spawn(move || {
         for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             logs::singbox(&line);
+            // "network: updated default interface Wi-Fi, index 12"
+            if line.contains("default interface") {
+                NETWORK_CHANGED.store(true, Ordering::Relaxed);
+            }
             let ev = if line.contains("tunnel established") {
                 Some(Ev::Established)
             } else if line.contains("waiting for authentication") {
@@ -425,22 +437,27 @@ fn watch_health(generation: u64, api: ClashApi, profile_id: String) {
         let now = SystemTime::now();
         let gap = now.duration_since(last_wall).unwrap_or_default();
         last_wall = now;
-        let woke = gap > HEALTH_TICK + WAKE_GAP;
-        if woke {
+        let changed = NETWORK_CHANGED.swap(false, Ordering::Relaxed);
+        let (window, after) = if gap > HEALTH_TICK + WAKE_GAP {
             logs::info(format!("电脑从睡眠中恢复（约 {} 秒），检查 VPN 出口", gap.as_secs()));
-        } else if last_check.elapsed() < HEALTH_EVERY {
+            (DOWN_AFTER_WAKE, "睡眠唤醒后")
+        } else if changed {
+            logs::info("网络有变化（换了网卡或断网），检查 VPN 出口");
+            (DOWN_AFTER_CHANGE, "网络有变化后")
+        } else if last_check.elapsed() >= HEALTH_EVERY {
+            (DOWN_AFTER, "")
+        } else {
             continue;
-        }
+        };
         last_check = Instant::now();
-        let window = if woke { DOWN_AFTER_WAKE } else { DOWN_AFTER };
         match exit_alive(generation, &api, window) {
-            Some(true) if woke => logs::info("睡眠唤醒后 VPN 出口正常"),
+            Some(true) if !after.is_empty() => logs::info(format!("{after} VPN 出口正常")),
             Some(true) => {}
             Some(false) => {
-                let msg = if woke {
-                    format!("睡眠唤醒后，VPN 出口 {} 秒内都没有回应。", window.as_secs())
-                } else {
+                let msg = if after.is_empty() {
                     format!("VPN 出口 {} 秒内都没有回应（隧道可能断了）。", window.as_secs())
+                } else {
+                    format!("{after}，VPN 出口 {} 秒内都没有回应。", window.as_secs())
                 };
                 return lost(generation, profile_id, msg);
             }
