@@ -71,7 +71,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 
 ---
 
-## V1 TUN 全直连 — 准备好，等维护者同意执行
+## V1 TUN 全直连 — ✅ 通过（2026-10-26，第 4 次）
 
 文件：`phase0/v1-tun-direct/`（config.json、run.ps1、test.ps1、cleanup.ps1）。
 `sing-box check -c phase0\v1-tun-direct\config.json`：通过（exit 0，没有警告）。
@@ -110,3 +110,11 @@ cleanup-all.ps1（检查模式）：nothing left over
 - route rule `{"ip_version": 6, "action": "reject"}`（放在 `hijack-dns` 后面）：程序直接连 IPv6 地址时立刻拒绝，让它马上改用 IPv4。
 - TUN 仍保留 IPv6 地址，这样 IPv6 流量不会绕过 TUN（否则命中规则的域名可能从 IPv6 漏出去，不经过 VPN）。
 - `sing-box check`：通过，没有警告。
+### 第 4 次（2026-10-26 13:23）— ✅ 通过
+
+- 配置：第 3 次的配置加上 `dns.strategy: ipv4_only` 和 `ip_version: 6 → reject`。
+- `SplitGate-TUN` Up；TUN 上有 `0.0.0.0/0` 和 `::/0` 两条路由，物理网卡的路由不变。
+- IPv4 出口 219.92.246.113（本地）；IPv6 出口为空（被拒绝，符合预期）。
+- `www.microsoft.com`：True；`www.google.com`：True。sing-box 日志里没有 ERROR，所有连接都走 `outbound/direct`。
+- 用 `Stop-Process -Force` 结束 sing-box：**0.7 秒后网络恢复**（目标是 5 秒内）。之后 cleanup-all 检查结果为干净：没有残留网卡和路由，DNS 和 baseline 相同。
+- 结论：sing-box 进程被强制结束时，Windows 会自动撤掉 TUN 网卡和它的路由。SPEC 的“应用崩溃不能让电脑断网”在 sing-box 这一层成立；cleanup.rs 仍然要做，用来处理 openconnect 或 Olm 留下的东西。
