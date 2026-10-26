@@ -4,7 +4,8 @@
 # on STDIN - it never goes to disk, the command line or the log. Stops with Ctrl+C.
 # If anything goes wrong: phase0\v3a-singbox-openconnect\cleanup.ps1
 param(
-    [string]$Server = 'https://sslvpn.jiecloud.net:8443',
+    # e.g. https://<cisco-server>:8443 (not stored in the public repo)
+    [Parameter(Mandatory = $true)][string]$Server,
     [string]$User = '',
     # Preselect the login GROUP (AnyLink shows: Master Network / Test Network / All Tunnel / ...). Empty = ask.
     [string]$AuthGroup = '',

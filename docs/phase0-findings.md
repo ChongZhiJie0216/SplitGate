@@ -1,5 +1,7 @@
 # 第 0 阶段验证结果
 
+> 2026-10-26：仓库是公开的，服务器域名和公网 IP 已换成代号（`<cisco-server>`、`<wireguard-server>`、`<pangolin-server>`、`<home-ip>`、`<school-ip>`、`<exit-node-ip>`、`<wireguard-server-ip-1/2>`）。git 历史里的旧版本没有清除（维护者定）。
+
 每一项写明：结果、实际命令、关键输出、和 SPEC 不符的地方。
 验证顺序（维护者同意，2026-10-26）：V0 环境 → V1 TUN 全直连 → V2 WireGuard → V3 openconnect → V4 Cisco + sing-box → V5 DNS → V6 Xbox 进程名 → V7 Pangolin。
 
@@ -97,7 +99,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 结果：
 
 - ✅ sing-box 建立 `SplitGate-TUN`，加了 `0.0.0.0/0` 和 `::/0` 两条默认路由（metric 0，next hop 172.19.0.2 / fdfe:dcba:9876::2），物理网卡的路由保持不变。
-- ✅ IPv4：`curl -4 ifconfig.me` 返回本地出口 219.92.246.113，所有连接都走 `outbound/direct`。
+- ✅ IPv4：`curl -4 ifconfig.me` 返回本地出口 <school-ip>，所有连接都走 `outbound/direct`。
 - ✅ DNS：系统的 DNS 查询发到 TUN 的 IPv6 地址，被 `hijack-dns` 接管，经 `local` 解析正常。
 - ❌ IPv6：所有 IPv6 连接都报 `dial tcp [...]: connectex: A socket operation was attempted to an unreachable network.`；`www.microsoft.com` 测试失败（`web: False`）。
 - ⚠️ `-Kill` 那一段的输出不完整（停在 `[kill] Stop-Process -Force sing-box`），恢复时间要重测。测试后 cleanup-all 检查结果为干净，IPv4 / IPv6 都恢复正常。
@@ -116,7 +118,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 
 - 配置：第 3 次的配置加上 `dns.strategy: ipv4_only` 和 `ip_version: 6 → reject`。
 - `SplitGate-TUN` Up；TUN 上有 `0.0.0.0/0` 和 `::/0` 两条路由，物理网卡的路由不变。
-- IPv4 出口 219.92.246.113（本地）；IPv6 出口为空（被拒绝，符合预期）。
+- IPv4 出口 <school-ip>（本地）；IPv6 出口为空（被拒绝，符合预期）。
 - `www.microsoft.com`：True；`www.google.com`：True。sing-box 日志里没有 ERROR，所有连接都走 `outbound/direct`。
 - 用 `Stop-Process -Force` 结束 sing-box：**0.7 秒后网络恢复**（目标是 5 秒内）。之后 cleanup-all 检查结果为干净：没有残留网卡和路由，DNS 和 baseline 相同。
 - 结论：sing-box 进程被强制结束时，Windows 会自动撤掉 TUN 网卡和它的路由。SPEC 的“应用崩溃不能让电脑断网”在 sing-box 这一层成立；cleanup.rs 仍然要做，用来处理 openconnect 或 Olm 留下的东西。
@@ -132,7 +134,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 ### 第 1 次（2026-10-26 13:28）— ❌ 隧道不通
 
 - `.conf`：Endpoint 是一个 DDNS 域名，端口 51820；Address 10.0.0.2/24；没有 DNS，所以 vpn-dns 改用 1.1.1.1（经隧道）。
-- 分流规则 ✅：ifconfig.me 的 DNS 查询照规则走进了 `endpoint/wireguard[vpn]`（`outbound packet connection to 1.1.1.1:53`）。不在规则里的 api.ipify.org 走直连，返回本地出口 219.92.246.113。
+- 分流规则 ✅：ifconfig.me 的 DNS 查询照规则走进了 `endpoint/wireguard[vpn]`（`outbound packet connection to 1.1.1.1:53`）。不在规则里的 api.ipify.org 走直连，返回本地出口 <school-ip>。
 - 隧道 ❌：经隧道发出的 DNS 查询 **8.99 秒没有回应**，ifconfig.me 的结果是空的。sing-box 能解析 peer 的域名（第一次用到 vpn 出口时才解析），但 info 级别的日志里没有握手信息。
 - 推测原因（待确认）：当前网络挡了 UDP 51820；家里服务器没有在跑；密钥或 peer 公钥不对。
 - 结束进程后 5.7 秒恢复：测试循环里每次检查最多等 5 秒，第一次撞上正在关闭的连接就白等了 5 秒。已改成最多等 2 秒，下次重测。
@@ -145,7 +147,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 命令：`run.ps1 -BindInterface Wi-Fi -LogLevel debug`，`test.ps1 -Kill`
 
 - 握手 ✅：`sending handshake initiation` 之后马上收到 `received handshake response`。第一个规则流量出现时才开始握手，peer 域名也是这时才解析。
-- 分流 ✅：`api.ipify.org`（不在规则里）→ 219.92.246.113（本地，经有线）；`ifconfig.me`（在规则里）→ **202.186.213.216（家里出口）**。日志：`router: match[3] domain_suffix=ifconfig.me => route(vpn)`。
+- 分流 ✅：`api.ipify.org`（不在规则里）→ <school-ip>（本地，经有线）；`ifconfig.me`（在规则里）→ **<home-ip>（家里出口）**。日志：`router: match[3] domain_suffix=ifconfig.me => route(vpn)`。
 - DNS 分流 ✅：`dns: match[0] domain_suffix=ifconfig.me => route(vpn-dns)`，经隧道问 1.1.1.1，134 ms 返回。其余域名走 `local`；AAAA 查询照设置被拒（`strategy rejected`）。
 - 其他流量照常直连，`www.microsoft.com`：True。
 - 结束进程后 **0.7 秒**恢复网络；cleanup-all 检查结果为干净；run.ps1 退出时已删除运行时配置。
@@ -163,7 +165,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 ## 维护者提供的环境信息（2026-10-26）
 
 - 有线网络 192.168.0.x 是**学校内网**。所以 V2 的结论是：**学校网络挡 WireGuard（UDP 51820）**。
-- Cisco 出口：`sslvpn.jiecloud.net:8443`。服务器是 **AnyLink**（兼容 ocserv 和 AnyConnect 协议，自建在家里），证书由 Let's Encrypt 签发，**只用账号密码登录**（没有 MFA、没有 authgroup）。所以 SPEC 待确认事项里的“MFA 要不要提前到 MVP”：不用。
+- Cisco 出口：`<cisco-server>:8443`。服务器是 **AnyLink**（兼容 ocserv 和 AnyConnect 协议，自建在家里），证书由 Let's Encrypt 签发，**只用账号密码登录**（没有 MFA、没有 authgroup）。所以 SPEC 待确认事项里的“MFA 要不要提前到 MVP”：不用。
 
 ## 配置走 STDIN，凭据不写进文件（2026-10-26）
 
@@ -175,13 +177,13 @@ cleanup-all.ps1（检查模式）：nothing left over
 
 文件：`phase0/v3a-singbox-openconnect/`（run.ps1、test.ps1、cleanup.ps1）；共用检查脚本 `phase0/split-test.ps1`（V2 的 test.ps1 也改成调用它）。
 
-- endpoint：`{"type":"openconnect","tag":"vpn","server":"https://sslvpn.jiecloud.net:8443","username":…,"password":…}`。
+- endpoint：`{"type":"openconnect","tag":"vpn","server":"https://<cisco-server>:8443","username":…,"password":…}`。
 - vpn-dns 默认用 `{"type":"openconnect","endpoint":"vpn","accept_default_resolvers":true}`，也就是 VPN 推送的 DNS；也可以用 `-VpnDns <IP>` 改成经隧道的 UDP DNS。`-NoUdp` 可以关闭 DTLS。
 - 密码由 `Read-Host -AsSecureString` 输入，只放在内存里，经 stdin 交给 sing-box。
 - `run.ps1 -CheckOnly`（用假账号）：两种 DNS 设置都通过 `sing-box check`，`phase0/runtime` 里没有产生任何文件。
 ### 第 1 次（2026-10-26 13:44）— ❌ 停在“等待认证”
 
-- TUN 正常，非规则流量照常直连（api.ipify.org → 219.92.246.113，www.microsoft.com：True）。
+- TUN 正常，非规则流量照常直连（api.ipify.org → <school-ip>，www.microsoft.com：True）。
 - endpoint 日志：`endpoint/openconnect[vpn]: waiting for authentication`，之后没有任何进展；ifconfig.me 的结果是 `endpoint is not ready yet`。
 - 也就是说，**配置里填的 `username` / `password` 没有被自动提交**，sing-box 停下来等人回答服务器发来的登录表单。推测：AnyLink 的登录表单还有其他字段（例如组别选择），或者字段名和 sing-box 自动填写时认的名字不同。
 - 源码（v1.14.4 `protocol/openconnect/status.go` 的 `watchAuthForms`）：无法自动完成的表单会变成“auth challenge”，要通过 **sing-box API 服务**（`services: [{"type":"api"}]`，gRPC）由客户端回答。CLI 是 `sing-box api openconnect status|auth|cancel`，用 `BOX_API_URL` / `BOX_API_SECRET` 指定连接哪个实例。
@@ -199,7 +201,7 @@ cleanup-all.ps1（检查模式）：nothing left over
   - 结论：前两次卡住是因为 **GROUP 下拉没人选**，不是账号密码的问题。配置加 `auth_group` 就能全自动（run.ps1 新增 `-AuthGroup`，`-CheckOnly` 通过，待实测）。
 - 日志：`WARN DTLS unavailable; retrying while CSTP remains active: ... handshake error: context deadline exceeded`，随后 `anyconnect tunnel established using cstp`。**学校网络挡 DTLS（UDP）**，自动退回 TLS（TCP）。从回答表单到 established 大约等了 DTLS 超时的时间；学校网络下建议 `no_udp`。
 - `dns/openconnect[vpn-dns]: updated 0 DNS routes and 2 resolvers`：VPN 推送了 2 个 DNS；ifconfig.me 的查询经 `endpoint/openconnect[vpn]` 发到 1.1.1.1:53。
-- 测试：api.ipify.org → 219.92.246.113（本地），ifconfig.me → **202.186.213.216（家里）**，www.microsoft.com：True。没有另建 VPN 网卡，默认路由没有变化。
+- 测试：api.ipify.org → <school-ip>（本地），ifconfig.me → **<home-ip>（家里）**，www.microsoft.com：True。没有另建 VPN 网卡，默认路由没有变化。
 - 结束 sing-box 后恢复时间：**6.0 秒**（目标 5 秒以内）。V3a 四次的数字是 12.3 / 1.4 / 6.0 秒，波动很大，V1/V2 都是 0.7 秒。待查：可能和 OpenConnect 连接中的 TCP 连接、或 Windows 检测网络状态有关。第 1 阶段要有“结束后主动清理 + 检查”的步骤，不能只靠进程退出。
 - 残留检查：干净。
 
@@ -211,7 +213,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 ### 第 4 次（2026-10-26 13:55）— ✅ 全自动连接（`-AuthGroup "Master Network" -NoUdp`）
 
 - 只输入账号密码，没有弹出任何表单；`sing-box started` 和 `anyconnect tunnel established using cstp` 在**同一秒**（13:55:48）。第 3 次因为等 DTLS 超时，慢了大约 50 秒以上。
-- 分流结果和第 3 次相同：api.ipify.org → 219.92.246.113，ifconfig.me → 202.186.213.216，网页 True，无残留。
+- 分流结果和第 3 次相同：api.ipify.org → <school-ip>，ifconfig.me → <home-ip>，网页 True，无残留。
 - 结束后恢复时间 **5.1 秒**（V3a 五次：12.3 / 1.4 / 6.0 / 5.1 秒）。仍然待查，第 1 阶段处理。
 - 结论：学校网络下的 Cisco profile 默认用 `auth_group` + `no_udp`，就能一键连接。
 ---
@@ -227,19 +229,19 @@ V3a 已证明 sing-box 自带的 OpenConnect 可用，不需要另建 VPN 网卡
 目的：OpenConnect endpoint 加 `bind_interface`（Dial Fields）之后，VPN 自己的封包从指定网卡（Wi-Fi 手机热点）出去；不命中规则的流量照旧走默认网卡（有线）。顺便看热点上 DTLS（UDP）能不能用。
 
 - 脚本：`phase0/v4-bind-interface/run.ps1`（转调 V3a 的 run.ps1，默认 `-BindInterface Wi-Fi -AuthGroup "Master Network"`，**不**加 `-NoUdp`）。V3a 的 run.ps1 新增 `-BindInterface` 参数。
-- `test.ps1`：用 `Get-NetTCPConnection` 查 sing-box 到 202.186.213.216:8443 的连接，本地地址必须是 Wi-Fi 的 IP；再从日志看用的是 DTLS 还是 CSTP；最后跑共用的 split-test。
+- `test.ps1`：用 `Get-NetTCPConnection` 查 sing-box 到 <home-ip>:8443 的连接，本地地址必须是 Wi-Fi 的 IP；再从日志看用的是 DTLS 还是 CSTP；最后跑共用的 split-test。
 - `-CheckOnly` 通过。
 ### 第 1 次（2026-10-26 13:59，Wi-Fi，DTLS 开）— 部分通过（测试跑早了）
 
-- **外层连接走 Wi-Fi：通过。** sing-box 到 202.186.213.216:8443 的两条 TCP 连接，本地地址都是 172.20.10.4（Wi-Fi）；默认网卡仍是 Ethernet，api.ipify.org 照旧走本地。
+- **外层连接走 Wi-Fi：通过。** sing-box 到 <home-ip>:8443 的两条 TCP 连接，本地地址都是 172.20.10.4（Wi-Fi）；默认网卡仍是 Ethernet，api.ipify.org 照旧走本地。
 - **热点上 DTLS 也失败**（`DTLS unavailable ... context deadline exceeded`，启动后 16 秒才 `established using cstp`）。学校有线和手机热点都失败，所以多半是**服务器那边没开 UDP**（例如家里路由器只转发了 TCP 8443），不是学校的问题。→ 这个 profile 默认用 `no_udp`。
 - ifconfig.me 为空：测试在 13:59:22–34 跑完，隧道 13:59:35 才建立。**在等 DTLS 的这段时间里，命中规则的流量没有任何报错，就是没反应**（日志里连 ifconfig.me 的 DNS 查询都没有记录）。→ 第 1 阶段：状态要等 `established` 才显示“已连接”；连接中命中规则的流量应快速失败，不要让用户以为卡住了。
 - 结束后恢复：3.1 秒；无残留。
 - 修改：test.ps1 在日志里没有 `tunnel established` 时拒绝运行。
 ### 第 2 次（2026-10-26 14:01，Wi-Fi，`-NoUdp`）— ✅ 通过
 
-- 外层连接：两条 TCP 连接都是 172.20.10.4（Wi-Fi）→ 202.186.213.216:8443。
-- 分流：api.ipify.org → 219.92.246.113（本地，走有线），ifconfig.me → 202.186.213.216（VPN），网页 True。
+- 外层连接：两条 TCP 连接都是 172.20.10.4（Wi-Fi）→ <home-ip>:8443。
+- 分流：api.ipify.org → <school-ip>（本地，走有线），ifconfig.me → <home-ip>（VPN），网页 True。
 - 结束后恢复 1.5 秒；无残留。
 - 结论：OpenConnect endpoint 的 `bind_interface` 可用，能把 VPN 外层连接固定在指定网卡，不影响其他流量的默认网卡。→ Profile 可以加“出口网卡”选项（留空 = 自动）。
 
@@ -301,7 +303,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - `-CheckOnly` 通过（含 PrismLauncher 两个路径）。
 ### 第 1 次（2026-10-26 14:17，有线，`-NoUdp`，规则：curl.exe + PrismLauncher 两个路径）— ✅ 通过
 
-- 同一个网址 api.ipify.org：curl.exe → **202.186.213.216（VPN）**，powershell.exe → **219.92.246.113（本地）**。
+- 同一个网址 api.ipify.org：curl.exe → **<home-ip>（VPN）**，powershell.exe → **<school-ip>（本地）**。
 - 日志：14:17:16 `endpoint/openconnect[vpn]: outbound connection to 172.67.74.152:443`（curl），14:17:17 `outbound/direct[direct]` 同一个 IP（PowerShell）。同一个目标 IP，按程序分到不同出口。
 - 结论：Windows 上 sing-box 的 `process_name` / `process_path` 可用（TUN 模式下能认出连接是哪个程序发的）。
 - 修正：test.ps1 原本在 sing-box 还开着的时候做残留检查，列出的都是正在使用的网卡和路由，不是残留。已拿掉，改成提示关闭后再检查。
@@ -317,7 +319,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 ## V7 Pangolin — ✅ 通过（改用官方客户端；独立运行 Olm / Pangolin CLI 不符合安全规则）
 
-维护者信息（2026-10-26）：服务器 `pangolin.jiecloud.net`，Pangolin **1.24.0**；上星期在学校用官方客户端能连通。本机已安装官方 Pangolin Windows 客户端（服务 `PangolinManager` 运行中，隧道服务 `PangolinTunnel$olm` 平时停止；配置在 `C:\ProgramData\pangolin\`、`%LOCALAPPDATA%\pangolin\`，**没有读取内容**）。
+维护者信息（2026-10-26）：服务器 `<pangolin-server>`，Pangolin **1.24.0**；上星期在学校用官方客户端能连通。本机已安装官方 Pangolin Windows 客户端（服务 `PangolinManager` 运行中，隧道服务 `PangolinTunnel$olm` 平时停止；配置在 `C:\ProgramData\pangolin\`、`%LOCALAPPDATA%\pangolin\`，**没有读取内容**）。
 
 读 Olm 1.10.1 源码（`main.go`、`config.go`、`service_windows.go`）发现：
 
@@ -356,7 +358,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - 服务 `PangolinTunnel$olm` 变成 Running；网卡名 **`Pangolin`**（WireGuard Tunnel，ifIndex 45），地址 100.90.128.14/20，**接口跃点 5**（有线 25、Wi-Fi 30）。
 - 路由只加了 site 资源：100.90.128.0/20、100.96.128.0/20、192.168.1.0/24、192.168.2.0/24、几个 /32（192.168.2.2/8/9、192.168.100.1）。**没有默认路由**，系统默认路由和基准一样。
 - DNS：`Pangolin` 网卡上静态设了 **100.96.128.1**（Olm 的 DNS 代理）。因为它的跃点最小，Windows 会优先用它解析所有域名（不在 Pangolin 资源里的域名再转发到上游）。没有 NRPT 规则。
-- 出口 IP：api.ipify.org 仍是 219.92.246.113（本地）。
+- 出口 IP：api.ipify.org 仍是 <school-ip>（本地）。
 - 推论：
   1. 只连 site 时，Pangolin 网卡只通到 site 资源（WireGuard AllowedIPs 只有这些网段），sing-box `bind_interface: Pangolin` 送上网流量**不会通**。要当“上网出口”，必须在 App 里选 Exit Node（会装 gateway 路由，见源码分析）。
   2. sing-box 的 TUN 用 0/0 拆分路由，Pangolin 的 /24、/32 更具体，所以 site 资源流量会绕过 sing-box 直接走 Pangolin，两者可以共存（待实测）。
@@ -365,7 +367,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 - 在 App 里选 Exit Node、断开重连都没有变化；维护者在**后台开启**之后才生效。日志：`Gateway set to sites [...] (site resource 10)`、`Exit node set to VPN.Node`、`Exit node active: removed resource routes/aliases for 7 site(s)`（App 的“Exit Node Takes Precedence Over Resources”开着）。
 - 路由：`Pangolin` 网卡加了 **0.0.0.0/1 和 128.0.0.0/1**（跃点 0），比 0.0.0.0/0 更具体，IPv4 全部被它接管（全隧道）。家里内网的 /24、/32 路由被拿掉。**IPv6 没有进隧道**（::/0 仍是 Wi-Fi）。
-- 出口 IP：**149.118.140.232**（VPN.Node，不是家里的 202.186.213.216）。
+- 出口 IP：**<exit-node-ip>**（VPN.Node，不是家里的 <home-ip>）。
 - 和 SPEC 一致：Exit Node = 全隧道，会和 sing-box 的 TUN 抢流量。下一步按 SPEC 方案 A：删掉这两条路由，看隧道还能不能用、App 会不会加回来；再用 sing-box `bind_interface: Pangolin` 只送 ifconfig.me。
 
 ### V7 验证准备
@@ -375,7 +377,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - cleanup-all：新增 `$ForeignAdapterNames = @('Pangolin')`，**永远不改官方 Pangolin 客户端的网卡**（只会提示它的路由，不会删除）。check 模式确认：只提示两条 Pangolin 路由。
 ### V7 第 2 步：删除全隧道路由（2026-10-26 14:53，维护者同意并执行）— ✅
 
-- `drop-routes.ps1 -Apply` 删除 `Pangolin` 网卡上的 0.0.0.0/1 和 128.0.0.0/1；出口 IP 立刻回到 219.92.246.113（本地）。
+- `drop-routes.ps1 -Apply` 删除 `Pangolin` 网卡上的 0.0.0.0/1 和 128.0.0.0/1；出口 IP 立刻回到 <school-ip>（本地）。
 - 每 5 秒检查一次、共 60 秒：**官方客户端没有把路由加回来**（之后再查仍然没有）。
 - 结论：SPEC 方案 A 的前提成立 —— 删掉 Exit Node 的路由不会被客户端立刻还原。（隧道本身是否还通，由第 3 步 sing-box 绑定网卡来验证。）
 - 注意：客户端重连 / 切换 Exit Node 时会重新加路由。第 1 阶段要监视路由表，看到 `Pangolin` 网卡上出现 0/1、128/1 就再删一次（或提示用户关掉 Exit Node 改用 SplitGate）。
@@ -388,7 +390,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - 对 SPEC：Pangolin 出口（以及任何“外部 VPN 网卡 + bind_interface”的做法）在 Windows 上要“删全隧道路由 + 加低优先级默认路由”，而不是只删路由。
 ### V7 第 3 步第 2 次（2026-10-26 14:58，加了低优先级 0.0.0.0/0 后，维护者同意并执行）— 部分成功
 
-- `drop-routes.ps1 -LowPriorityDefault -Apply` 之后，一般上网仍走有线（出口 219.92.246.113）。
+- `drop-routes.ps1 -LowPriorityDefault -Apply` 之后，一般上网仍走有线（出口 <school-ip>）。
 - **经 Pangolin 的 DNS 查询有回应**：`outbound/direct[vpn]: outbound packet connection to 1.1.1.1:53` → `exchanged A ifconfig.me ... 34.160.111.145`。→ 隧道是通的，`bind_interface` 加了路由之后能用。
 - 但**所有 DNS 都变慢**（本地域名 3–5 秒，vpn-dns 约 9 秒），ifconfig.me 测试超时，网页 False。不开 sing-box 时，系统 / 1.1.1.1 / 100.96.128.1 都只要 10–30 ms。
 - 判断：sing-box 的 `local` DNS 读系统 DNS 列表；Pangolin 网卡有了默认路由之后，它的 100.96.128.1 排在最前，而 sing-box 的直连都绑在有线网卡上，100.96.128.1 只能经 Pangolin 才到得了 → 每次先超时再换下一个。
@@ -398,14 +400,14 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 - 直连恢复正常：api.ipify.org 本地、网页 True、结束后 1.7 秒恢复、无残留。
 - 经 Pangolin 的 DNS（1.1.1.1）只发出、没有回应：`outbound/direct[vpn]: outbound packet connection to 1.1.1.1:53` 两次，没有 `exchanged`。
-- 15:01:56 维护者在 App 断开时，官方客户端日志列出它开 Exit Node 时加的**例外路由（excluded routes，不走隧道）**：104.21.0.97、172.67.150.210（wg.jiecloud.net）、202.186.213.216（家）、**1.1.1.1**、149.118.140.232（VPN.Node）。也就是说客户端把 1.1.1.1 当作“绕过隧道”的地址（推测是因为它是有线网卡的 DNS），隧道里多半也不收发它。
+- 15:01:56 维护者在 App 断开时，官方客户端日志列出它开 Exit Node 时加的**例外路由（excluded routes，不走隧道）**：<wireguard-server-ip-1>、<wireguard-server-ip-2>（<wireguard-server>）、<home-ip>（家）、**1.1.1.1**、<exit-node-ip>（VPN.Node）。也就是说客户端把 1.1.1.1 当作“绕过隧道”的地址（推测是因为它是有线网卡的 DNS），隧道里多半也不收发它。
 - 修改：V7 的 vpn-dns 改成 **9.9.9.9**（不在例外名单里）。`-CheckOnly` 通过。
 - 对 SPEC：用外部 VPN 网卡时，vpn-dns 要避开该客户端的例外地址（物理网卡的 DNS、VPN 服务器本身）；第 1 阶段可以在连接后读路由表，自动避开。
 ### V7 第 3 步第 4 次（2026-10-26 15:04，vpn-dns 9.9.9.9）— ❌（测试落在 Pangolin 断线期间）
 
 - 直连正常（本地出口、网页 True、0.9 秒恢复、无残留）；经 Pangolin 的 DNS 发出两次（15:04:07、15:04:17）没有回应。
 - 官方客户端日志（同一时间）：
-  - 15:04:04 sing-box 启动（TUN 加了经 172.19.0.2 的默认路由）→ 客户端认为“网络变了”，把自己的例外路由改指向 **172.19.0.2（sing-box 的 TUN）**：`Setting bypass route to 149.118.140.232 via 172.19.0.2`。于是 Pangolin 自己的 WireGuard 封包也进了 sing-box。
+  - 15:04:04 sing-box 启动（TUN 加了经 172.19.0.2 的默认路由）→ 客户端认为“网络变了”，把自己的例外路由改指向 **172.19.0.2（sing-box 的 TUN）**：`Setting bypass route to <exit-node-ip> via 172.19.0.2`。于是 Pangolin 自己的 WireGuard 封包也进了 sing-box。
   - 15:04:12–13 `Holepunch to site 7 ... DISCONNECTED`、`WireGuard connection to site 7 is DISCONNECTED`。
   - 15:04:20 `WireGuard connection to site 7 is CONNECTED`，例外路由改回 `via 192.168.0.254`（有线）。
   - 15:04:21 `System DNS changed: [1.1.1.1:53 8.8.8.8:53 172.19.0.2:53]` —— 客户端也注意到 sing-box 的 DNS。
@@ -415,9 +417,9 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
   2. 外部客户端会跟着系统默认路由改它的例外路由；sing-box 的 TUN 不能把这些例外地址（VPN 服务器、site 端点）吸进来，否则会形成回环。第 1 阶段可以把这些地址加进 TUN 的 `route_exclude_address`。
 ### V7 第 3 步第 5 次（2026-10-26 15:05，sing-box 启动后等 30 秒再测）— ✅ 通过
 
-- api.ipify.org → 219.92.246.113（本地）；ifconfig.me → **202.186.213.216**；网页 True；结束后 1.5 秒恢复；无残留（只提示我们加的低优先级 Pangolin 默认路由）。
+- api.ipify.org → <school-ip>（本地）；ifconfig.me → **<home-ip>**；网页 True；结束后 1.5 秒恢复；无残留（只提示我们加的低优先级 Pangolin 默认路由）。
 - sing-box 日志：`outbound/direct[vpn]: outbound packet connection to 9.9.9.9:53` → 18 ms 后 `exchanged A ifconfig.me`；`outbound/direct[vpn]: outbound connection to 34.160.111.145:443`。规则流量确实经 Pangolin 网卡出去。
-- 出口 IP 不是 149.118.140.232：官方客户端日志 15:05:59 `Route optimizer: moving 0.0.0.0/0 from site 7 to site 3`。Exit Node 背后是 7 个 site 组成的 gateway 组，客户端会自动换出口 site，**出口 IP 会变**。
+- 出口 IP 不是 <exit-node-ip>：官方客户端日志 15:05:59 `Route optimizer: moving 0.0.0.0/0 from site 7 to site 3`。Exit Node 背后是 7 个 site 组成的 gateway 组，客户端会自动换出口 site，**出口 IP 会变**。
 - V7 结论：Pangolin 出口可行，做法是“官方客户端负责连接和凭据 + 删全隧道路由 + 加低优先级默认路由 + sing-box `bind_interface`”。
 
 ---

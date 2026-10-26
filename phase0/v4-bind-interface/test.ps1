@@ -2,9 +2,10 @@
 # (3) with -Kill: network recovery + leftover check. Read-only except -Kill (stops sing-box).
 param(
     [string]$BindInterface = 'Wi-Fi',
-    [string]$ServerIp = '202.186.213.216',
+    # Cisco server IP and home public IP: pass them in, they are not stored in the public repo.
+    [Parameter(Mandatory = $true)][string]$ServerIp,
     [int]$ServerPort = 8443,
-    [string]$HomeIp = '202.186.213.216',
+    [Parameter(Mandatory = $true)][string]$HomeIp,
     [switch]$Kill
 )
 . (Join-Path $PSScriptRoot '..\common.ps1')
