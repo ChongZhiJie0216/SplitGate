@@ -16,8 +16,10 @@ SplitGate 是维护者**自己用的网络工具**，不是给老师用的程序
 
 ## 开发阶段
 
-- 严格按 SPEC 的“开发阶段”推进。第 0 阶段只写验证脚本（`phase0/`），不搭 Tauri 项目。
-- 第 0 阶段完成后，要等维护者确认才能进入第 1 阶段。
+- 严格按 SPEC 的“开发阶段”推进。第 0 阶段已完成（2026-10-26），SPEC 已按实测修订；维护者 2026-10-26 同意进入第 1 阶段。
+- 版本号唯一来源：`package.json` 的 `version`；`src-tauri/Cargo.toml` 必须同值（`src-tauri/tests/structure.rs` 检查）。
+- 测试：`cd src-tauri; cargo test`、`cargo clippy --all-targets -- -D warnings`；前端 `npm run build`（含 `tsc`）。
+- 开发版不要求管理员（看界面用）；正式版清单要求管理员（`src-tauri/build.rs`）。
 - SPEC 里标“待核实”的内容一律以实测为准，结果写进 `docs/phase0-findings.md`。
 
 ## 安全

@@ -24,3 +24,8 @@ dist/
 target/
 *.exe
 *.dll
+
+# Tauri 生成的文件
+src-tauri/gen/
+src-tauri/binaries/
+
