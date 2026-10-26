@@ -4,6 +4,9 @@
 
 ## 未发布
 
+### 新增
+- 便携版：`scripts\build-portable.ps1` 先跑测试，再生成 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe`）和 zip，不用安装。
+
 ## 0.4.0 — 2026-10-26（连接与分流：Cisco、WireGuard）
 
 ### 新增

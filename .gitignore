@@ -29,3 +29,6 @@ target/
 src-tauri/gen/
 src-tauri/binaries/
 
+
+# 便携版输出（scripts/build-portable.ps1）
+portable/
