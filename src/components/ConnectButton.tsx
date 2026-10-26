@@ -29,11 +29,17 @@ export default function ConnectButton({ big = false }: { big?: boolean }) {
           {T.status.disconnecting}…
         </button>
       );
-    default:
+    default: {
+      const retrying = status.state === "error" && status.retrying;
       return (
-        <button className={cls} onClick={connect} disabled={!info?.isAdmin || !hasProfile}>
-          {status.state === "error" ? T.action.retry : T.action.connect}
+        <button
+          className={retrying ? `connect-btn ${big ? "big " : ""}connecting` : cls}
+          onClick={connect}
+          disabled={!info?.isAdmin || !hasProfile}
+        >
+          {retrying ? T.action.retryNow : status.state === "error" ? T.action.retry : T.action.connect}
         </button>
       );
+    }
   }
 }

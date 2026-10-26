@@ -6,6 +6,10 @@
 //! inside a kill-on-close job) → wait for the tunnel (Cisco: "tunnel established") → probe through
 //! the VPN (Clash API delay test) → connected. Only a successful probe counts as connected
 //! (phase 0: WireGuard handshakes only on first traffic; Cisco can look up but carry nothing).
+//!
+//! While connected: sleep / wake is noticed and the exit is probed now and then. When the
+//! connection breaks (exit silent, or sing-box stops), it cleans up first and then, if the
+//! setting allows, reconnects on its own with backoff, at most 5 times (SPEC "连接状态机").
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::Child;
@@ -25,6 +29,16 @@ const TUNNEL_TIMEOUT: Duration = Duration::from_secs(60);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 const PROBE_EACH_MS: u32 = 5000;
 
+const HEALTH_TICK: Duration = Duration::from_secs(5);
+const HEALTH_EVERY: Duration = Duration::from_secs(60);
+/// The wall clock moved this much more than one tick: the PC was asleep.
+const WAKE_GAP: Duration = Duration::from_secs(20);
+/// How long the exit may stay silent before the connection counts as broken. Right after
+/// waking, Wi-Fi first has to come back, so that window is longer.
+const DOWN_AFTER: Duration = Duration::from_secs(20);
+const DOWN_AFTER_WAKE: Duration = Duration::from_secs(60);
+const RETRIES: u32 = 5;
+
 #[derive(Serialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Step {
@@ -43,7 +57,8 @@ pub enum Status {
     Connecting { profile_name: String, step: Step },
     Connected { profile_name: String, exit: ExitType, since_ms: u64, probe_ms: u32 },
     Disconnecting,
-    Error { message: String },
+    /// `retrying`: the connection broke and an automatic reconnect is waiting.
+    Error { message: String, retrying: bool },
 }
 
 struct Inner {
@@ -132,31 +147,43 @@ impl From<Cancelled> for Failure {
 }
 
 pub fn connect(profile_id: Option<String>) -> Result<(), String> {
+    let generation = begin_connect(None)?;
+    thread::spawn(move || {
+        let _ = attempt(generation, profile_id);
+    });
+    Ok(())
+}
+
+/// `only_if`: an automatic reconnect only goes ahead while nothing else happened meanwhile.
+fn begin_connect(only_if: Option<u64>) -> Result<u64, String> {
     if !platform::is_admin() {
         return Err("需要以管理员身份运行 SplitGate 才能连接。".into());
     }
-    let generation = {
-        let mut s = STATE.lock().map_err(|_| "内部错误")?;
-        if matches!(s.status, Status::Connecting { .. } | Status::Connected { .. } | Status::Disconnecting) {
-            return Err("已经在连接中或已连接".into());
-        }
-        s.generation += 1;
-        s.status = Status::Connecting { profile_name: String::new(), step: Step::Prepare };
-        emit(&s.status);
-        s.generation
-    };
-    thread::spawn(move || match run_connect(generation, profile_id) {
-        Ok(()) | Err(Failure::Cancelled) => {}
-        Err(Failure::Message(msg)) => {
-            logs::error(format!("连接失败：{msg}"));
-            let child = STATE.lock().ok().and_then(|mut s| if s.generation == generation { s.child.take() } else { None });
-            stop_child(child);
-            let _ = cleanup::run(true);
-            logs::set_redactions(Vec::new());
-            set_if_current(generation, Status::Error { message: msg });
-        }
-    });
-    Ok(())
+    let mut s = STATE.lock().map_err(|_| "内部错误")?;
+    if matches!(s.status, Status::Connecting { .. } | Status::Connected { .. } | Status::Disconnecting) {
+        return Err("已经在连接中或已连接".into());
+    }
+    if only_if.is_some_and(|g| g != s.generation) {
+        return Err("已经由使用者接手".into());
+    }
+    s.generation += 1;
+    s.status = Status::Connecting { profile_name: String::new(), step: Step::Prepare };
+    emit(&s.status);
+    Ok(s.generation)
+}
+
+/// One connect attempt; a failure is cleaned up and shown.
+fn attempt(generation: u64, profile_id: Option<String>) -> Result<(), Failure> {
+    let r = run_connect(generation, profile_id);
+    if let Err(Failure::Message(msg)) = &r {
+        logs::error(format!("连接失败：{msg}"));
+        let child = STATE.lock().ok().and_then(|mut s| if s.generation == generation { s.child.take() } else { None });
+        stop_child(child);
+        let _ = cleanup::run(true);
+        logs::set_redactions(Vec::new());
+        set_if_current(generation, Status::Error { message: msg.clone(), retrying: false });
+    }
+    r
 }
 
 fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failure> {
@@ -251,7 +278,10 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
         return Err(Failure::Cancelled);
     }
     logs::info(format!("已连接：{name}，经 VPN 测试 {probe_ms} ms"));
-    thread::spawn(move || watch_exit(generation, rx));
+    let id = profile.id.clone();
+    thread::spawn(move || watch_exit(generation, rx, id));
+    let (id, health_api) = (profile.id.clone(), api.clone());
+    thread::spawn(move || watch_health(generation, health_api, id));
     if let Some(app) = APP.get() {
         traffic::start(app.clone(), api, move || is_connected(generation));
     }
@@ -346,8 +376,8 @@ fn probe(generation: u64, api: &ClashApi, rx: &Receiver<Ev>, last_error: &mut Op
     Err(Failure::Message(String::new()))
 }
 
-/// After "connected": if sing-box stops on its own, clean up and show the error.
-fn watch_exit(generation: u64, rx: Receiver<Ev>) {
+/// After "connected": sing-box stopping on its own breaks the connection.
+fn watch_exit(generation: u64, rx: Receiver<Ev>, profile_id: String) {
     let mut last_error = None;
     loop {
         match rx.recv() {
@@ -356,16 +386,115 @@ fn watch_exit(generation: u64, rx: Receiver<Ev>) {
             Ok(_) => {}
         }
     }
+    lost(generation, profile_id, exited_message(&last_error));
+}
+
+/// While connected: notice sleep / wake (SPEC "系统睡眠后唤醒") and probe the exit every minute,
+/// which also catches a dead tunnel while sing-box keeps running. Sleep shows up as the wall
+/// clock jumping across one short tick, so no Windows power notification is needed.
+fn watch_health(generation: u64, api: ClashApi, profile_id: String) {
+    let mut last_wall = SystemTime::now();
+    let mut last_check = Instant::now();
+    loop {
+        thread::sleep(HEALTH_TICK);
+        if !is_connected(generation) {
+            return;
+        }
+        let now = SystemTime::now();
+        let gap = now.duration_since(last_wall).unwrap_or_default();
+        last_wall = now;
+        let woke = gap > HEALTH_TICK + WAKE_GAP;
+        if woke {
+            logs::info(format!("电脑从睡眠中恢复（约 {} 秒），检查 VPN 出口", gap.as_secs()));
+        } else if last_check.elapsed() < HEALTH_EVERY {
+            continue;
+        }
+        last_check = Instant::now();
+        let window = if woke { DOWN_AFTER_WAKE } else { DOWN_AFTER };
+        match exit_alive(generation, &api, window) {
+            Some(true) if woke => logs::info("睡眠唤醒后 VPN 出口正常"),
+            Some(true) => {}
+            Some(false) => {
+                let msg = if woke {
+                    format!("睡眠唤醒后，VPN 出口 {} 秒内都没有回应。", window.as_secs())
+                } else {
+                    format!("VPN 出口 {} 秒内都没有回应（隧道可能断了）。", window.as_secs())
+                };
+                return lost(generation, profile_id, msg);
+            }
+            None => return,
+        }
+    }
+}
+
+/// Some(true): a probe got through; Some(false): silent for `window`; None: no longer connected.
+fn exit_alive(generation: u64, api: &ClashApi, window: Duration) -> Option<bool> {
+    let deadline = Instant::now() + window;
+    loop {
+        if !is_connected(generation) {
+            return None;
+        }
+        if api.probe_vpn(PROBE_EACH_MS).is_some() {
+            return Some(true);
+        }
+        if Instant::now() >= deadline {
+            return Some(false);
+        }
+        thread::sleep(Duration::from_secs(2));
+    }
+}
+
+/// The connection broke after "connected". Clean up first (the network must work again right
+/// away), then reconnect on our own if the setting allows.
+fn lost(generation: u64, profile_id: String, msg: String) {
     let child = STATE.lock().ok().and_then(|mut s| if s.generation == generation { s.child.take() } else { None });
     if child.is_none() {
-        return; // a normal disconnect already took it
+        return; // a disconnect, or the other watcher, already took it
     }
     stop_child(child);
-    let msg = exited_message(&last_error);
     logs::error(format!("连接中断：{msg}"));
     let _ = cleanup::run(true);
     logs::set_redactions(Vec::new());
-    set_if_current(generation, Status::Error { message: format!("{msg} 已清理，网络已恢复。") });
+    if settings::load_or_default().auto_reconnect {
+        reconnect(generation, profile_id, msg);
+    } else {
+        set_if_current(generation, Status::Error { message: format!("{msg}已清理，网络已恢复。"), retrying: false });
+    }
+}
+
+/// Backoff 2, 4, 8, 16, 32 s. Pressing connect or disconnect meanwhile takes over (generation).
+fn reconnect(mut generation: u64, profile_id: String, first: String) {
+    let mut why = first;
+    for n in 1..=RETRIES {
+        let wait = Duration::from_secs(1 << n);
+        let message = format!("{why}已清理，网络已恢复。{} 秒后自动重新连接（第 {n} / {RETRIES} 次）。", wait.as_secs());
+        if !set_if_current(generation, Status::Error { message, retrying: true }) || !sleep_while_current(generation, wait) {
+            return;
+        }
+        logs::info(format!("自动重新连接（第 {n} / {RETRIES} 次）"));
+        generation = match begin_connect(Some(generation)) {
+            Ok(g) => g,
+            Err(_) => return,
+        };
+        match attempt(generation, Some(profile_id.clone())) {
+            Ok(()) => return logs::info(format!("自动重新连接成功（第 {n} 次）")),
+            Err(Failure::Cancelled) => return,
+            Err(Failure::Message(m)) => why = format!("第 {n} 次重新连接失败：{m}"),
+        }
+    }
+    let message = format!("自动重新连接 {RETRIES} 次都没有成功（{why}）。网络已恢复，可以按“重新连接”再试。");
+    set_if_current(generation, Status::Error { message, retrying: false });
+}
+
+fn sleep_while_current(generation: u64, total: Duration) -> bool {
+    let end = Instant::now() + total;
+    while Instant::now() < end {
+        if STATE.lock().map(|s| s.generation != generation).unwrap_or(true) {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(250));
+    }
+    STATE.lock().map(|s| s.generation == generation).unwrap_or(false)
 }
 
 fn stop_child(child: Option<Child>) {
@@ -394,6 +523,8 @@ fn begin_disconnect() -> Result<Option<(u64, Option<Child>)>, String> {
     match s.status {
         Status::Disconnected | Status::Disconnecting => return Ok(None),
         Status::Error { .. } if s.child.is_none() => {
+            // Also stops a waiting automatic reconnect.
+            s.generation += 1;
             s.status = Status::Disconnected;
             emit(&s.status);
             return Ok(None);

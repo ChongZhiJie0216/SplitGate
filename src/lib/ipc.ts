@@ -11,7 +11,8 @@ export type Status =
   | { state: "connecting"; profile_name: string; step: Step }
   | { state: "connected"; profile_name: string; exit: ExitType; since_ms: number; probe_ms: number }
   | { state: "disconnecting" }
-  | { state: "error"; message: string };
+  /** retrying：连接中断后正在等待自动重新连接。 */
+  | { state: "error"; message: string; retrying: boolean };
 
 export interface LogLine {
   time: string;
@@ -129,6 +130,7 @@ export const listRunningProcesses = () => invoke<RunningProcess[]>("list_running
 export interface Settings {
   version: number;
   auto_connect: boolean;
+  auto_reconnect: boolean;
   singbox_log_level: "info" | "debug" | "trace";
   tun_ipv4: string;
 }

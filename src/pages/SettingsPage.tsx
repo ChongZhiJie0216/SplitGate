@@ -109,6 +109,11 @@ export default function SettingsPage() {
 
       <div className="card">
         <h2>{L.connection}</h2>
+        <label className="check">
+          <input type="checkbox" checked={draft.auto_reconnect} onChange={(e) => patch({ auto_reconnect: e.target.checked })} />
+          {L.autoReconnect}
+        </label>
+        <p className="field-hint">{L.autoReconnectHint}</p>
         <p className="muted">{L.connectionHint}</p>
         <label className="field">
           <span className="field-label">{L.logLevel}</span>
@@ -139,7 +144,7 @@ export default function SettingsPage() {
           </button>
           <button
             className="btn"
-            onClick={() => patch({ auto_connect: false, singbox_log_level: "info", tun_ipv4: DEFAULT_TUN })}
+            onClick={() => patch({ auto_connect: false, auto_reconnect: true, singbox_log_level: "info", tun_ipv4: DEFAULT_TUN })}
           >
             {L.reset}
           </button>
