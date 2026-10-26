@@ -315,7 +315,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - Xbox App 的程序名（XboxPcApp.exe、gamingservices.exe 等）本机没有安装，没测；先用域名规则。
 ---
 
-## V7 Pangolin — ⚠ 方案 A（独立运行 Olm）在 Windows 上不符合安全规则，暂停，等维护者决定
+## V7 Pangolin — ✅ 通过（改用官方客户端；独立运行 Olm / Pangolin CLI 不符合安全规则）
 
 维护者信息（2026-10-26）：服务器 `pangolin.jiecloud.net`，Pangolin **1.24.0**；上星期在学校用官方客户端能连通。本机已安装官方 Pangolin Windows 客户端（服务 `PangolinManager` 运行中，隧道服务 `PangolinTunnel$olm` 平时停止；配置在 `C:\ProgramData\pangolin\`、`%LOCALAPPDATA%\pangolin\`，**没有读取内容**）。
 
@@ -413,3 +413,57 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - 对 SPEC：
   1. 用外部 VPN 客户端时，SplitGate 要在 sing-box 启动后**等外部隧道恢复**（看握手 / 探测），才显示“已连接”。
   2. 外部客户端会跟着系统默认路由改它的例外路由；sing-box 的 TUN 不能把这些例外地址（VPN 服务器、site 端点）吸进来，否则会形成回环。第 1 阶段可以把这些地址加进 TUN 的 `route_exclude_address`。
+### V7 第 3 步第 5 次（2026-10-26 15:05，sing-box 启动后等 30 秒再测）— ✅ 通过
+
+- api.ipify.org → 219.92.246.113（本地）；ifconfig.me → **202.186.213.216**；网页 True；结束后 1.5 秒恢复；无残留（只提示我们加的低优先级 Pangolin 默认路由）。
+- sing-box 日志：`outbound/direct[vpn]: outbound packet connection to 9.9.9.9:53` → 18 ms 后 `exchanged A ifconfig.me`；`outbound/direct[vpn]: outbound connection to 34.160.111.145:443`。规则流量确实经 Pangolin 网卡出去。
+- 出口 IP 不是 149.118.140.232：官方客户端日志 15:05:59 `Route optimizer: moving 0.0.0.0/0 from site 7 to site 3`。Exit Node 背后是 7 个 site 组成的 gateway 组，客户端会自动换出口 site，**出口 IP 会变**。
+- V7 结论：Pangolin 出口可行，做法是“官方客户端负责连接和凭据 + 删全隧道路由 + 加低优先级默认路由 + sing-box `bind_interface`”。
+
+---
+
+# 第 0 阶段总结（2026-10-26）
+
+| 项 | 结果 |
+|---|---|
+| V0 环境与版本锁定 | ✅ |
+| V1 TUN 全直连、结束后恢复 | ✅ |
+| V2 WireGuard | ✅（只在手机热点上；学校有线挡 WireGuard UDP） |
+| V3a sing-box 自带 OpenConnect（Cisco / AnyLink） | ✅ 全自动（`auth_group` + `no_udp`） |
+| V3b openconnect.exe + 连接脚本 | ⏭ 跳过（维护者定） |
+| V4 VPN 外层连接固定走指定网卡 | ✅ |
+| V5 绕过学校 Fortinet 拦截 | ✅ 按域名分流；PrismLauncher、Steam 登录成功 |
+| V6 按程序分流 | ✅ 只按程序路径；PrismLauncher 登录成功 |
+| V7 Pangolin | ✅ 改用官方客户端 |
+
+## 建议对 SPEC.md 做的修改（等维护者确认）
+
+**架构与出口**
+1. Cisco 出口改用 **sing-box 自带的 OpenConnect endpoint**：不打包 openconnect.exe、wintun、vpnc-script，不需要 tunnel.json，也不会另建 VPN 网卡、不改系统路由。Profile 字段：服务器、用户名、密码、组别（`auth_group`）、只用 TCP（`no_udp`）、出口网卡（`bind_interface`，留空 = 自动）。openconnect.exe 做法降为备用（未实测）。
+2. 服务器额外要求的登录表单（组别、MFA）通过 **sing-box API 服务（gRPC，`services: [{type: api}]`）** 回答，对应 SPEC 的 prompt / answer_prompt 事件；API 只听 127.0.0.1，端口和 secret 每次随机。
+3. Pangolin 出口改为“**外部客户端**”类型：由官方 Pangolin 客户端负责登录和凭据，SplitGate 不碰 Secret。原因：Olm 1.10.1 和 Pangolin CLI 0.19.0 在 Windows 上**都必须装成 Windows 服务**，会把 Secret 写进 `ProgramData\olm\service_args.json` / 事件日志 / 注册表，违反安全规则。SPEC 的“方案 A：sidecar 运行 Olm”和 fork 计划取消或延后。
+4. 外部客户端的接法（Windows 实测）：删掉它的全隧道路由（Pangolin 是 0.0.0.0/1 + 128.0.0.0/1），**再加一条最低优先级的 0.0.0.0/0**（跃点 9999）；sing-box 用 `direct` + `bind_interface`。Windows 上 `bind_interface` **要求该网卡有覆盖目标的路由**，SPEC 原假设“没有路由也能送进隧道”不成立。
+5. 外部客户端要持续监视：客户端重连 / 换 Exit Node 会重新加全隧道路由，要再删；sing-box 启动会让 Pangolin **断线约 10–15 秒**后自行恢复；Pangolin 的 VPN 服务器、site 端点等例外地址要加进 TUN 的 `route_exclude_address`，避免回环；Exit Node 的出口 site 会自动切换，出口 IP 会变。
+6. Exit Node 在 Pangolin 1.24 里要**在后台开启**才生效（App 里选了不算）；“Exit Node Takes Precedence Over Resources”开着时，会拿掉连回家里内网的路由。
+
+**DNS**
+7. 学校**不是靠 DNS 拦截**（DHCP 给 1.1.1.1 / 8.8.8.8，被拦截的域名都能正常解析）。vpn-dns 仍保留，但不是绕过拦截的关键。
+8. 有外部 VPN 网卡时，直连 DNS **不能用 sing-box 的 `local`（系统 DNS 列表）**，要用物理网卡自己的 DNS 服务器；vpn-dns 要避开外部客户端的例外地址（Pangolin 把 1.1.1.1 列为例外）。
+9. 开着 SplitGate 时，Pangolin 的 DNS 代理会被 hijack-dns 绕过，Pangolin 资源别名可能解析不到；第 1 阶段要把 Pangolin 的域名后缀交给它的 DNS（100.96.128.1）解析。
+
+**规则**
+10. 学校 Fortinet = **SSL 深度检测 + 按网址（SNI）拦截**：被拦截的网站拿到 Fortinet 自签证书。内置规则第一版：`xboxlive.com`、`xbox.com`、`minecraft.net`、`steampowered.com`、`steamcommunity.com`、`steamserver.net`、`steamstatic.com`、`steamcdn-a.akamaihd.net`（不要整个 akamaihd.net）。
+11. 新功能“**拦截检测**”：发现证书签发者是 Fortinet / 证书链不受信任 → 提示“这个网址被当前网络拦截，要不要加进规则”。学校的拦截会变，固定清单不够。
+12. 程序规则要支持 **`process_path`（完整路径）**，不能只靠 `process_name`（`javaw.exe` 这种名字会误伤）；界面上“加程序”让用户从正在运行的程序里挑。
+
+**网络与安全**
+13. 分流期间 **只用 IPv4**：DNS `ipv4_only` + 拒绝 IPv6 流量；TUN 仍保留 IPv6 地址，防止 IPv6 绕过 TUN。（本机只有手机热点有 IPv6，选有线当出口时 IPv6 会断。）Pangolin 的 Exit Node 也不接管 IPv6。
+14. sing-box 配置一律经 **stdin** 传入，含密码的配置不落盘（注意 Windows 会在 stdin 前加 BOM，要去掉）；读取 sidecar 的 stderr 当日志。
+15. WireGuard 出口 `allowed_ips` 固定为 0.0.0.0/0、::/0，分流交给 sing-box 规则。
+16. 学校网络挡 WireGuard UDP、也挡 DTLS；Cisco 的 DTLS 在手机热点上也失败（多半是服务器那边没转发 UDP 8443），学校默认 `no_udp`。
+17. 状态显示：要等出口真的建立（OpenConnect `tunnel established`、WireGuard 握手、外部隧道恢复）才显示“已连接”；连接中命中规则的流量要快速失败；握手失败要提示“可能被当前网络阻挡”。
+18. 结束后恢复上网的时间不稳定（0.7–12.3 秒），第 1 阶段要有“结束后主动清理 + 检查”，不能只靠进程退出。
+19. MVP 不需要 MFA（AnyLink 只要账号密码 + 组别）。
+
+**许可证**
+20. 不再打包 Olm（AGPL-3.0），许可证负担变小；sing-box 的许可证有“不得用 sing-box 名称”的条款，安装包和界面命名要注意。
