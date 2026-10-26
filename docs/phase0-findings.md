@@ -169,7 +169,7 @@ cleanup-all.ps1（检查模式）：nothing left over
 - 坑：PowerShell 管道和 .NET Framework 的 `Process.StandardInput` 都会在开头加 UTF-8 BOM，sing-box 会报 `invalid character 'ï'`。`phase0/stdin-run.ps1` 的做法：启动前暂时把 `[Console]::InputEncoding` 设成不带 BOM 的 UTF-8，写完就关闭 stdin，再逐行读 stderr，同时显示和写进日志。
 - **对 SPEC 的影响**：第 1 阶段的 Rust 端可以把 sing-box 配置直接写进子进程的 stdin。这样密码、WireGuard 私钥都不用写进 `runtime/singbox.json`，只有去掉凭据的版本才需要保存（用来诊断）。SPEC 第 3 节“生成 runtime/singbox.json”要相应修改。
 
-## V3a sing-box 自带 OpenConnect — 准备好，等维护者执行
+## V3a sing-box 自带 OpenConnect — 进行中
 
 文件：`phase0/v3a-singbox-openconnect/`（run.ps1、test.ps1、cleanup.ps1）；共用检查脚本 `phase0/split-test.ps1`（V2 的 test.ps1 也改成调用它）。
 
@@ -177,3 +177,12 @@ cleanup-all.ps1（检查模式）：nothing left over
 - vpn-dns 默认用 `{"type":"openconnect","endpoint":"vpn","accept_default_resolvers":true}`，也就是 VPN 推送的 DNS；也可以用 `-VpnDns <IP>` 改成经隧道的 UDP DNS。`-NoUdp` 可以关闭 DTLS。
 - 密码由 `Read-Host -AsSecureString` 输入，只放在内存里，经 stdin 交给 sing-box。
 - `run.ps1 -CheckOnly`（用假账号）：两种 DNS 设置都通过 `sing-box check`，`phase0/runtime` 里没有产生任何文件。
+### 第 1 次（2026-10-26 13:44）— ❌ 停在“等待认证”
+
+- TUN 正常，非规则流量照常直连（api.ipify.org → 219.92.246.113，www.microsoft.com：True）。
+- endpoint 日志：`endpoint/openconnect[vpn]: waiting for authentication`，之后没有任何进展；ifconfig.me 的结果是 `endpoint is not ready yet`。
+- 也就是说，**配置里填的 `username` / `password` 没有被自动提交**，sing-box 停下来等人回答服务器发来的登录表单。推测：AnyLink 的登录表单还有其他字段（例如组别选择），或者字段名和 sing-box 自动填写时认的名字不同。
+- 源码（v1.14.4 `protocol/openconnect/status.go` 的 `watchAuthForms`）：无法自动完成的表单会变成“auth challenge”，要通过 **sing-box API 服务**（`services: [{"type":"api"}]`，gRPC）由客户端回答。CLI 是 `sing-box api openconnect status|auth|cancel`，用 `BOX_API_URL` / `BOX_API_SECRET` 指定连接哪个实例。
+- 结束进程后 12.3 秒才恢复，比 V1/V2 的 0.7 秒慢很多，原因未明，下次重测。
+- 修改：run.ps1 加上 API 服务（只听 127.0.0.1，端口和 secret 每次随机生成），启动时显示第二个窗口要用的命令。`-CheckOnly` 通过。
+- 对 SPEC 的影响（预计）：如果走自带 OpenConnect，第 1 阶段的 Rust 端要做 API 服务的 gRPC 客户端，用来收表单、填表单（等于 SPEC 的 `prompt` / `answer_prompt` 事件）；或者用 `form_entries` 预先填好。

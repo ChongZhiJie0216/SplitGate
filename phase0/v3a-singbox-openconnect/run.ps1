@@ -68,6 +68,14 @@ try {
             default_domain_resolver = [ordered]@{ server = 'local' }
         }
     }
+    # sing-box API (gRPC) on loopback with a random port and secret, so a second window can run
+    # "sing-box api openconnect status|auth" to see / answer the login form the server sends.
+    $apiPort = Get-Random -Minimum 20000 -Maximum 60000
+    $apiSecretBytes = New-Object byte[] 16
+    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($apiSecretBytes)
+    $apiSecret = -join ($apiSecretBytes | ForEach-Object { $_.ToString('x2') })
+    $config.services = @([ordered]@{ type = 'api'; tag = 'api'; listen = '127.0.0.1'; listen_port = $apiPort; secret = $apiSecret })
+
     $json = $config | ConvertTo-Json -Depth 10
     $oc.password = $null; $config = $null
 
@@ -82,6 +90,10 @@ try {
 
     $log = Join-Path $LogDir ("v3a-singbox-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
     New-Item -ItemType Directory -Force $LogDir | Out-Null
+    Write-Host '[api] To see / answer the login form, paste these 3 lines into a SECOND PowerShell (same folder):'
+    Write-Host "      `$env:BOX_API_URL = '127.0.0.1:$apiPort'; `$env:BOX_API_SECRET = '$apiSecret'"
+    Write-Host '      .\third_party\bin\sing-box\sing-box.exe api openconnect status'
+    Write-Host '      .\third_party\bin\sing-box\sing-box.exe api openconnect auth'
     Write-Host "[start] sing-box (log: $log). Press Ctrl+C to stop."
     $rc = Invoke-SingBoxStdin -Mode run -ConfigJson $json -LogFile $log
     Write-Host "[exit] sing-box exited with code $rc"
