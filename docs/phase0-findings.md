@@ -422,6 +422,29 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 ---
 
+## V8 Pangolin 经家里 SOCKS5 代理（不用 Exit Node）— 准备好，待测
+
+维护者定（2026-10-26）：
+- Pangolin 出口不用 Exit Node，改成经 Pangolin 连到家里的 SOCKS5 代理，省掉 V7 的“删全隧道路由 + 低优先级默认路由 + 监视”。
+- 代理用 sing-box 1.14.4（和 SplitGate 同一版本），要用户名和密码。
+- 放在 PVE 上的 VPN-Server 虚拟机（newt、WireGuard、AnyLink 都在这台）。
+- 新要求：不管用哪种出口，连上后都要能访问家里内网的设备。
+
+文件：`phase0/v8-pangolin-socks/`
+- `server/install-socks.sh`（在 VM 上以 root 执行）：不带参数只检查（列出 VM 的 IPv4 地址、端口是否被占用）；`<VM 内网 IP> -y` 才安装：下载 sing-box、建系统用户 `splitgate-socks`、`/etc/splitgate-socks/config.json`（0600）、systemd 服务 `splitgate-socks`。密码在 VM 上随机产生，只在最后显示一次。不改路由、DNS、防火墙，也不碰 WireGuard / AnyLink / newt。
+- `server/uninstall-socks.sh -y`：全部移除。
+- `run.ps1 -ProxyIp <VM 内网 IP>`（Windows 管理员）：检查代理 IP 是不是经 `Pangolin` 网卡路由、Pangolin 网卡上还有没有全隧道路由（有 = Exit Node 没关）；隐藏输入代理密码，经 stdin 交给 sing-box。只有 ifconfig.me 经代理，其他直连。
+- `test.ps1 -HomeIp <家里公网 IP> -HomeTarget <PVE IP>:8006`：出口 IP 分流是否正确；不在规则里的家里设备能不能连到（走 Pangolin 自己的路由）。
+- `cleanup.ps1`：同 `cleanup-all.ps1 -Apply`，不碰 Pangolin 的网卡。
+
+要看的：
+1. ifconfig.me 的出口是家里的公网 IP，api.ipify.org 是本地。
+2. 开着 sing-box 时 PVE 管理网页（家里设备）连得到。
+3. sing-box 启动时，官方 Pangolin 客户端还会不会断线 10–15 秒（V7 是在 Exit Node 开着时看到的）。
+4. 经代理的 DNS（TCP 9.9.9.9）有没有回应、速度如何。
+
+---
+
 # 第 0 阶段总结（2026-10-26）
 
 | 项 | 结果 |

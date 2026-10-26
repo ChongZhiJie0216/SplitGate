@@ -30,7 +30,9 @@ SplitGate（暂定名）是一个 Windows 桌面客户端：连接一个 VPN 出
 
 - **Cisco 出口**：sing-box 自带的 OpenConnect endpoint（`endpoints: [{type: "openconnect"}]`），不打包 openconnect.exe，不另建 VPN 网卡，不改系统路由。
 - **WireGuard 出口**：sing-box 自带的 WireGuard endpoint。
-- **Pangolin 出口**：“外部客户端”类型。官方 Pangolin 客户端负责登录、凭据和隧道；SplitGate 删掉它的全隧道路由、加一条最低优先级默认路由，再让 sing-box 的 `direct` 出口用 `bind_interface` 绑定它的网卡。
+- **Pangolin 出口**：~~“外部客户端”类型。官方 Pangolin 客户端负责登录、凭据和隧道；SplitGate 删掉它的全隧道路由、加一条最低优先级默认路由，再让 sing-box 的 `direct` 出口用 `bind_interface` 绑定它的网卡。~~
+  **改法（维护者 2026-10-26 同意，待第 0 阶段 V8 实测）**：不用 Exit Node。官方 Pangolin 客户端照常只连 site（负责登录和凭据）；家里 VPN-Server 虚拟机（newt 所在的那台，PVE 上）跑一个 SOCKS5 代理（sing-box 1.14.4，用户名 + 密码）；SplitGate 的 `vpn` 出口 = sing-box `socks` 出口，用 `bind_interface: Pangolin` 经 Pangolin 网卡连到这个代理。不删、不加任何路由，组件 2 的 route_guard 不再需要。代理密码存凭据管理器。限制：经 SOCKS5 + Pangolin 的 UDP 不一定通（Xbox 联机 / 语音），登录、商店、Steam、Minecraft 登录都是 TCP。
+- **所有出口都要能访问家里内网的设备**（维护者 2026-10-26 补充；例如 PVE 管理网页）：Cisco、WireGuard 用一个含家里网段的规则集（`ip_cidr`）送进 `vpn`，要服务器那一端允许访问内网；Pangolin 不开 Exit Node 时，官方客户端本来就有到 site 资源的路由。连接时要检查家里网段和本地网络有没有撞号（例如学校也用同一个 192.168.x.0/24）。
 
 &#91;embedded content: 架构总览 · 主程序、sing-box sidecar、三种出口\]
 
@@ -142,6 +144,8 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 
 ### 2. 外部客户端出口的接法（route_guard.rs）
 
+> 改用 SOCKS5 代理（见架构总览“Pangolin 出口”）后不再需要；V8 通过后删掉本节。保留作为第 0 阶段 V7 的记录。
+
 适用于 Pangolin（以及以后任何“自己建网卡的 VPN 客户端”）。Windows 实测规则：
 
 1. **删除全隧道路由**：Pangolin 开 Exit Node 时会在它的网卡上加 `0.0.0.0/1` 和 `128.0.0.0/1`，要删掉。
@@ -179,6 +183,8 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 - 后续版本改为安装一个 Windows 服务负责启停核心，界面以普通权限运行，两者通过命名管道通信。
 
 ### 6. Pangolin 出口（exits/pangolin.rs，官方客户端）
+
+> 改法见架构总览“Pangolin 出口”：不用 Exit Node，经 Pangolin 连到家里的 SOCKS5 代理。下面的 Exit Node 流程是 V7 的做法，V8 通过后改写。验证脚本：`phase0/v8-pangolin-socks/`。
 
 **不运行 Olm 或 Pangolin CLI**：实测 Olm 1.10.1 和 Pangolin CLI 0.19.0 在 Windows 上都必须装成 Windows 服务，会把 Secret 写进 `ProgramData\olm\service_args.json`、事件日志或注册表，违反“凭据不落盘”的规则。原规格的“方案 A：sidecar 运行 Olm / fork Olm”和“方案 B：WSL2 + Pangolin CLI”取消。
 
@@ -453,7 +459,8 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [x] 连接列表页（Clash API）、流量统计、从连接列表一键加规则（v0.6.0；维护者 2026-10-26 同意在第 1 阶段验收前先做；`find_process` 改成一直开，才能显示每条连接的程序）
 - [x] 拦截检测与拦截提示页（v0.7.0；主动 TLS 握手，见组件 8；**还没在学校网络下实测**）
 - [x] 睡眠唤醒检测与自动重连（v0.8.0；**还没实测睡眠唤醒**）
-- [ ] Pangolin 出口（外部客户端方式：route_guard、例外地址排除、等待恢复、资源别名 DNS）
+- [ ] Pangolin 出口（改为“经 Pangolin 连到家里 SOCKS5 代理”，不用 Exit Node；先做第 0 阶段 V8）
+- [ ] 所有出口都能访问家里内网设备（家里网段规则 + 撞号检查）
 
 ### 第 3 阶段：增强
 

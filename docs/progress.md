@@ -52,6 +52,7 @@
 
 ## 下一步（照顺序）
 
+0. **Pangolin 改法（维护者 2026-10-26 定）**：不用 Exit Node，经 Pangolin 连到家里 VPN-Server 虚拟机上的 SOCKS5 代理（sing-box，用户名 + 密码）。先做第 0 阶段 V8（`phase0/v8-pangolin-socks/`，步骤见 `docs/phase0-findings.md` V8），通过后才写 SplitGate 的 Pangolin 出口。另外新要求：所有出口都要能访问家里内网设备（家里网段规则 + 撞号检查）。
 1. ~~第一次真正连接测试~~（2026-10-26 完成，Cisco 和 WireGuard 都通过，见上）。回滚方法仍是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。
 2. 按 SPEC 第 1 阶段验收逐条测（2026-10-26 热点下能测的都通过，见上；剩学校网络两项）：Xbox App / PrismLauncher / Steam 能登录；非规则流量出口仍是学校网络；任务管理器结束 SplitGate 后 5 秒内恢复；断开再连接 20 次没有残留；日志和 `%APPDATA%\SplitGate\` 搜不到密码；核实 Xbox App 进程名补进预设。
    辅助脚本在 `phase1\`（2026-10-26 写好，**还没在 Windows 上跑过**，第一次用时留意报错）。除 `kill-recovery.ps1 -KillNow` 会结束 SplitGate 外都只读；回滚一律是 `phase0\cleanup-all.ps1 -Apply`。先在断开状态跑一次 `phase0\snapshot.ps1 -Baseline` 当基准。
