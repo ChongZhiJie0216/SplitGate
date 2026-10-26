@@ -92,6 +92,10 @@ export default function SettingsPage() {
           <input type="checkbox" checked={draft.auto_connect} onChange={(e) => patch({ auto_connect: e.target.checked })} />
           {L.autoConnect}
         </label>
+        <label className="check">
+          <input type="checkbox" checked={draft.check_updates} onChange={(e) => patch({ check_updates: e.target.checked })} />
+          {L.checkUpdates}
+        </label>
         <p className="field-hint">{L.tray}</p>
       </div>
 
@@ -144,7 +148,7 @@ export default function SettingsPage() {
           </button>
           <button
             className="btn"
-            onClick={() => patch({ auto_connect: false, auto_reconnect: true, singbox_log_level: "info", tun_ipv4: DEFAULT_TUN })}
+            onClick={() => patch({ auto_connect: false, auto_reconnect: true, check_updates: true, singbox_log_level: "info", tun_ipv4: DEFAULT_TUN })}
           >
             {L.reset}
           </button>

@@ -16,6 +16,7 @@ mod singbox;
 mod supervisor;
 mod traffic;
 mod tray;
+mod update;
 
 use tauri::Manager;
 
@@ -105,6 +106,8 @@ pub fn run() {
             commands::clear_blocked,
             commands::export_diagnostics,
             commands::show_diagnostics,
+            commands::check_update,
+            commands::open_release_page,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SplitGate");

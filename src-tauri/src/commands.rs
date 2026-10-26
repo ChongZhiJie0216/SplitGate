@@ -7,7 +7,7 @@ use crate::exits::wireguard;
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, block_detect, diagnostics, logs, paths, platform, supervisor, traffic};
+use crate::{autostart, block_detect, diagnostics, logs, paths, platform, supervisor, traffic, update};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -228,4 +228,16 @@ pub async fn export_diagnostics(app: tauri::AppHandle) -> Result<String, String>
 #[tauri::command]
 pub fn show_diagnostics(path: String) -> Result<(), String> {
     diagnostics::show(&path)
+}
+
+/// Asks GitHub for the latest release; takes a few seconds (PowerShell + two requests).
+#[tauri::command]
+pub async fn check_update(app: tauri::AppHandle) -> Result<update::UpdateInfo, String> {
+    let version = app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move || update::check(&version)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn open_release_page(url: String) -> Result<(), String> {
+    update::open_release_page(&url)
 }
