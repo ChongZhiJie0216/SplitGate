@@ -71,3 +71,31 @@ export const saveProfile = (profile: Profile, secrets?: SecretsInput) =>
 export const deleteProfile = (id: string) => invoke<ProfilesView>("delete_profile", { id });
 export const setActiveProfile = (id: string) => invoke<ProfilesView>("set_active_profile", { id });
 export const importWireguardConf = (text: string) => invoke<ImportedConf>("import_wireguard_conf", { text });
+
+export interface RuleSet {
+  id: string;
+  name: string;
+  enabled: boolean;
+  domain_suffix: string[];
+  domain_keyword: string[];
+  process_path: string[];
+  process_name: string[];
+  ip_cidr: string[];
+}
+
+export interface RuleSetView {
+  ruleset: RuleSet;
+  /** 内置预设：不能删除，可以恢复预设。 */
+  preset: boolean;
+}
+
+export interface RunningProcess {
+  name: string;
+  path: string;
+}
+
+export const listRulesets = () => invoke<RuleSetView[]>("list_rulesets");
+export const saveRuleset = (ruleset: RuleSet) => invoke<{ id: string; rulesets: RuleSetView[] }>("save_ruleset", { ruleset });
+export const deleteRuleset = (id: string) => invoke<RuleSetView[]>("delete_ruleset", { id });
+export const resetRulesetToPreset = (id: string) => invoke<RuleSetView[]>("reset_ruleset_to_preset", { id });
+export const listRunningProcesses = () => invoke<RunningProcess[]>("list_running_processes");

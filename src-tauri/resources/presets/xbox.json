@@ -1,0 +1,10 @@
+{
+  "id": "xbox",
+  "name": "Xbox",
+  "enabled": true,
+  "domain_suffix": ["xboxlive.com", "xbox.com", "xboxservices.com", "gamepass.com", "xboxab.com", "playfabapi.com"],
+  "domain_keyword": [],
+  "process_path": [],
+  "process_name": [],
+  "ip_cidr": []
+}

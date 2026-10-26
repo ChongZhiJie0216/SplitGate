@@ -4,6 +4,19 @@
 
 ## 未发布
 
+## 0.3.0 — 2026-10-26（规则集）
+
+### 新增
+- “规则”页：内置 Xbox、Minecraft、Steam 三组预设，可以编辑、关掉、恢复预设（不能删除）；可以新建、删除自己的规则集。
+  - 每组可填：域名（含子域名）、域名关键字、程序完整路径、程序名、IP 段，一行一个。
+  - 输入会自动整理：`*.Example.COM` → `example.com`，重复的去掉；格式不对的会指出是哪一行。
+  - “从正在运行的程序里挑”：列出正在运行的程序和完整路径（Windows 自带的程序不列），一键加入。
+- “Profile”页可以勾选这个出口用哪些规则集。
+- 规则保存在 `%APPDATA%\SplitGate\rules.json`。删除自己的规则集时，所有 Profile 里对它的勾选也一起去掉。
+
+### 规则
+- 内置预设的域名来自第 0 阶段 V5 实测（2026-10-26）：`xboxlive.com`、`xbox.com`、`minecraft.net`、`steampowered.com`、`steamcommunity.com`、`steamserver.net`、`steamstatic.com`、`steamcdn-a.akamaihd.net`（不放整个 `akamaihd.net`）。Xbox 另含原规格的 `xboxservices.com`、`gamepass.com`、`xboxab.com`、`playfabapi.com`（待第 1 阶段验收时核实）。
+
 ## 0.2.0 — 2026-10-26（Profile 与凭据管理）
 
 ### 新增

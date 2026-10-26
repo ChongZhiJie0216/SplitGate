@@ -388,7 +388,7 @@ textarea {
   margin-bottom: 12px;
 }
 
-.field input:not([type="file"]),
+.field input:not([type="file"]):not([type="checkbox"]),
 .field textarea {
   width: 100%;
 }
@@ -408,6 +408,71 @@ textarea {
   align-items: center;
   gap: 6px;
   margin-bottom: 12px;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.tag.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.checks .check {
+  margin-bottom: 0;
+}
+
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 10;
+}
+
+.modal {
+  width: min(760px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.proc-list {
+  margin-top: 12px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+}
+
+.proc {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.proc-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.proc-text .mono {
+  overflow-wrap: anywhere;
 }
 
 .kv th {

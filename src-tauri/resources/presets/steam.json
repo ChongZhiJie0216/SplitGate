@@ -1,0 +1,10 @@
+{
+  "id": "steam",
+  "name": "Steam",
+  "enabled": true,
+  "domain_suffix": ["steampowered.com", "steamcommunity.com", "steamserver.net", "steamstatic.com", "steamcdn-a.akamaihd.net"],
+  "domain_keyword": [],
+  "process_path": [],
+  "process_name": [],
+  "ip_cidr": []
+}

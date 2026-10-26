@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::config::{self, Profile};
 use crate::exits::wireguard;
 use crate::profiles::{self, ProfilesView, SecretsInput};
+use crate::rules::{self, RuleSet, RuleSetView};
 use crate::{paths, platform};
 
 #[derive(Serialize)]
@@ -76,6 +77,59 @@ pub fn delete_profile(id: String) -> Result<ProfilesView, String> {
 #[tauri::command]
 pub fn set_active_profile(id: String) -> Result<ProfilesView, String> {
     edit_profiles(|f| profiles::set_active(f, &id))
+}
+
+/// Load rules.json (adding missing presets), apply `change`, save when needed, return the view.
+fn edit_rules(change: impl FnOnce(&mut rules::RulesFile) -> Result<bool, String>) -> Result<Vec<RuleSetView>, String> {
+    let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
+    let (mut file, added) = rules::load()?;
+    if change(&mut file)? || added {
+        rules::save(&file)?;
+    }
+    Ok(rules::view(&file))
+}
+
+#[tauri::command]
+pub fn list_rulesets() -> Result<Vec<RuleSetView>, String> {
+    edit_rules(|_| Ok(false))
+}
+
+#[derive(Serialize)]
+pub struct SaveRuleSetResult {
+    id: String,
+    rulesets: Vec<RuleSetView>,
+}
+
+#[tauri::command]
+pub fn save_ruleset(ruleset: RuleSet) -> Result<SaveRuleSetResult, String> {
+    let mut id = String::new();
+    let rulesets = edit_rules(|f| {
+        id = rules::upsert(f, ruleset)?;
+        Ok(true)
+    })?;
+    Ok(SaveRuleSetResult { id, rulesets })
+}
+
+#[tauri::command]
+pub fn reset_ruleset_to_preset(id: String) -> Result<Vec<RuleSetView>, String> {
+    edit_rules(|f| rules::reset_to_preset(f, &id).map(|_| true))
+}
+
+/// Also removes the rule set from every profile, so both files change together.
+#[tauri::command]
+pub fn delete_ruleset(id: String) -> Result<Vec<RuleSetView>, String> {
+    let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
+    let (mut file, _) = rules::load()?;
+    let mut profiles = config::load_profiles()?;
+    rules::delete(&mut file, &mut profiles, &id)?;
+    rules::save(&file)?;
+    config::save_profiles(&profiles)?;
+    Ok(rules::view(&file))
+}
+
+#[tauri::command]
+pub fn list_running_processes() -> Vec<platform::RunningProcess> {
+    platform::running_processes()
 }
 
 #[tauri::command]

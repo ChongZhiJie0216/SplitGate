@@ -216,7 +216,7 @@ fn check_ip(s: &str) -> Result<(), String> {
     s.trim().parse::<IpAddr>().map(|_| ()).map_err(|_| format!("“{s}” 不是有效的 IP 地址"))
 }
 
-fn check_cidr(s: &str) -> Result<(), String> {
+pub(crate) fn check_cidr(s: &str) -> Result<(), String> {
     let (ip, len) = s.trim().split_once('/').ok_or_else(|| format!("“{s}” 要写成 IP/前缀长度"))?;
     let ip: IpAddr = ip.parse().map_err(|_| format!("“{s}” 不是有效的地址"))?;
     let max = if ip.is_ipv4() { 32 } else { 128 };

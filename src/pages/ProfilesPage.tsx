@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useProfiles } from "../store/profiles";
+import { useRules } from "../store/rules";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
 
@@ -26,6 +27,7 @@ const splitList = (s: string) =>
 
 export default function ProfilesPage() {
   const { view, error, load, run } = useProfiles();
+  const { rulesets, load: loadRules } = useRules();
   const [draft, setDraft] = useState<ipc.Profile | null>(null);
   const [hasSecret, setHasSecret] = useState(false);
   const [secrets, setSecrets] = useState<ipc.SecretsInput>({});
@@ -34,7 +36,8 @@ export default function ProfilesPage() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadRules();
+  }, [load, loadRules]);
 
   const select = (p: ipc.Profile, saved: boolean) => {
     setDraft(structuredClone(p));
@@ -108,6 +111,28 @@ export default function ProfilesPage() {
           <Field label={L.name}>
             <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           </Field>
+          <div className="field">
+            <span className="field-label">{L.rulesets}</span>
+            <div className="checks">
+              {rulesets?.map(({ ruleset: r }) => (
+                <label className="check" key={r.id}>
+                  <input
+                    type="checkbox"
+                    checked={draft.ruleset_ids.includes(r.id)}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        ruleset_ids: e.target.checked ? [...draft.ruleset_ids, r.id] : draft.ruleset_ids.filter((x) => x !== r.id),
+                      })
+                    }
+                  />
+                  {r.name}
+                  {!r.enabled && <span className="tag warn">{T.rules.off}</span>}
+                </label>
+              ))}
+            </div>
+            <span className="field-hint">{L.rulesetsHint}</span>
+          </div>
 
           {draft.type === "cisco" && draft.cisco && (
             <>

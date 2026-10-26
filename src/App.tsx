@@ -7,6 +7,7 @@ import { setActiveProfile } from "./lib/ipc";
 import AboutPage from "./pages/AboutPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import ProfilesPage from "./pages/ProfilesPage";
+import RulesPage from "./pages/RulesPage";
 
 const PAGES: Page[] = ["connect", "rules", "logs", "profiles", "settings", "about"];
 
@@ -69,7 +70,15 @@ export default function App() {
         {info && !info.isAdmin && <div className="banner warn">{T.notAdmin}</div>}
         {infoError && <div className="banner bad">{infoError}</div>}
         <section className="content">
-          {page === "about" ? <AboutPage /> : page === "profiles" ? <ProfilesPage /> : <PlaceholderPage title={T.nav[page]} />}
+          {page === "about" ? (
+            <AboutPage />
+          ) : page === "profiles" ? (
+            <ProfilesPage />
+          ) : page === "rules" ? (
+            <RulesPage />
+          ) : (
+            <PlaceholderPage title={T.nav[page]} />
+          )}
         </section>
       </main>
     </div>
