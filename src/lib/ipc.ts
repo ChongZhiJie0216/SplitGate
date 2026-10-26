@@ -200,6 +200,10 @@ export interface Blocked {
   time: string;
 }
 
+/** 诊断包：返回 zip 的完整路径（设置文件夹的 diagnostics 里）。 */
+export const exportDiagnostics = () => invoke<string>("export_diagnostics");
+export const showDiagnostics = (path: string) => invoke<void>("show_diagnostics", { path });
+
 export const listBlocked = () => invoke<Blocked[]>("list_blocked");
 export const dismissBlocked = (host: string) => invoke<Blocked[]>("dismiss_blocked", { host });
 export const clearBlocked = () => invoke<Blocked[]>("clear_blocked");

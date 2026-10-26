@@ -171,6 +171,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 - 服务名 `SplitGate`，账户键为 `<profile_id>:<user>`。存 Cisco 密码、WireGuard 私钥。
 - 删除 profile 时同步删除凭据。
 - 日志、错误信息、诊断包中一律不输出密码、cookie、secret、私钥。
+- 诊断包（v0.9.0，`diagnostics.rs`）：设置文件夹 `diagnostics\SplitGate-diagnostics-<时间>.zip`，用 PowerShell `Compress-Archive` 打包。内含最近 7 天日志、三个设置文件、使用中 Profile 的 sing-box 配置（凭据换成 `***`）、网络状态、摘要。写入前：JSON 里 `password` / `private_key` / `pre_shared_key` / `secret` / `token` 一律换成 `***`；凭据管理器里存的每个密码 / 私钥在所有文件里搜一遍换成 `***`；服务器、账号、WireGuard 对端主机名、`%USERPROFILE%`、Windows 用户名换成代号（仓库是公开的，诊断包可能贴出去）。
 
 ### 5. 权限
 
@@ -340,6 +341,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 | `dismiss_blocked` | host | 列表（这次运行期间不再提示这个域名） |
 | `clear_blocked` | 无 | 列表（清空） |
 | `export_diagnostics` | 无 | 文件路径（日志打包，已脱敏） |
+| `show_diagnostics` | path | 无（在资源管理器里选中这个诊断包） |
 
 **Events（后端推送）**
 
@@ -443,7 +445,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [ ] 连接期间，非规则流量的出口 IP 仍是学校网络
 - [x] 在任务管理器中结束 SplitGate 进程后，网络能在 5 秒内恢复正常（v0.6.0，手机热点 + WireGuard，1.6 秒，2026-10-26）
 - [x] 断开再连接 20 次，没有残留进程、网卡或路由（v0.6.0，手机热点 + WireGuard，每次断开后 0.7–1.1 秒清干净，2026-10-26）
-- [ ] 日志、诊断包和 `%APPDATA%\SplitGate\` 中搜索不到密码（v0.6.0 日志、设置、WebView2 数据、便携版文件夹、命令行、任务计划都搜不到 Cisco 密码和 WireGuard 私钥，2026-10-26；诊断包第 2 阶段才有，到时再测）
+- [ ] 日志、诊断包和 `%APPDATA%\SplitGate\` 中搜索不到密码（v0.6.0 日志、设置、WebView2 数据、便携版文件夹、命令行、任务计划都搜不到 Cisco 密码和 WireGuard 私钥，2026-10-26；诊断包 v0.9.0 才有，`phase1\secret-scan.ps1` 已会解开 zip 再搜，待测）
 - [x] 用任务管理器核实 Xbox App 的进程，补进预设（`XboxPcApp.exe`、`XboxPcAppFT.exe`，v0.6.1）
 
 ### 第 2 阶段：可观测性与 Pangolin

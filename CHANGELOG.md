@@ -4,6 +4,12 @@
 
 ## 未发布
 
+## 0.9.0 — 2026-10-26（诊断包）
+
+### 新增
+- “日志”页的“导出诊断包”：打包成一个 zip，保存在设置文件夹的 `diagnostics\`，可以按“在文件夹中显示”找到它。内容：最近 7 天的日志、`profiles.json` / `rules.json` / `settings.json`、使用中 Profile 的 sing-box 配置、网络状态（网卡、默认路由、DNS）和一份摘要（版本、状态、残留检查、拦截提示）。
+  - 密码、私钥、secret 一律换成 `***`；服务器地址、账号、WireGuard 对端地址、Windows 用户名换成代号（例如 `<cisco-server-1>`），可以放心发给别人。
+
 ### 改变
 - `build.bat` 打包完会把 `SplitGate.exe` 和 `sing-box.exe` 复制到仓库根目录，直接双击就能测试；SplitGate 还开着时会在一开始就提示先退出，不会白等编译。
 

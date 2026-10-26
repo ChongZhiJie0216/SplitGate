@@ -99,6 +99,12 @@ export const T = {
     clear: "清空画面",
     empty: "还没有日志。",
     fileHint: "完整日志在设置文件夹的 logs 里，保留 30 天。",
+    exportDiag: "导出诊断包",
+    exporting: "正在打包…",
+    exported: "诊断包已保存：",
+    showFile: "在文件夹中显示",
+    diagHint:
+      "诊断包是一个 zip：最近 7 天的日志、设置、sing-box 配置、网络状态。密码、私钥换成 ***，服务器地址、账号、Windows 用户名也换成代号，可以放心发给别人。",
   },
   notAdmin: "没有以管理员身份运行：可以浏览和编辑设置，但不能连接。",
   about: {

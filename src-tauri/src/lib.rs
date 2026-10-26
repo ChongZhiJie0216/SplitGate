@@ -4,6 +4,7 @@ mod cleanup;
 mod commands;
 mod config;
 mod credentials;
+mod diagnostics;
 mod exits;
 mod logs;
 mod paths;
@@ -97,6 +98,8 @@ pub fn run() {
             commands::list_blocked,
             commands::dismiss_blocked,
             commands::clear_blocked,
+            commands::export_diagnostics,
+            commands::show_diagnostics,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SplitGate");
