@@ -222,7 +222,7 @@ V3a 已证明 sing-box 自带的 OpenConnect 可用，不需要另建 VPN 网卡
 
 ---
 
-## V4 VPN 外层连接固定走指定网卡 — 准备好，等维护者执行
+## V4 VPN 外层连接固定走指定网卡 — ✅ 通过
 
 目的：OpenConnect endpoint 加 `bind_interface`（Dial Fields）之后，VPN 自己的封包从指定网卡（Wi-Fi 手机热点）出去；不命中规则的流量照旧走默认网卡（有线）。顺便看热点上 DTLS（UDP）能不能用。
 
@@ -236,3 +236,18 @@ V3a 已证明 sing-box 自带的 OpenConnect 可用，不需要另建 VPN 网卡
 - ifconfig.me 为空：测试在 13:59:22–34 跑完，隧道 13:59:35 才建立。**在等 DTLS 的这段时间里，命中规则的流量没有任何报错，就是没反应**（日志里连 ifconfig.me 的 DNS 查询都没有记录）。→ 第 1 阶段：状态要等 `established` 才显示“已连接”；连接中命中规则的流量应快速失败，不要让用户以为卡住了。
 - 结束后恢复：3.1 秒；无残留。
 - 修改：test.ps1 在日志里没有 `tunnel established` 时拒绝运行。
+### 第 2 次（2026-10-26 14:01，Wi-Fi，`-NoUdp`）— ✅ 通过
+
+- 外层连接：两条 TCP 连接都是 172.20.10.4（Wi-Fi）→ 202.186.213.216:8443。
+- 分流：api.ipify.org → 219.92.246.113（本地，走有线），ifconfig.me → 202.186.213.216（VPN），网页 True。
+- 结束后恢复 1.5 秒；无残留。
+- 结论：OpenConnect endpoint 的 `bind_interface` 可用，能把 VPN 外层连接固定在指定网卡，不影响其他流量的默认网卡。→ Profile 可以加“出口网卡”选项（留空 = 自动）。
+
+---
+
+## V5 DNS 屏蔽 — 预查（2026-10-26 14:03，只读）
+
+学校有线的 DNS（DHCP 给的）是 **1.1.1.1 / 8.8.8.8**，不是学校自己的 DNS 服务器。直接问 1.1.1.1，以下 Xbox 相关域名**都能正常解析**，结果是微软 / CDN 的 IP，和手机热点的结果同一类：
+www.xbox.com、xboxlive.com、user.auth.xboxlive.com、xsts.auth.xboxlive.com、title.mgt.xboxlive.com、login.live.com、assets1.xboxlive.com、xbl.io、gamepass.com、store-images.s-microsoft.com。
+
+→ 至少这些域名，学校**不是靠 DNS 屏蔽**。如果 Xbox 在学校用不了，比较可能是按 IP / SNI 阻挡，或者挡了某些端口（例如 Xbox Live 的 UDP 3074 / Teredo）。SPEC 的 V5 前提（“学校 DNS 屏蔽 Xbox 域名”）要先向维护者确认实际症状。
