@@ -401,3 +401,15 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - 15:01:56 维护者在 App 断开时，官方客户端日志列出它开 Exit Node 时加的**例外路由（excluded routes，不走隧道）**：104.21.0.97、172.67.150.210（wg.jiecloud.net）、202.186.213.216（家）、**1.1.1.1**、149.118.140.232（VPN.Node）。也就是说客户端把 1.1.1.1 当作“绕过隧道”的地址（推测是因为它是有线网卡的 DNS），隧道里多半也不收发它。
 - 修改：V7 的 vpn-dns 改成 **9.9.9.9**（不在例外名单里）。`-CheckOnly` 通过。
 - 对 SPEC：用外部 VPN 网卡时，vpn-dns 要避开该客户端的例外地址（物理网卡的 DNS、VPN 服务器本身）；第 1 阶段可以在连接后读路由表，自动避开。
+### V7 第 3 步第 4 次（2026-10-26 15:04，vpn-dns 9.9.9.9）— ❌（测试落在 Pangolin 断线期间）
+
+- 直连正常（本地出口、网页 True、0.9 秒恢复、无残留）；经 Pangolin 的 DNS 发出两次（15:04:07、15:04:17）没有回应。
+- 官方客户端日志（同一时间）：
+  - 15:04:04 sing-box 启动（TUN 加了经 172.19.0.2 的默认路由）→ 客户端认为“网络变了”，把自己的例外路由改指向 **172.19.0.2（sing-box 的 TUN）**：`Setting bypass route to 149.118.140.232 via 172.19.0.2`。于是 Pangolin 自己的 WireGuard 封包也进了 sing-box。
+  - 15:04:12–13 `Holepunch to site 7 ... DISCONNECTED`、`WireGuard connection to site 7 is DISCONNECTED`。
+  - 15:04:20 `WireGuard connection to site 7 is CONNECTED`，例外路由改回 `via 192.168.0.254`（有线）。
+  - 15:04:21 `System DNS changed: [1.1.1.1:53 8.8.8.8:53 172.19.0.2:53]` —— 客户端也注意到 sing-box 的 DNS。
+- 结论：**sing-box 启动会让官方 Pangolin 客户端断线约 10–15 秒**，之后自己恢复。测试要等它恢复再跑。
+- 对 SPEC：
+  1. 用外部 VPN 客户端时，SplitGate 要在 sing-box 启动后**等外部隧道恢复**（看握手 / 探测），才显示“已连接”。
+  2. 外部客户端会跟着系统默认路由改它的例外路由；sing-box 的 TUN 不能把这些例外地址（VPN 服务器、site 端点）吸进来，否则会形成回环。第 1 阶段可以把这些地址加进 TUN 的 `route_exclude_address`。
