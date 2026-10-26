@@ -6,8 +6,9 @@
 param(
     [string]$Interface = 'Pangolin',
     [string[]]$VpnDomains = @('ifconfig.me'),
-    # DNS for rule domains, sent through the Pangolin adapter
-    [string]$VpnDns = '1.1.1.1',
+    # DNS for rule domains, sent through the Pangolin adapter. Not 1.1.1.1: with an Exit Node the Pangolin client
+    # puts 1.1.1.1 (and its own endpoints) on its bypass list, so 1.1.1.1 never answers through the tunnel.
+    [string]$VpnDns = '9.9.9.9',
     # DNS for everything else, sent direct. Not 'local' (system list): with a route on the Pangolin adapter, Windows
     # puts Pangolin's DNS (100.96.128.1) first, and sing-box dials it via the physical adapter -> timeouts. Empty = 'local'.
     [string]$LocalDns = '1.1.1.1',

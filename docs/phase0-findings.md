@@ -394,3 +394,10 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - 判断：sing-box 的 `local` DNS 读系统 DNS 列表；Pangolin 网卡有了默认路由之后，它的 100.96.128.1 排在最前，而 sing-box 的直连都绑在有线网卡上，100.96.128.1 只能经 Pangolin 才到得了 → 每次先超时再换下一个。
 - 修改：run-singbox.ps1 的直连 DNS 改成明确的 `udp 1.1.1.1`（新参数 `-LocalDns`，留空 = 系统列表）。`-CheckOnly` 通过。
 - 对 SPEC：有外部 VPN 网卡时，直连 DNS 不能用 sing-box 的 `local`（系统列表），要用物理网卡自己的 DNS 服务器。
+### V7 第 3 步第 3 次（2026-10-26 15:01，直连 DNS = 1.1.1.1）— ❌（但找到原因）
+
+- 直连恢复正常：api.ipify.org 本地、网页 True、结束后 1.7 秒恢复、无残留。
+- 经 Pangolin 的 DNS（1.1.1.1）只发出、没有回应：`outbound/direct[vpn]: outbound packet connection to 1.1.1.1:53` 两次，没有 `exchanged`。
+- 15:01:56 维护者在 App 断开时，官方客户端日志列出它开 Exit Node 时加的**例外路由（excluded routes，不走隧道）**：104.21.0.97、172.67.150.210（wg.jiecloud.net）、202.186.213.216（家）、**1.1.1.1**、149.118.140.232（VPN.Node）。也就是说客户端把 1.1.1.1 当作“绕过隧道”的地址（推测是因为它是有线网卡的 DNS），隧道里多半也不收发它。
+- 修改：V7 的 vpn-dns 改成 **9.9.9.9**（不在例外名单里）。`-CheckOnly` 通过。
+- 对 SPEC：用外部 VPN 网卡时，vpn-dns 要避开该客户端的例外地址（物理网卡的 DNS、VPN 服务器本身）；第 1 阶段可以在连接后读路由表，自动避开。
