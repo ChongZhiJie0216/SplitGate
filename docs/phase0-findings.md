@@ -80,4 +80,12 @@ cleanup-all.ps1（检查模式）：nothing left over
 
 - test.ps1 运行时 sing-box 没有在跑：没有 `SplitGate-TUN` 网卡，默认路由和 baseline 一样，`phase0/logs` 里也没有 `v1-before` 快照和 sing-box 日志，说明 run.ps1 在快照之前就退出了（推测是没用管理员身份）。“1.1 秒恢复”不算数。
 - 发现本机有 IPv6 出口（ifconfig.me 返回 `2001:d08:…`）。原配置的 TUN 只有 IPv4 地址，IPv6 流量可能绕过分流。
-- 修改：TUN 加 IPv6 地址 `fdfe:dcba:9876::1/126`（SPEC 第 3 节的 inbounds 也要补上 IPv6）；test.ps1 在 sing-box 没运行或没有网卡时直接报错退出；test.ps1 分别测 IPv4 / IPv6 出口，并列出 TUN 网卡上的路由。
+- 修改（第 1 次后）：TUN 加 IPv6 地址 `fdfe:dcba:9876::1/126`（SPEC 第 3 节的 inbounds 也要补上 IPv6）；test.ps1 在 sing-box 没运行或没有网卡时直接报错退出；test.ps1 分别测 IPv4 / IPv6 出口，并列出 TUN 网卡上的路由。
+
+### 第 2 次尝试（2026-10-26 13:15）— 脚本 bug，要重测
+
+- run.ps1 以管理员身份运行，快照正常，sing-box 输出 `inbound/tun[tun-in]: started at SplitGate-TUN` 后脚本立刻中断（`NativeCommandError`）。
+- 原因：PowerShell 5.1 里对原生 exe 用 `2>&1`，stderr 的每一行都会变成错误记录；脚本设了 `$ErrorActionPreference = 'Stop'`，第一行日志就让脚本中断，sing-box 也跟着结束。
+- 收获：sing-box 1.14.4 能在本机建立 `SplitGate-TUN` 网卡；sing-box 被中断后，网卡和路由都自动撤掉了（cleanup-all 检查结果为干净）。
+- 修改：改由 `cmd.exe /c "... 2>&1"` 合并输出，再接 `Tee-Object`；加上 `--disable-color`。已用一个故意失败的命令确认：输出能正确显示和写进日志，退出码也能传回来。
+- 第 1 阶段要注意：Rust 端读 sidecar 输出时要同时读 stdout 和 stderr，sing-box 的日志在 stderr。

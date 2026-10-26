@@ -14,4 +14,8 @@ if ($LASTEXITCODE -ne 0) { Write-Host '[ERROR] sing-box check failed, not starti
 
 $log = Join-Path $LogDir ("v1-singbox-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
 Write-Host "[start] sing-box (log: $log). Press Ctrl+C to stop."
-& $singbox run -c $config 2>&1 | Tee-Object -FilePath $log
+# sing-box logs to stderr. In PowerShell 5.1, "2>&1" on a native exe turns each stderr line into an
+# error record, which aborts the script under ErrorActionPreference=Stop. Let cmd.exe merge the streams.
+$ErrorActionPreference = 'Continue'
+cmd.exe /c "`"$singbox`" run --disable-color -c `"$config`" 2>&1" | Tee-Object -FilePath $log
+Write-Host "[exit] sing-box exited with code $LASTEXITCODE"
