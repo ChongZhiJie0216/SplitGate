@@ -89,6 +89,67 @@ mod tests {
     }
 }
 
+/// Local time as (y, mo, d, h, mi, s) for log lines and file names.
+pub fn local_time() -> (u16, u16, u16, u16, u16, u16) {
+    #[cfg(windows)]
+    unsafe {
+        let mut t: windows_sys::Win32::Foundation::SYSTEMTIME = std::mem::zeroed();
+        windows_sys::Win32::System::SystemInformation::GetLocalTime(&mut t);
+        (t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
+    }
+    #[cfg(not(windows))]
+    (1970, 1, 1, 0, 0, 0)
+}
+
+/// A job object with KILL_ON_JOB_CLOSE: children put in it end when SplitGate ends,
+/// even when SplitGate crashes or is killed in Task Manager (SPEC "错误处理与清理").
+/// The handle is never closed on purpose: closing it is what kills the children.
+#[cfg(windows)]
+pub struct KillOnCloseJob(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+unsafe impl Send for KillOnCloseJob {}
+#[cfg(windows)]
+unsafe impl Sync for KillOnCloseJob {}
+
+#[cfg(windows)]
+impl KillOnCloseJob {
+    pub fn new() -> Result<Self, String> {
+        use windows_sys::Win32::System::JobObjects::{
+            CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        };
+        unsafe {
+            let h = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if h.is_null() {
+                return Err("无法建立 Job Object".into());
+            }
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let ok = SetInformationJobObject(
+                h,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as *const core::ffi::c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            );
+            if ok == 0 {
+                return Err("无法设置 Job Object".into());
+            }
+            Ok(Self(h))
+        }
+    }
+
+    pub fn assign(&self, child: &std::process::Child) -> Result<(), String> {
+        use std::os::windows::io::AsRawHandle;
+        let ok = unsafe { windows_sys::Win32::System::JobObjects::AssignProcessToJobObject(self.0, child.as_raw_handle() as _) };
+        if ok == 0 {
+            Err("无法把 sing-box 放进 Job Object".into())
+        } else {
+            Ok(())
+        }
+    }
+}
+
 /// A Command for a console helper (sing-box etc.) that never opens a window.
 pub fn hidden_command(exe: &Path) -> Command {
     #[allow(unused_mut)]

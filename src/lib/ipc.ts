@@ -1,6 +1,31 @@
 // 所有 Tauri invoke / listen 的类型封装。前端其它地方不直接调用 invoke。
 // Profile 相关字段名和 profiles.json 一致（snake_case，见 SPEC“数据模型”）。
 import { invoke } from "@tauri-apps/api/core";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
+
+export type Step = "prepare" | "cleanup" | "check" | "start" | "tunnel" | "probe";
+
+/** 连接状态：后端是唯一来源（supervisor.rs），前端只显示。 */
+export type Status =
+  | { state: "disconnected" }
+  | { state: "connecting"; profile_name: string; step: Step }
+  | { state: "connected"; profile_name: string; exit: ExitType; since_ms: number; probe_ms: number }
+  | { state: "disconnecting" }
+  | { state: "error"; message: string };
+
+export interface LogLine {
+  time: string;
+  source: "app" | "sing-box";
+  level: "info" | "warn" | "error";
+  text: string;
+}
+
+export const connect = (profileId?: string) => invoke<void>("connect", { profileId: profileId ?? null });
+export const disconnect = () => invoke<void>("disconnect");
+export const getStatus = () => invoke<Status>("get_status");
+export const getLogs = () => invoke<LogLine[]>("get_logs");
+export const onStatus = (f: (s: Status) => void): Promise<UnlistenFn> => listen<Status>("status_changed", (e) => f(e.payload));
+export const onLog = (f: (l: LogLine) => void): Promise<UnlistenFn> => listen<LogLine>("log", (e) => f(e.payload));
 
 export interface AppInfo {
   version: string;

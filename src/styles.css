@@ -475,6 +475,139 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.connect-btn.connected {
+  background: var(--good);
+}
+
+.connect-btn.connecting,
+.connect-btn.disconnecting {
+  background: var(--warn);
+}
+
+.connect-btn.error {
+  background: var(--bad);
+}
+
+.connect-btn.big {
+  font-size: 16px;
+  padding: 12px 36px;
+}
+
+.btn-sub {
+  font-weight: 400;
+  opacity: 0.8;
+  margin-left: 6px;
+}
+
+.connect-card {
+  max-width: 640px;
+}
+
+.connect-card h2 {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.state-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 10px;
+  vertical-align: middle;
+  background: var(--muted);
+}
+
+.state-dot.connected {
+  background: var(--good);
+}
+
+.state-dot.connecting,
+.state-dot.disconnecting {
+  background: var(--warn);
+}
+
+.state-dot.error {
+  background: var(--bad);
+}
+
+.steps {
+  margin: 4px 0 12px;
+  padding-left: 22px;
+  color: var(--muted);
+}
+
+.steps li.done {
+  color: var(--text-2);
+}
+
+.steps li.now {
+  color: var(--text);
+  font-weight: 600;
+}
+
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent-ink);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.logs-card {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 140px);
+}
+
+.logs-card .row.top {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.log-box {
+  flex: 1;
+  overflow: auto;
+  font-size: 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.log-line {
+  display: flex;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.log-line.warn .log-text {
+  color: var(--warn);
+}
+
+.log-line.error .log-text {
+  color: var(--bad);
+}
+
+.log-time,
+.log-src {
+  flex: none;
+  color: var(--muted);
+}
+
+.log-src {
+  width: 64px;
+}
+
+.log-src.app {
+  color: var(--accent-ink);
+}
+
+.log-text {
+  overflow-wrap: anywhere;
+}
+
 .kv th {
   text-align: left;
   font-weight: 500;

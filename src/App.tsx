@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { Page, useApp } from "./store/app";
 import { useProfiles } from "./store/profiles";
+import { useStatus } from "./store/status";
 import { T } from "./lib/text";
 import { Theme, applyTheme, loadTheme } from "./lib/theme";
 import { setActiveProfile } from "./lib/ipc";
+import ConnectButton from "./components/ConnectButton";
 import AboutPage from "./pages/AboutPage";
+import ConnectPage from "./pages/ConnectPage";
+import LogsPage from "./pages/LogsPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import ProfilesPage from "./pages/ProfilesPage";
 import RulesPage from "./pages/RulesPage";
@@ -14,12 +18,15 @@ const PAGES: Page[] = ["connect", "rules", "logs", "profiles", "settings", "abou
 export default function App() {
   const { page, setPage, info, infoError, loadInfo } = useApp();
   const { view, load: loadProfiles, run } = useProfiles();
+  const { status, start } = useStatus();
   const [theme, setTheme] = useState<Theme>(loadTheme());
+  const busy = status.state !== "disconnected" && status.state !== "error";
 
   useEffect(() => {
     loadInfo();
     loadProfiles();
-  }, [loadInfo, loadProfiles]);
+    start();
+  }, [loadInfo, loadProfiles, start]);
 
   const changeTheme = (t: Theme) => {
     setTheme(t);
@@ -39,14 +46,12 @@ export default function App() {
       </nav>
       <main className="main">
         <header className="topbar">
-          <button className="connect-btn" disabled>
-            {T.status.disconnected}
-          </button>
+          <ConnectButton />
           <label className="theme">
             {T.profile.pick}
             <select
               value={view?.active ?? ""}
-              disabled={!view?.profiles.length}
+              disabled={!view?.profiles.length || busy}
               onChange={(e) => run(() => setActiveProfile(e.target.value))}
             >
               {!view?.profiles.length && <option value="">{T.profile.none}</option>}
@@ -70,7 +75,11 @@ export default function App() {
         {info && !info.isAdmin && <div className="banner warn">{T.notAdmin}</div>}
         {infoError && <div className="banner bad">{infoError}</div>}
         <section className="content">
-          {page === "about" ? (
+          {page === "connect" ? (
+            <ConnectPage />
+          ) : page === "logs" ? (
+            <LogsPage />
+          ) : page === "about" ? (
             <AboutPage />
           ) : page === "profiles" ? (
             <ProfilesPage />

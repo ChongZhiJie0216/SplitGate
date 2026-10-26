@@ -6,7 +6,7 @@ use crate::config::{self, Profile};
 use crate::exits::wireguard;
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
-use crate::{paths, platform};
+use crate::{logs, paths, platform, supervisor};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,6 +130,26 @@ pub fn delete_ruleset(id: String) -> Result<Vec<RuleSetView>, String> {
 #[tauri::command]
 pub fn list_running_processes() -> Vec<platform::RunningProcess> {
     platform::running_processes()
+}
+
+#[tauri::command]
+pub fn connect(profile_id: Option<String>) -> Result<(), String> {
+    supervisor::connect(profile_id)
+}
+
+#[tauri::command]
+pub fn disconnect() -> Result<(), String> {
+    supervisor::disconnect()
+}
+
+#[tauri::command]
+pub fn get_status() -> supervisor::Status {
+    supervisor::status()
+}
+
+#[tauri::command]
+pub fn get_logs() -> Vec<logs::LogLine> {
+    logs::recent()
 }
 
 #[tauri::command]
