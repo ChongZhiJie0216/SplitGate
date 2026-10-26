@@ -313,3 +313,26 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - 规则要支持 `process_path`（完整路径），不能只有 `process_name`；`javaw.exe` 这种通用名字只靠名字会误伤别的程序。
 - 界面上“加程序”最好让用户从正在运行的程序里挑，自动填完整路径（Minecraft 本体是 PrismLauncher 启动后才出现的 javaw.exe）。
 - Xbox App 的程序名（XboxPcApp.exe、gamingservices.exe 等）本机没有安装，没测；先用域名规则。
+---
+
+## V7 Pangolin — ⚠ 方案 A（独立运行 Olm）在 Windows 上不符合安全规则，暂停，等维护者决定
+
+维护者信息（2026-10-26）：服务器 `pangolin.jiecloud.net`，Pangolin **1.24.0**；上星期在学校用官方客户端能连通。本机已安装官方 Pangolin Windows 客户端（服务 `PangolinManager` 运行中，隧道服务 `PangolinTunnel$olm` 平时停止；配置在 `C:\ProgramData\pangolin\`、`%LOCALAPPDATA%\pangolin\`，**没有读取内容**）。
+
+读 Olm 1.10.1 源码（`main.go`、`config.go`、`service_windows.go`）发现：
+
+1. **Windows 上没有真正的“控制台模式”**：除了 install / remove / start 等子命令，其余任何参数都走 `default` 分支 → 服务 `OlmWireguardService` 没装就**自动安装**（LocalSystem，手动启动），然后通过服务管理器把服务启动起来。也就是说 olm.exe 只是“遥控器”，真正跑隧道的是**另一个服务进程**。
+2. 所以通过环境变量传 `OLM_SECRET` **传不到**服务进程；只能用 `--secret` 参数。而参数会被：
+   - 写进 `C:\ProgramData\olm\service_args.json`（权限 0644，所有人可读）；
+   - 写进 Windows 事件日志（`Service Execute called with args: ...`、`Final args to use: ...`）。
+3. 另外，每次启动都把完整配置（含 secret）写进 `%PROGRAMDATA%\olm\olm-client\config.json`（可以用 `CONFIG_FILE` 指向不存在的文件夹来避免，这一条有解）。
+4. `OverrideDNS` 默认是**开**（会改系统 DNS），环境变量 `OVERRIDE_DNS=false` 无效，只能用 `--override-dns=false`。
+5. Exit Node 在 1.10.1 里只给服务器 IP 加 /32 路由；“全隧道”来自 **gateway site**（源码注释：gateway routes 永远会装，`--disable-routes-and-aliases` 也关不掉）。SPEC 对 Exit Node 的描述要按这个改。
+
+→ 违反“凭据不写进文件、命令行参数、日志”，**没有让维护者运行**。我自己只跑过一次不带管理员的 `--show-config` 检查：Olm 在查询服务状态时就因权限不足退出，**没有装服务、没有建 `ProgramData\olm`**（已确认）。写好的 run-olm.ps1 已删除；`observe.ps1`（只读，查看网卡 / 路由 / DNS / 出口 IP）保留，改成通用。
+
+可选方向（等维护者决定）：
+- **A. 用已安装的官方 Pangolin 客户端**：由它负责登录和凭据，SplitGate 不碰 Secret；连上后用 observe.ps1 看它的网卡和路由，再让 sing-box `bind_interface` 到那张网卡。风险：如果它装了全隧道默认路由，会和 sing-box 的 TUN 抢流量。
+- **B. 自己改 Olm（fork）**：加一个真正的控制台模式（不装服务、secret 只从环境变量读）。需要装 Go 编译，属于新增依赖。
+- **C. 评估 Pangolin CLI 0.19.0**：之前下载被权限拦下，可由维护者手动下载；要先查它在 Windows 上是不是也走服务。
+- **D. SPEC 方案 B（WSL2 + Linux 版客户端 + SOCKS5）**。
