@@ -290,7 +290,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 ---
 
-## V6 按程序分流 — ✅ 测试通过（PrismLauncher 实测待回报）
+## V6 按程序分流 — ✅ 通过
 
 本机看到的程序（2026-10-26）：`prismlauncher.exe`（D:\PrismLauncher\），Minecraft 本体是 `javaw.exe`（PrismLauncher 自带的 Java，D:\PrismLauncher\java\...）。`javaw.exe` 这个名字很常见（别的 Java 程序也叫这个），所以**规则要支持完整路径**（sing-box `process_path`），不能只靠程序名。
 
@@ -305,3 +305,11 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - 日志：14:17:16 `endpoint/openconnect[vpn]: outbound connection to 172.67.74.152:443`（curl），14:17:17 `outbound/direct[direct]` 同一个 IP（PowerShell）。同一个目标 IP，按程序分到不同出口。
 - 结论：Windows 上 sing-box 的 `process_name` / `process_path` 可用（TUN 模式下能认出连接是哪个程序发的）。
 - 修正：test.ps1 原本在 sing-box 还开着的时候做残留检查，列出的都是正在使用的网卡和路由，不是残留。已拿掉，改成提示关闭后再检查。
+### 实际登录（2026-10-26，维护者测）— ✅ 成功
+
+规则里**只有程序路径**（prismlauncher.exe + 自带 javaw.exe），没有任何 Xbox / Minecraft 域名，PrismLauncher 退出后重新登录 Microsoft 账号成功。
+
+**V6 结论：** 按程序分流可以取代一长串域名，学校新增拦截的网址也不受影响。对 SPEC：
+- 规则要支持 `process_path`（完整路径），不能只有 `process_name`；`javaw.exe` 这种通用名字只靠名字会误伤别的程序。
+- 界面上“加程序”最好让用户从正在运行的程序里挑，自动填完整路径（Minecraft 本体是 PrismLauncher 启动后才出现的 javaw.exe）。
+- Xbox App 的程序名（XboxPcApp.exe、gamingservices.exe 等）本机没有安装，没测；先用域名规则。
