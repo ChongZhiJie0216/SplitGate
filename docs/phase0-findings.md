@@ -118,3 +118,12 @@ cleanup-all.ps1（检查模式）：nothing left over
 - `www.microsoft.com`：True；`www.google.com`：True。sing-box 日志里没有 ERROR，所有连接都走 `outbound/direct`。
 - 用 `Stop-Process -Force` 结束 sing-box：**0.7 秒后网络恢复**（目标是 5 秒内）。之后 cleanup-all 检查结果为干净：没有残留网卡和路由，DNS 和 baseline 相同。
 - 结论：sing-box 进程被强制结束时，Windows 会自动撤掉 TUN 网卡和它的路由。SPEC 的“应用崩溃不能让电脑断网”在 sing-box 这一层成立；cleanup.rs 仍然要做，用来处理 openconnect 或 Olm 留下的东西。
+---
+
+## V2 WireGuard — 准备好，等维护者提供 .conf
+
+文件：`phase0/v2-wireguard/`（make-config.ps1、run.ps1、test.ps1、cleanup.ps1）。
+
+- `make-config.ps1` 读取标准 `.conf`（必须放在仓库外面，否则拒绝执行），生成 `phase0/runtime/v2-singbox.json`。文件权限只给当前用户、Administrators 和 SYSTEM。run.ps1 结束时会删除它，cleanup-all 也会删。屏幕上不显示任何密钥。
+- 生成规则：WireGuard endpoint `tag: vpn`；peer 的 `allowed_ips` 固定为 `0.0.0.0/0, ::/0`；`.conf` 的 DNS 只取 IP（搜索域名会被忽略）作为 `vpn-dns`（`detour: vpn`）；`ifconfig.me` 走 `vpn` 并用 `vpn-dns` 解析；其余直连。
+- 用随机生成的假 `.conf` 测试：`sing-box check` 通过，ACL 正确，放在仓库里的 `.conf` 会被拒绝。
