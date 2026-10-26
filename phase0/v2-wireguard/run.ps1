@@ -3,7 +3,8 @@
 # If anything goes wrong: phase0\v2-wireguard\cleanup.ps1
 param(
     [string]$Conf = (Join-Path $env:USERPROFILE 'splitgate-secrets\home.conf'),
-    [string]$LogLevel = 'info'
+    [string]$LogLevel = 'info',
+    [string]$BindInterface = ''
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\common.ps1')
@@ -13,7 +14,7 @@ Write-Host '[ok] running as Administrator'
 $singbox = Join-Path $BinDir 'sing-box\sing-box.exe'
 $config = Join-Path $RuntimeDir 'v2-singbox.json'
 & (Join-Path $Phase0Dir 'snapshot.ps1') -Label 'v2-before' | Out-Null
-& (Join-Path $PSScriptRoot 'make-config.ps1') -Conf $Conf -LogLevel $LogLevel
+& (Join-Path $PSScriptRoot 'make-config.ps1') -Conf $Conf -LogLevel $LogLevel -BindInterface $BindInterface
 
 try {
     & $singbox check -c $config

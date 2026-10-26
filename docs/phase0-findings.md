@@ -135,4 +135,6 @@ cleanup-all.ps1（检查模式）：nothing left over
 - 推测原因（待确认）：当前网络挡了 UDP 51820；家里服务器没有在跑；密钥或 peer 公钥不对。
 - 结束进程后 5.7 秒恢复：测试循环里每次检查最多等 5 秒，第一次撞上正在关闭的连接就白等了 5 秒。已改成最多等 2 秒，下次重测。
 - 设计提示：vpn-dns 不通时，命中规则的域名会**整个打不开**，而不是悄悄改走直连（fail closed）。这符合“规则流量必须走 VPN”。但界面要能看出“隧道不通”，不能只显示“已连接”。第 1 阶段的状态检测要包含“隧道里能不能收到回应”。
-- 修改：make-config / run.ps1 加 `-LogLevel` 选项（默认 info），用 `-LogLevel debug` 可以看到握手过程。
+- 修改：make-config / run.ps1 加 `-LogLevel` 选项（默认 info），用 `-LogLevel debug` 可以看到握手过程。- 维护者说明（2026-10-26）：学校网络可能挡官方 WireGuard。线索：同一时间这台电脑连家里 IP 的 TCP 8443 是通的（日志里有 `outbound connection to <家里IP>:8443`），所以家里服务器连得到，被挡的可能只是 WireGuard 的 UDP。
+- 诊断：make-config / run.ps1 加 `-BindInterface <网卡名>`，让 WireGuard 的 UDP 封包从指定网卡出去（例如手机热点的 `Wi-Fi`），用来对比两条网络。`sing-box check` 通过。
+- **对 SPEC 的影响（待确认）**：如果学校挡 WireGuard，那 WireGuard 出口和 **Pangolin 出口（Olm 也是 WireGuard）** 在学校都可能用不了。能在学校用的可能只剩走 TCP/TLS 443 的 Cisco，或者要把 WireGuard 包进 TCP/TLS（需要服务器配合，SPEC 目前没有这一项）。

@@ -5,7 +5,9 @@
 param(
     [Parameter(Mandatory = $true)][string]$Conf,
     [string[]]$VpnDomains = @('ifconfig.me'),
-    [ValidateSet('trace', 'debug', 'info', 'warn', 'error')][string]$LogLevel = 'info'
+    [ValidateSet('trace', 'debug', 'info', 'warn', 'error')][string]$LogLevel = 'info',
+    # Diagnosis only: send the WireGuard UDP packets out of this adapter (e.g. 'Wi-Fi' for a phone hotspot)
+    [string]$BindInterface = ''
 )
 . (Join-Path $PSScriptRoot '..\common.ps1')
 
@@ -64,6 +66,10 @@ $wg = [ordered]@{
     peers       = @($wgPeer)
 }
 if ($if['mtu']) { $wg.mtu = [int]$if['mtu'][0] }
+if ($BindInterface) {
+    if (-not (Get-NetAdapter -Name $BindInterface -ErrorAction SilentlyContinue)) { throw "Adapter '$BindInterface' not found (see Get-NetAdapter)." }
+    $wg.bind_interface = $BindInterface
+}
 
 $config = [ordered]@{
     log       = [ordered]@{ level = $LogLevel; timestamp = $true }
@@ -104,3 +110,4 @@ icacls $out /inheritance:r /grant:r "$($env:USERNAME):F" '*S-1-5-32-544:F' '*S-1
 Write-Host "[config] $out"
 Write-Host "[config] peer endpoint $epHost`:$epPort, tunnel address $($if['address'] -join ', '), vpn-dns $($v4dns[0])"
 Write-Host "[config] via VPN: $($VpnDomains -join ', '); everything else direct"
+if ($BindInterface) { Write-Host "[config] WireGuard packets forced out of adapter '$BindInterface'" }
