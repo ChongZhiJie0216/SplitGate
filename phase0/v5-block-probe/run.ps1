@@ -8,7 +8,7 @@ param(
         'ifconfig.me',
         'xboxlive.com', 'xbox.com',
         'minecraft.net',
-        'steampowered.com', 'steamcommunity.com', 'steamserver.net', 'steamstatic.com'
+        'steampowered.com', 'steamcommunity.com', 'steamserver.net', 'steamstatic.com', 'steamcdn-a.akamaihd.net'
     ),
     [string]$AuthGroup = 'Master Network',
     [string]$BindInterface = '',

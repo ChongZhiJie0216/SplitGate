@@ -274,3 +274,11 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 - `phase0/v5-block-probe/run.ps1`：调用 V3a 的 run.ps1，只把上表中被拦截的域名（加上 ifconfig.me）送进 VPN，`-AuthGroup "Master Network" -NoUdp`。`-CheckOnly` 通过。
 - `probe.ps1 -ViaTun`：经过 sing-box 再探测一次。预期：被拦截的网址变成正常证书，其他网址结果不变。
+### 第 1 次（2026-10-26 14:09，有线，`-NoUdp`）— ✅ 分流有效（实际登录待测）
+
+- `probe.ps1 -ViaTun`：上表中**所有被拦截的网址都变成正常证书**（Microsoft / Let's Encrypt），HTTP 有正常回应。没在规则里的网址结果不变。
+- sing-box 日志：规则里的域名（steampowered.com、steamcommunity.com、xbox.com、xboxlive.com……）都是 `endpoint/openconnect[vpn]: outbound connection`；其他都是 `outbound/direct`。DNS 用本地解析（学校没有在 DNS 上做手脚，见上）。
+- 两个**直连**网址出现异常，和 VPN 无关：
+  - `steamcdn-a.akamaihd.net`：.NET 握手拿到 DigiCert 证书，但 curl 连试 3 次都是 `SEC_E_UNTRUSTED_ROOT`（证书链不受信任）。14:06 直连时 curl 是 200。推测 Fortinet 对这个 CDN 的拦截不是每次都一样（可能和 TLS 指纹 / ALPN 有关，或是 Fortinet 看到 Steam 流量后才开始拦）。→ 规则要加 `steamcdn-a.akamaihd.net`（只加这个主机名，**不要**加整个 akamaihd.net，太多别的网站也用它）。
+  - `www.microsoft.com`：一次超时（curl exit 28），之后连试 3 次都是 200。当作偶发。
+- 对 SPEC 的影响：只靠一份固定的规则清单不够，因为学校的拦截会变。程序要有“拦截检测”：看到证书签发者是 Fortinet / 证书链不受信任，就提示“这个网址被当前网络拦截，要不要加进规则”。
