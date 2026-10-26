@@ -1,19 +1,24 @@
 import { useEffect, useState } from "react";
 import { Page, useApp } from "./store/app";
+import { useProfiles } from "./store/profiles";
 import { T } from "./lib/text";
 import { Theme, applyTheme, loadTheme } from "./lib/theme";
+import { setActiveProfile } from "./lib/ipc";
 import AboutPage from "./pages/AboutPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import ProfilesPage from "./pages/ProfilesPage";
 
 const PAGES: Page[] = ["connect", "rules", "logs", "profiles", "settings", "about"];
 
 export default function App() {
   const { page, setPage, info, infoError, loadInfo } = useApp();
+  const { view, load: loadProfiles, run } = useProfiles();
   const [theme, setTheme] = useState<Theme>(loadTheme());
 
   useEffect(() => {
     loadInfo();
-  }, [loadInfo]);
+    loadProfiles();
+  }, [loadInfo, loadProfiles]);
 
   const changeTheme = (t: Theme) => {
     setTheme(t);
@@ -36,6 +41,21 @@ export default function App() {
           <button className="connect-btn" disabled>
             {T.status.disconnected}
           </button>
+          <label className="theme">
+            {T.profile.pick}
+            <select
+              value={view?.active ?? ""}
+              disabled={!view?.profiles.length}
+              onChange={(e) => run(() => setActiveProfile(e.target.value))}
+            >
+              {!view?.profiles.length && <option value="">{T.profile.none}</option>}
+              {view?.profiles.map(({ profile }) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}（{T.profile.types[profile.type]}）
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="spacer" />
           <label className="theme">
             {T.theme.label}
@@ -49,7 +69,7 @@ export default function App() {
         {info && !info.isAdmin && <div className="banner warn">{T.notAdmin}</div>}
         {infoError && <div className="banner bad">{infoError}</div>}
         <section className="content">
-          {page === "about" ? <AboutPage /> : <PlaceholderPage title={T.nav[page]} />}
+          {page === "about" ? <AboutPage /> : page === "profiles" ? <ProfilesPage /> : <PlaceholderPage title={T.nav[page]} />}
         </section>
       </main>
     </div>

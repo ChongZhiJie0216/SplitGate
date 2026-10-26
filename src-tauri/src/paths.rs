@@ -13,6 +13,10 @@ pub fn data_dir() -> PathBuf {
     base.join(APP_DIR_NAME)
 }
 
+pub fn profiles_json() -> PathBuf {
+    data_dir().join("profiles.json")
+}
+
 /// Folder of the running exe; Tauri puts the sing-box sidecar next to it.
 pub fn exe_dir() -> PathBuf {
     std::env::current_exe()

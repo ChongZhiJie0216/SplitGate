@@ -246,6 +246,170 @@ input {
   font-family: var(--mono);
 }
 
+textarea {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px;
+  resize: vertical;
+}
+
+.banner.good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.card .banner {
+  margin: 8px 0;
+}
+
+.split {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.list-card {
+  width: 280px;
+  flex: none;
+}
+
+.form-card {
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+}
+
+.form-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plist {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.pitem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.pitem span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pitem:hover {
+  background: var(--surface-2);
+}
+
+.pitem.active {
+  background: var(--accent-soft);
+}
+
+.tag {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.tag.good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.btn {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.btn:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn.danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.field input:not([type="file"]),
+.field textarea {
+  width: 100%;
+}
+
+.field-label {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
 .kv th {
   text-align: left;
   font-weight: 500;

@@ -4,6 +4,19 @@
 
 ## 未发布
 
+## 0.2.0 — 2026-10-26（Profile 与凭据管理）
+
+### 新增
+- “Profile”页：新建、编辑、删除三种出口（Cisco、WireGuard、Pangolin），并可设为使用中；顶部可以切换当前出口。
+  - Cisco：服务器、账号、密码、组别、只用 TCP（默认勾选）、出口网卡。
+  - WireGuard：导入 `.conf` 文件或粘贴内容；AllowedIPs 一律忽略。
+  - Pangolin：官方客户端的网卡名、规则域名用的 DNS（默认 9.9.9.9）、资源别名后缀；第 2 阶段才能连接。
+- 设置保存在 `%APPDATA%\SplitGate\profiles.json`（先写临时文件再改名，保留一份 `.bak`），不含任何密码。
+- Cisco 密码、WireGuard 私钥存在 Windows 凭据管理器（`SplitGate` 名下）；改账号时自动搬过去，删 Profile 时一起删除。
+
+### 改变
+- 安装包识别名改为 `SplitGate`（维护者定，2026-10-26）。
+
 ## 0.1.0 — 2026-10-26（第 1 阶段：项目骨架）
 
 ### 新增
