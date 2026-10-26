@@ -9,6 +9,10 @@ param(
 )
 . (Join-Path $PSScriptRoot '..\common.ps1')
 if (-not (Get-OurProcesses)) { Write-Host '[ERROR] sing-box is not running. Start phase0\v4-bind-interface\run.ps1 first. Test NOT run.'; exit 1 }
+$log = Get-ChildItem (Join-Path $LogDir 'v3a-singbox-*.log') -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+if (-not $log -or -not (Select-String -Path $log.FullName -Pattern 'tunnel established' -Quiet)) {
+    Write-Host '[ERROR] VPN not connected yet (no "tunnel established" in the sing-box log). Wait for it, then run again. Test NOT run.'; exit 1
+}
 
 $bound = @(Get-NetIPAddress -InterfaceAlias $BindInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object -Expand IPAddress)
 Write-Host "--- outer VPN connection (expect local address on '$BindInterface': $($bound -join ', ')) ---"
@@ -23,7 +27,6 @@ if (-not $conns) {
     }
 }
 Write-Host '--- DTLS / UDP (from the newest sing-box log) ---'
-$log = Get-ChildItem (Join-Path $LogDir 'v3a-singbox-*.log') -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
 if ($log) { Select-String -Path $log.FullName -Pattern 'tunnel established|DTLS' | Select-Object -Last 3 | ForEach-Object { $_.Line } }
 
 $splat = @{ HomeIp = $HomeIp }

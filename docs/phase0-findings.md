@@ -229,3 +229,10 @@ V3a 已证明 sing-box 自带的 OpenConnect 可用，不需要另建 VPN 网卡
 - 脚本：`phase0/v4-bind-interface/run.ps1`（转调 V3a 的 run.ps1，默认 `-BindInterface Wi-Fi -AuthGroup "Master Network"`，**不**加 `-NoUdp`）。V3a 的 run.ps1 新增 `-BindInterface` 参数。
 - `test.ps1`：用 `Get-NetTCPConnection` 查 sing-box 到 202.186.213.216:8443 的连接，本地地址必须是 Wi-Fi 的 IP；再从日志看用的是 DTLS 还是 CSTP；最后跑共用的 split-test。
 - `-CheckOnly` 通过。
+### 第 1 次（2026-10-26 13:59，Wi-Fi，DTLS 开）— 部分通过（测试跑早了）
+
+- **外层连接走 Wi-Fi：通过。** sing-box 到 202.186.213.216:8443 的两条 TCP 连接，本地地址都是 172.20.10.4（Wi-Fi）；默认网卡仍是 Ethernet，api.ipify.org 照旧走本地。
+- **热点上 DTLS 也失败**（`DTLS unavailable ... context deadline exceeded`，启动后 16 秒才 `established using cstp`）。学校有线和手机热点都失败，所以多半是**服务器那边没开 UDP**（例如家里路由器只转发了 TCP 8443），不是学校的问题。→ 这个 profile 默认用 `no_udp`。
+- ifconfig.me 为空：测试在 13:59:22–34 跑完，隧道 13:59:35 才建立。**在等 DTLS 的这段时间里，命中规则的流量没有任何报错，就是没反应**（日志里连 ifconfig.me 的 DNS 查询都没有记录）。→ 第 1 阶段：状态要等 `established` 才显示“已连接”；连接中命中规则的流量应快速失败，不要让用户以为卡住了。
+- 结束后恢复：3.1 秒；无残留。
+- 修改：test.ps1 在日志里没有 `tunnel established` 时拒绝运行。
