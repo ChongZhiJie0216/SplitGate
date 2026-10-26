@@ -89,3 +89,24 @@ cleanup-all.ps1（检查模式）：nothing left over
 - 收获：sing-box 1.14.4 能在本机建立 `SplitGate-TUN` 网卡；sing-box 被中断后，网卡和路由都自动撤掉了（cleanup-all 检查结果为干净）。
 - 修改：改由 `cmd.exe /c "... 2>&1"` 合并输出，再接 `Tee-Object`；加上 `--disable-color`。已用一个故意失败的命令确认：输出能正确显示和写进日志，退出码也能传回来。
 - 第 1 阶段要注意：Rust 端读 sidecar 输出时要同时读 stdout 和 stderr，sing-box 的日志在 stderr。
+
+### 第 3 次尝试（2026-10-26 13:19）— IPv4 通过，IPv6 导致部分网站打不开
+
+结果：
+
+- ✅ sing-box 建立 `SplitGate-TUN`，加了 `0.0.0.0/0` 和 `::/0` 两条默认路由（metric 0，next hop 172.19.0.2 / fdfe:dcba:9876::2），物理网卡的路由保持不变。
+- ✅ IPv4：`curl -4 ifconfig.me` 返回本地出口 219.92.246.113，所有连接都走 `outbound/direct`。
+- ✅ DNS：系统的 DNS 查询发到 TUN 的 IPv6 地址，被 `hijack-dns` 接管，经 `local` 解析正常。
+- ❌ IPv6：所有 IPv6 连接都报 `dial tcp [...]: connectex: A socket operation was attempted to an unreachable network.`；`www.microsoft.com` 测试失败（`web: False`）。
+- ⚠️ `-Kill` 那一段的输出不完整（停在 `[kill] Stop-Process -Force sing-box`），恢复时间要重测。测试后 cleanup-all 检查结果为干净，IPv4 / IPv6 都恢复正常。
+
+原因：本机只有 Wi-Fi（手机热点）有 IPv6，有线网卡没有。sing-box 的 `auto_detect_interface` 选了有线（`updated default interface Ethernet, index 9`），所以 IPv6 没有出口。TUN 先接受了 TCP 连接、再断开，程序来不及改用 IPv4（happy eyeballs 不起作用），所以优先走 IPv6 的网站打不开。
+
+这对 SPEC 很重要：**“任何情况下都不能断网”要把 IPv6 考虑进去**。不能假设出口网卡一定有 IPv6。
+
+修改（第 4 次测试用）：
+
+- `dns.strategy: "ipv4_only"`：DNS 只返回 A 记录，程序就不会去连 IPv6。
+- route rule `{"ip_version": 6, "action": "reject"}`（放在 `hijack-dns` 后面）：程序直接连 IPv6 地址时立刻拒绝，让它马上改用 IPv4。
+- TUN 仍保留 IPv6 地址，这样 IPv6 流量不会绕过 TUN（否则命中规则的域名可能从 IPv6 漏出去，不经过 VPN）。
+- `sing-box check`：通过，没有警告。

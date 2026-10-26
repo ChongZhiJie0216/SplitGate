@@ -5,6 +5,7 @@ param([switch]$Kill)
 $ErrorActionPreference = 'Continue'
 
 function Test-Web {
+    # Default address family, the way a browser would connect.
     $code = curl.exe -s -o NUL -w '%{http_code}' --max-time 5 https://www.microsoft.com
     return ($code -match '^[23]')
 }
@@ -28,7 +29,8 @@ Write-Host ('IPv4: ' + (curl.exe -4 -s --max-time 8 https://ifconfig.me))
 Write-Host ('IPv6: ' + (curl.exe -6 -s --max-time 8 https://ifconfig.me))
 Write-Host '--- DNS ---'
 Resolve-DnsName www.xbox.com -Type A -DnsOnly -ErrorAction SilentlyContinue | Select-Object -First 3 Name, IPAddress | Format-Table -AutoSize | Out-String | Write-Host
-Write-Host "--- web: $(Test-Web) ---"
+Write-Host "--- web (www.microsoft.com, default family): $(Test-Web) ---"
+Write-Host "--- web (www.google.com): $((curl.exe -s -o NUL -w '%{http_code}' --max-time 5 https://www.google.com) -match '^[23]') ---"
 
 if ($Kill) {
     if (-not (Test-IsAdmin)) { Write-Host '[ERROR] -Kill needs admin.'; exit 1 }
