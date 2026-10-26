@@ -94,10 +94,15 @@ try {
     Write-Host "      `$env:BOX_API_URL = '127.0.0.1:$apiPort'; `$env:BOX_API_SECRET = '$apiSecret'"
     Write-Host '      .\third_party\bin\sing-box\sing-box.exe api openconnect status'
     Write-Host '      .\third_party\bin\sing-box\sing-box.exe api openconnect auth'
+    # Let a helper (or Claude Code) in another window read the login form. Session-only secret, deleted on exit.
+    New-Item -ItemType Directory -Force $RuntimeDir | Out-Null
+    $apiEnv = Join-Path $RuntimeDir 'v3a-api.env'
+    [IO.File]::WriteAllText($apiEnv, "BOX_API_URL=127.0.0.1:$apiPort`r`nBOX_API_SECRET=$apiSecret`r`n", (New-Object Text.UTF8Encoding $false))
     Write-Host "[start] sing-box (log: $log). Press Ctrl+C to stop."
     $rc = Invoke-SingBoxStdin -Mode run -ConfigJson $json -LogFile $log
     Write-Host "[exit] sing-box exited with code $rc"
 } finally {
+    if ($apiEnv) { Remove-Item -Force $apiEnv -ErrorAction SilentlyContinue }
     $json = $null
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
 }

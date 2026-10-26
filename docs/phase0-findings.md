@@ -186,3 +186,8 @@ cleanup-all.ps1（检查模式）：nothing left over
 - 结束进程后 12.3 秒才恢复，比 V1/V2 的 0.7 秒慢很多，原因未明，下次重测。
 - 修改：run.ps1 加上 API 服务（只听 127.0.0.1，端口和 secret 每次随机生成），启动时显示第二个窗口要用的命令。`-CheckOnly` 通过。
 - 对 SPEC 的影响（预计）：如果走自带 OpenConnect，第 1 阶段的 Rust 端要做 API 服务的 gRPC 客户端，用来收表单、填表单（等于 SPEC 的 `prompt` / `answer_prompt` 事件）；或者用 `form_entries` 预先填好。
+### 第 2 次（2026-10-26 13:47）— ❌ 同样停在“等待认证”（没有回答表单）
+
+- API 服务正常启动（`service/api[api]: tcp server started at 127.0.0.1:<随机端口>`），但没有在第二个窗口执行 `status` / `auth`，所以表单没人回答。
+- 结束进程后 **1.4 秒**恢复上网（第 1 次的 12.3 秒没有再出现，当作偶发）；没有残留。
+- 修改：run.ps1 运行期间把 API 地址和本次随机密钥写进 `phase0/runtime/v3a-api.env`（被 .gitignore 忽略，退出时删除，cleanup-all 也会删 runtime 文件）；新增只读的 `status.ps1`，读这个文件后执行 `sing-box api openconnect status`。这个密钥是程序每次随机生成的，不是 VPN 凭据。
