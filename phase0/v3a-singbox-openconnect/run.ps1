@@ -9,6 +9,9 @@ param(
     # Preselect the login GROUP (AnyLink shows: Master Network / Test Network / All Tunnel / ...). Empty = ask.
     [string]$AuthGroup = '',
     [string[]]$VpnDomains = @('ifconfig.me'),
+    # All traffic of these programs goes through the VPN: exe names (e.g. curl.exe) and/or full exe paths
+    [string[]]$VpnProcesses = @(),
+    [string[]]$VpnProcessPaths = @(),
     # Empty = use the DNS servers the VPN pushes (sing-box "openconnect" DNS server). Or give an IP, e.g. 1.1.1.1
     [string]$VpnDns = '',
     # Disable the DTLS (UDP) data channel and stay on TLS (TCP) only
@@ -20,6 +23,9 @@ param(
     [switch]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'
+# "powershell -File" passes a list as one comma-joined string; split it back.
+function Split-List($list) { @($list | ForEach-Object { "$_" -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+$VpnDomains = Split-List $VpnDomains; $VpnProcesses = Split-List $VpnProcesses; $VpnProcessPaths = Split-List $VpnProcessPaths
 . (Join-Path $PSScriptRoot '..\common.ps1')
 . (Join-Path $Phase0Dir 'stdin-run.ps1')
 if ($CheckOnly) {
@@ -77,6 +83,16 @@ try {
             default_domain_resolver = [ordered]@{ server = 'local' }
         }
     }
+    $procRules = @()
+    if ($VpnProcesses) { $procRules += [ordered]@{ process_name = $VpnProcesses; action = 'route'; outbound = 'vpn' } }
+    if ($VpnProcessPaths) { $procRules += [ordered]@{ process_path = $VpnProcessPaths; action = 'route'; outbound = 'vpn' } }
+    if ($procRules) {
+        # after sniff / hijack-dns / IPv6 reject, before the domain rule
+        $r = $config.route.rules
+        $config.route.rules = @($r[0], $r[1], $r[2]) + $procRules + @($r[3])
+        $config.route.find_process = $true
+    }
+
     # sing-box API (gRPC) on loopback with a random port and secret, so a second window can run
     # "sing-box api openconnect status|auth" to see / answer the login form the server sends.
     $apiPort = Get-Random -Minimum 20000 -Maximum 60000
@@ -91,6 +107,7 @@ try {
     if (-not $CheckOnly) { & (Join-Path $Phase0Dir 'snapshot.ps1') -Label 'v3a-before' | Out-Null }
     Write-Host "[config] server $Server, user $User, group $(if ($AuthGroup) { $AuthGroup } else { '(ask)' }), via VPN: $($VpnDomains -join ', ')"
     if ($BindInterface) { Write-Host "[config] VPN packets forced out of adapter '$BindInterface'" }
+    if ($VpnProcesses -or $VpnProcessPaths) { Write-Host "[config] all traffic of: $((@($VpnProcesses) + @($VpnProcessPaths)) -join ', ')" }
     Write-Host ("[config] vpn-dns: " + $(if ($VpnDns) { "$VpnDns through the tunnel" } else { 'servers pushed by the VPN' }) + $(if ($NoUdp) { '; DTLS off' } else { '' }))
 
     $ErrorActionPreference = 'Continue'
