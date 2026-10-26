@@ -11,8 +11,13 @@ param([switch]$KillNow, [int]$LimitSec = 5, [int]$WaitSec = 30)
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 if (-not (Test-Connected)) { Write-Host "[ERROR] $TunName not found. Connect in SplitGate first."; exit 1 }
-$app = @(Get-Process -Name 'SplitGate' -ErrorAction SilentlyContinue)
-if ($app.Count -eq 0) { Write-Host '[ERROR] no SplitGate.exe process.'; exit 1 }
+# With the background service installed there are two SplitGate.exe: the window and the service.
+# Only the window is ended; the service must notice it and disconnect.
+$svc = Get-CimInstance Win32_Service -Filter "Name='SplitGateService'" -ErrorAction SilentlyContinue
+$svcPid = 0
+if ($svc -and $svc.State -eq 'Running') { $svcPid = [int]$svc.ProcessId }
+$app = @(Get-Process -Name 'SplitGate' -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $svcPid })
+if ($app.Count -eq 0) { Write-Host '[ERROR] no SplitGate.exe window process.'; exit 1 }
 if ($KillNow -and -not (Test-IsAdmin)) { Write-Host '[ERROR] -KillNow needs an Administrator PowerShell (SplitGate runs as admin).'; exit 1 }
 
 $base = Get-BaselineState
@@ -22,6 +27,7 @@ if ($null -eq $base) {
 
 $log = "kill-recovery-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 Write-Log $log "connected, SplitGate pid $($app.Id -join ',')"
+if ($svcPid) { Write-Log $log "background service running (pid $svcPid): it must disconnect when the window is gone" }
 if ($KillNow) {
     Write-Log $log 'ending SplitGate.exe (Stop-Process -Force)'
     Stop-Process -Id $app.Id -Force
@@ -31,6 +37,7 @@ if ($KillNow) {
 while (@(Get-Process -Id $app.Id -ErrorAction SilentlyContinue).Count -gt 0) { Start-Sleep -Milliseconds 50 }
 $t = [Diagnostics.Stopwatch]::StartNew()
 Write-Log $log 'SplitGate.exe is gone, timing recovery'
+if ($svcPid -and -not (Get-Process -Id $svcPid -ErrorAction SilentlyContinue)) { Write-Log $log "[warn] the background service (pid $svcPid) is gone too: it stopped or crashed" }
 
 $left = @('not checked yet'); $net = $false
 while ($t.Elapsed.TotalSeconds -lt $WaitSec) {
