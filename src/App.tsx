@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Page, useApp } from "./store/app";
 import { useProfiles } from "./store/profiles";
 import { useStatus } from "./store/status";
@@ -15,7 +15,10 @@ import ProfilesPage from "./pages/ProfilesPage";
 import RulesPage from "./pages/RulesPage";
 import SettingsPage from "./pages/SettingsPage";
 
-const PAGES: Page[] = ["connect", "rules", "connections", "blocked", "logs", "profiles", "settings", "about"];
+// 流量画布带着 React Flow（约 190 KB），打开那一页才加载。
+const CanvasPage = lazy(() => import("./pages/CanvasPage"));
+
+const PAGES: Page[] = ["connect", "rules", "connections", "canvas", "blocked", "logs", "profiles", "settings", "about"];
 
 export default function App() {
   const { page, setPage, info, infoError, loadInfo } = useApp();
@@ -78,6 +81,10 @@ export default function App() {
             <RulesPage />
           ) : page === "connections" ? (
             <ConnectionsPage />
+          ) : page === "canvas" ? (
+            <Suspense fallback={<div className="card muted">…</div>}>
+              <CanvasPage />
+            </Suspense>
           ) : page === "blocked" ? (
             <BlockedPage />
           ) : (

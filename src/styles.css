@@ -735,3 +735,75 @@ button.link {
 .btn.small {
   padding: 2px 8px;
 }
+
+/* 流量画布（React Flow，只用它的 base.css，颜色都用这里的变量，跟着主题走） */
+.canvas-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-wrap {
+  height: calc(100vh - 230px);
+  min-height: 360px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  position: relative;
+}
+
+.canvas-empty {
+  padding: 16px;
+}
+
+.canvas-wrap .react-flow {
+  --xy-background-pattern-color: var(--line);
+  --xy-edge-stroke: var(--muted);
+  --xy-edge-label-background-color: var(--surface);
+  --xy-edge-label-color: var(--muted);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--text);
+  --xy-controls-button-border-color: var(--line);
+  --xy-attribution-background-color: transparent;
+}
+
+.flow-node {
+  width: 220px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.flow-node.vpn {
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+
+.flow-node.exit {
+  font-weight: 600;
+}
+
+.flow-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.flow-edge.vpn .react-flow__edge-path {
+  stroke: var(--good);
+}
+
+.react-flow__handle {
+  width: 6px;
+  height: 6px;
+  background: var(--muted);
+  border: 0;
+}

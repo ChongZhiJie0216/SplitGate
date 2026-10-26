@@ -181,6 +181,13 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 
 - TUN 和改路由都需要管理员权限。MVP 在应用清单里要求 `requireAdministrator`，启动时弹一次 UAC。
 - 后续版本改为安装一个 Windows 服务负责启停核心，界面以普通权限运行，两者通过命名管道通信。
+- **Windows 服务的做法（维护者 2026-10-26 同意，第 3 阶段）**：
+  1. 还是一个 exe：`SplitGate.exe --service` 是服务模式，不另做程序（版本号、打包都只有一份）。
+  2. 设置页“安装后台服务 / 移除后台服务”：安装时弹一次 UAC，之后打开 SplitGate 不再要求管理员。便携版搬了位置时，像开机自启一样提示“改成这一个”。
+  3. 服务以 LocalSystem 运行，读不到使用者的凭据管理器：每次连接由界面读出密码 / 私钥，经命名管道交给服务，服务只放在内存里。
+  4. 命名管道的权限只给“安装服务的那个 Windows 用户”和 Administrators。
+  5. 没装服务时照旧：以管理员身份运行也能用。正式版清单改成 `asInvoker`；没装服务又不是管理员时，连接按钮旁提示“安装后台服务”或“以管理员身份重新打开”。
+  6. 分三个版本：服务骨架 + 命名管道 + 安装 / 移除 → 连接状态机搬进服务 → 开机自启改成普通权限启动（不再用最高权限的任务计划）。
 
 ### 6. Pangolin 出口（exits/pangolin.rs，官方客户端）
 
@@ -374,7 +381,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 | Profile | 先选出口类型，再显示对应表单。Cisco：服务器、账号、密码、组别、只用 TCP、出口网卡；Pangolin：外部客户端网卡名、vpn-dns、资源别名后缀（附“先在官方客户端连接并在后台开 Exit Node”的说明）；WireGuard：导入 .conf | MVP（Pangolin 表单第 2 阶段） |
 | 设置 | 开机自启、启动后自动连接、主题、sing-box 日志级别、TUN 网段 | MVP |
 | 关于 | 版本、组件版本、许可证与第三方声明 | MVP |
-| 流量画布 | 用 React Flow 显示“应用 → 规则 → 出口”的可视化图 | 后续 |
+| 流量画布 | 用 React Flow 显示“应用 → 规则 → 出口”的可视化图：中间一列是规则集名（前端按规则集内容再比一次；家里内网单独一个），每 2 秒刷新，只画流量最大的 15 个程序 | 第 3 阶段（v0.11.0） |
 
 **交互要点**
 
@@ -466,11 +473,11 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 
 ### 第 3 阶段：增强
 
-维护者 2026-10-26 定：进入第 3 阶段（第 2 阶段 v0.7.0–v0.10.0 的 Windows 实测和 PR 合并同时进行）。顺序：openconnect 评估 → Windows 服务 → React Flow 流量画布。
+维护者 2026-10-26 定：进入第 3 阶段（第 2 阶段 v0.7.0–v0.10.0 的 Windows 实测和 PR 合并同时进行）。顺序：openconnect 评估 → React Flow 流量画布（v0.11）→ Windows 服务（改动大，维护者定放后面）。
 
 - [ ] ~~Duo push 和 SAML 登录~~（维护者 2026-10-26 定跳过：现在的 AnyLink 只要账号密码 + 组别；服务器以后改用 MFA 再做）
-- [ ] 用 Windows 服务取代整个应用以管理员身份运行
-- [ ] React Flow 流量画布
+- [ ] 用 Windows 服务取代整个应用以管理员身份运行（做法见组件 5，维护者 2026-10-26 同意；排在流量画布之后）
+- [x] React Flow 流量画布（v0.11.0；`@xyflow/react` 12.12.0，MIT，维护者 2026-10-26 同意新增；画布页按需加载，约 185 KB / gzip 61 KB）
 - [x] 评估备用做法（openconnect.exe）是否还需要 —— **不需要**（2026-10-26）：
   - sing-box 1.14.4 的 OpenConnect endpoint 已经实测可用：第 0 阶段 V3a 全自动连上 AnyLink（`auth_group` + `no_udp`），v0.4.0 起 SplitGate 用它连接，6 秒连上，断开 2.7 秒恢复。
   - openconnect.exe 的代价：官方没有发布 Windows 版（只有 GitLab CI 产物，没有签名，CI 产物还会过期）；要另附 wintun.dll、GnuTLS 等 DLL 和它们的许可证（LGPL）；要写 JScript 连接脚本；它会自己建网卡、改路由，和 sing-box 的 TUN 抢流量（Pangolin Exit Node 那一类麻烦，见组件 2）。
