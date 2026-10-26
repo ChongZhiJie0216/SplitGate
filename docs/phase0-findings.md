@@ -379,3 +379,10 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - 每 5 秒检查一次、共 60 秒：**官方客户端没有把路由加回来**（之后再查仍然没有）。
 - 结论：SPEC 方案 A 的前提成立 —— 删掉 Exit Node 的路由不会被客户端立刻还原。（隧道本身是否还通，由第 3 步 sing-box 绑定网卡来验证。）
 - 注意：客户端重连 / 切换 Exit Node 时会重新加路由。第 1 阶段要监视路由表，看到 `Pangolin` 网卡上出现 0/1、128/1 就再删一次（或提示用户关掉 Exit Node 改用 SplitGate）。
+### V7 第 3 步第 1 次（2026-10-26 14:55，sing-box `bind_interface: Pangolin`，网卡上没有任何上网路由）— ❌
+
+- api.ipify.org 本地正常，网页 True；ifconfig.me 为空。结束后恢复 1.6 秒，无残留。
+- sing-box 日志：`outbound/direct[vpn]: outbound packet connection to 1.1.1.1:53` → `ERROR ... dial udp 1.1.1.1:53: connect: A socket operation was attempted to an unreachable network.`
+- 结论：**Windows 上 `bind_interface`（IP_UNICAST_IF）要求该网卡上有覆盖目标地址的路由**，否则直接返回“网络不可达”。SPEC 第 0 阶段这一项（“确认 bind_interface 在没有该网卡路由的情况下仍能把流量送进隧道”）**实测不成立**。
+- 处理：把 Exit Node 的 0/1、128/1 换成一条**最低优先级的 0.0.0.0/0**（跃点 9999）。一般程序仍走有线的默认路由（开 sing-box 时本来就先进 TUN），sing-box 绑定到 Pangolin 时就找得到路。`drop-routes.ps1 -LowPriorityDefault [-Restore] -Apply`。
+- 对 SPEC：Pangolin 出口（以及任何“外部 VPN 网卡 + bind_interface”的做法）在 Windows 上要“删全隧道路由 + 加低优先级默认路由”，而不是只删路由。

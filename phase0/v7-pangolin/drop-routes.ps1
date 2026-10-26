@@ -7,6 +7,10 @@ param(
     [string]$Interface = 'Pangolin',
     [switch]$Apply,
     [switch]$Restore,
+    # Add (or with -Restore: remove) a lowest-priority 0.0.0.0/0 on the adapter. Windows refuses to send a
+    # socket bound to an interface (sing-box bind_interface) when that interface has no route to the target.
+    [switch]$LowPriorityDefault,
+    [int]$LowMetric = 9999,
     [int]$WatchSeconds = 60
 )
 . (Join-Path $PSScriptRoot '..\common.ps1')
@@ -18,6 +22,24 @@ if (-not $a) { Write-Host "[ERROR] adapter '$Interface' not found. Connect in th
 function Show-Routes {
     $r = @(Get-NetRoute -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.DestinationPrefix -in $prefixes })
     if ($r) { ($r | ForEach-Object { "$($_.DestinationPrefix) metric $($_.RouteMetric)" }) -join '; ' } else { '(none)' }
+}
+
+function Show-Low {
+    $r = Get-NetRoute -InterfaceIndex $a.ifIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue
+    if ($r) { "0.0.0.0/0 metric $($r.RouteMetric)" } else { '(no 0.0.0.0/0)' }
+}
+
+if ($LowPriorityDefault) {
+    $have = Get-NetRoute -InterfaceIndex $a.ifIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue
+    if ($Restore) { $cmd = "Remove-NetRoute -InterfaceIndex $($a.ifIndex) -DestinationPrefix 0.0.0.0/0 -Confirm:`$false" }
+    else { $cmd = "New-NetRoute -InterfaceIndex $($a.ifIndex) -DestinationPrefix 0.0.0.0/0 -NextHop 0.0.0.0 -RouteMetric $LowMetric -PolicyStore ActiveStore" }
+    Write-Host "[now] on ${Interface}: $(Show-Low); full-tunnel: $(Show-Routes)"
+    if (-not $Apply) { Write-Host "[would] $cmd"; Write-Host '[check] re-run with -Apply in an Administrator PowerShell.'; exit 0 }
+    if (-not (Test-IsAdmin)) { Write-Host '[ERROR] -Apply needs an Administrator PowerShell.'; exit 1 }
+    if ($Restore -and $have) { Write-Host "[run] $cmd"; Remove-NetRoute -InterfaceIndex $a.ifIndex -DestinationPrefix '0.0.0.0/0' -Confirm:$false }
+    elseif (-not $Restore -and -not $have) { Write-Host "[run] $cmd"; New-NetRoute -InterfaceIndex $a.ifIndex -DestinationPrefix '0.0.0.0/0' -NextHop 0.0.0.0 -RouteMetric $LowMetric -PolicyStore ActiveStore | Out-Null }
+    Write-Host "[after] on ${Interface}: $(Show-Low)   route for 1.1.1.1 -> $((Find-NetRoute -RemoteIPAddress 1.1.1.1 | Select-Object -Last 1).InterfaceAlias)   exit IP: $((curl.exe -4 -s --max-time 8 https://api.ipify.org) -join '')"
+    exit 0
 }
 
 if ($Restore) {
