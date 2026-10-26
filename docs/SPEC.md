@@ -193,7 +193,8 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
   - v0.15.0 做法（`service.rs`）：服务名 `SplitGateService`（和开机自启的任务计划 `SplitGate` 分开），命令行 `"<exe>" --service --allow-sid <安装者 SID>`，自动启动。管道 `\\.\pipe\SplitGate`，SDDL `D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;<安装者 SID>)`，拒绝远程连接；协议是一行一个 JSON（现在只有 `ping`）。用 `windows-sys` 的 Services / Pipes / Authorization 功能，不加依赖。服务日志 `data\logs\service-*.log`。
   - v0.17.0 做法（`service.rs` 服务端、`remote.rs` 界面端、`backend.rs` 选择由谁连接）：
     - 服务里跑整个状态机（`supervisor.rs` 不改流程，只把“推给界面”改成推给管道）：建配置、sing-box、等隧道、健康检查、自动重连。配置由服务自己从 `data\` 生成，界面不能塞配置给服务（否则可以借 sing-box 以 SYSTEM 写任意文件）。
-    - 管道协议加 `hello`（订阅状态 / 日志事件）、`connect`（profile_id + 密码 / 私钥）、`disconnect`；事件行带 `event`，回复行带 `ok`。每个客户端一个写出线程，慢的界面不会卡住状态机。
+    - 管道协议加 `hello`（订阅状态 / 日志事件）、`connect`（profile_id + 密码 / 私钥）、`disconnect`；事件行带 `event`，回复行带 `ok`。
+    - **每条管道连接只由一个线程使用**（v0.17.1 修正）：管道句柄是同步的，Windows 会把同一个句柄上的读写排队，写要等正在进行的读结束；v0.17.0 一个连接上同时有读线程和写线程，回复永远写不出去（“后台服务没有回应”）。现在界面开两条连接：命令连接（写请求、读回复，同一线程）和事件连接（发 `hello` 后只读）；服务端每条连接一个线程，事件连接从 `hello` 起只写（状态机只把事件放进通道，慢的界面不会卡住它），每 30 秒写一行 `{}` 心跳，好发现已经关掉的界面。
     - 防冒充：界面打开管道后用 `GetNamedPipeServerProcessId` 取对方进程编号，和服务管理器 `QueryServiceStatusEx` 给的 `SplitGateService` 进程编号比较，不一样就不用、不交密码。
     - 密码：界面从凭据管理器读出、经管道交给服务；服务只放在内存（自动重连要用），断开、放弃重连、等待重连时按断开都会清掉。服务里照样做日志脱敏。
     - 发起连接的那个界面断开管道（关掉或被结束）→ 服务断开并清理（取代原来的 Job Object 行为）；服务停止时 `supervisor::shutdown()`。

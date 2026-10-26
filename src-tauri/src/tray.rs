@@ -36,16 +36,22 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
+            // Off the main thread: through the background service these wait for its answer.
             "connect" => {
-                if let Err(e) = backend::connect(None) {
-                    logs::error(&e);
-                    show_window(app);
-                }
+                let app = app.clone();
+                std::thread::spawn(move || {
+                    if let Err(e) = backend::connect(None) {
+                        logs::error(&e);
+                        show_window(&app);
+                    }
+                });
             }
             "disconnect" => {
-                if let Err(e) = backend::disconnect() {
-                    logs::error(e);
-                }
+                std::thread::spawn(|| {
+                    if let Err(e) = backend::disconnect() {
+                        logs::error(e);
+                    }
+                });
             }
             "open" => show_window(app),
             "quit" => app.exit(0),

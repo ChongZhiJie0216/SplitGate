@@ -1,7 +1,7 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-26，版本 v0.17.0。
+> 最后更新：2026-10-26，版本 v0.17.1。
 
 ## 现在在哪一步
 
@@ -18,6 +18,7 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
+| 0.17.1 | — | 修正 v0.17.0“后台服务没有回应”（同步管道上读写线程互等）：拆成命令连接 + 事件连接，每条连接一个线程；经服务连接失败也写日志；托盘连接 / 断开移出主线程 |
 | 0.17.0 | — | 后台服务第 2 步：状态机在服务里跑（`service.rs` hello / connect / disconnect + 事件、`remote.rs` 界面端、`backend.rs` 选择）；防冒充核对管道对方进程编号；界面断开管道 → 服务断开清理；Clash API 交给界面读。**还没在 Windows 上跑过**，测试见 `docs/test-plan.md` E |
 | 0.16.0 | — | （维护者 2026-10-26 实测可用）Cisco：从服务器读组别改成下拉选择、测试登录、保存前先测试（`exits/cisco.rs`，AnyConnect XML init / auth-reply，PowerShell + stdin 传密码）。维护者 2026-10-26 要求，插在 Windows 服务第 2 步之前（服务第 2、3 步顺延 v0.17.0、v0.18.0）。**还没对真正的 AnyLink 服务器试过**，测试见 `docs/test-plan.md` D |
 | 0.15.0 | — | （维护者 2026-10-26 实测 C 部分通过）后台服务第一步（`service.rs`：`--service` 服务模式、命名管道 ping、设置页安装 / 启动 / 移除 / 改成这一个）；build.bat 检查服务是否在跑；云端开始做 Windows 版 clippy（`--target x86_64-pc-windows-msvc`）。**还没在 Windows 上跑过**，测试见 `docs/test-plan.md` C |

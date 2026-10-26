@@ -329,11 +329,11 @@ mod win {
         unsafe { LocalFree(sd) };
     }
 
-    /// Clients subscribed with "hello": each has its own writer thread, so a slow or stuck app
-    /// can never block the state machine that emits.
+    /// Event connections (they sent "hello"): the state machine only puts lines into a channel,
+    /// so a slow or stuck app can never block it.
     static CLIENTS: Mutex<Vec<(u64, mpsc::Sender<String>)>> = Mutex::new(Vec::new());
     static NEXT_CLIENT: AtomicU64 = AtomicU64::new(1);
-    /// The client that asked to connect; when it goes away, the connection goes too.
+    /// The connection that asked to connect; when it goes away, the VPN connection goes too.
     static OWNER: AtomicU64 = AtomicU64::new(0);
 
     fn broadcast(ev: &Event) {
@@ -343,20 +343,21 @@ mod win {
         }
     }
 
-    /// One client: answer each request line until it disconnects. Closing the File closes the pipe.
+    fn write_line(mut file: &File, line: &str) -> std::io::Result<()> {
+        file.write_all(line.as_bytes())?;
+        file.write_all(b"\n")?;
+        file.flush()
+    }
+
+    /// One connection, one thread. The pipe handle is synchronous, and Windows queues I/O on one
+    /// handle: a write waits until a pending read on the same handle finishes. So a connection is
+    /// either a command connection (read a request, write its reply, repeat) or, after "hello",
+    /// an event connection (only writes from then on). v0.17.0 had a reader and a writer thread on
+    /// one connection, and every reply hung behind the next read ("后台服务没有回应").
     fn serve(h: HANDLE) {
         let file = unsafe { File::from_raw_handle(h) };
-        let Ok(mut writer) = file.try_clone() else { return };
         let id = NEXT_CLIENT.fetch_add(1, Ordering::SeqCst);
-        let (tx, rx) = mpsc::channel::<String>();
-        thread::spawn(move || {
-            for line in rx {
-                if writer.write_all(line.as_bytes()).and_then(|_| writer.write_all(b"\n")).and_then(|_| writer.flush()).is_err() {
-                    return;
-                }
-            }
-        });
-        let mut reader = BufReader::new(file);
+        let mut reader = BufReader::new(&file);
         let mut line = String::new();
         loop {
             line.clear();
@@ -366,17 +367,18 @@ mod win {
                 Ok(_) if !line.ends_with('\n') => break, // longer than MAX_LINE
                 Ok(_) => {
                     let reply = match parse_request(line.trim()) {
-                        Ok(req) => answer(req, id, &tx),
+                        Ok(Request::Hello) => {
+                            stream_events(&file, id);
+                            break;
+                        }
+                        Ok(req) => answer(req, id),
                         Err(r) => r,
                     };
-                    if tx.send(serde_json::to_string(&reply).unwrap_or_default()).is_err() {
+                    if write_line(&file, &serde_json::to_string(&reply).unwrap_or_default()).is_err() {
                         break;
                     }
                 }
             }
-        }
-        if let Ok(mut c) = CLIENTS.lock() {
-            c.retain(|(cid, _)| *cid != id);
         }
         if OWNER.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
             crate::logs::info("SplitGate 关掉了或被结束了，后台服务断开连接");
@@ -384,23 +386,40 @@ mod win {
         }
     }
 
-    fn answer(req: Request, id: u64, tx: &mpsc::Sender<String>) -> Reply {
+    /// The current state first, then every change, until the app goes away (a write fails).
+    fn stream_events(file: &File, id: u64) {
+        let hello = Reply { ok: true, version: Some(env!("CARGO_PKG_VERSION").into()), error: None };
+        let status = crate::supervisor::status();
+        let api = crate::supervisor::clash_api();
+        let first = [serde_json::to_string(&hello), serde_json::to_string(&Event::Status { status, api })];
+        if first.iter().flatten().any(|l| write_line(file, l).is_err()) {
+            return;
+        }
+        let (tx, rx) = mpsc::channel::<String>();
+        if let Ok(mut c) = CLIENTS.lock() {
+            c.push((id, tx));
+        }
+        loop {
+            // A quiet heartbeat (the app ignores "{}") notices an app that went away.
+            let line = match rx.recv_timeout(Duration::from_secs(30)) {
+                Ok(l) => l,
+                Err(mpsc::RecvTimeoutError::Timeout) => "{}".to_string(),
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            };
+            if write_line(file, &line).is_err() {
+                break;
+            }
+        }
+        if let Ok(mut c) = CLIENTS.lock() {
+            c.retain(|(cid, _)| *cid != id);
+        }
+    }
+
+    fn answer(req: Request, id: u64) -> Reply {
         if let Some(r) = simple_reply(&req) {
             return r;
         }
         match req {
-            Request::Hello => {
-                // The current state first, then every change.
-                let status = crate::supervisor::status();
-                let api = crate::supervisor::clash_api();
-                if let Ok(line) = serde_json::to_string(&Event::Status { status, api }) {
-                    let _ = tx.send(line);
-                }
-                if let Ok(mut c) = CLIENTS.lock() {
-                    c.push((id, tx.clone()));
-                }
-                Reply { ok: true, version: Some(env!("CARGO_PKG_VERSION").into()), error: None }
-            }
             Request::Connect { profile_id, main, preshared_key } => {
                 OWNER.store(id, Ordering::SeqCst);
                 let secrets = crate::singbox::Secrets { main, preshared_key };
@@ -413,7 +432,7 @@ mod win {
                 Ok(()) => Reply::ok(),
                 Err(e) => Reply::err(e),
             },
-            Request::Ping => Reply::ok(),
+            Request::Ping | Request::Hello => Reply::ok(),
         }
     }
 

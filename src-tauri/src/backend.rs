@@ -3,7 +3,7 @@
 //! auto-connect and app exit all go through here.
 
 use crate::supervisor::{self, Status};
-use crate::{remote, service};
+use crate::{logs, remote, service};
 
 pub fn status() -> Status {
     remote::status().unwrap_or_else(supervisor::status)
@@ -12,8 +12,15 @@ pub fn status() -> Status {
 pub fn connect(profile_id: Option<String>) -> Result<(), String> {
     // Never let the service start a second sing-box while the app runs one itself.
     let local_busy = !matches!(supervisor::status(), Status::Disconnected | Status::Error { .. });
-    if !local_busy && remote::try_connect(profile_id.clone())? {
-        return Ok(());
+    if !local_busy {
+        match remote::try_connect(profile_id.clone()) {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(e) => {
+                logs::error(format!("经后台服务连接失败：{e}"));
+                return Err(e);
+            }
+        }
     }
     supervisor::connect(profile_id)
 }

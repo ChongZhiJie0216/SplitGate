@@ -2,12 +2,15 @@
 //! installed, running and points at this exe, connecting goes through it: the app reads the
 //! secrets from the user's Credential Manager and sends them over the pipe; the service runs the
 //! state machine and pushes status and log lines back. The app still shows connections, traffic
-//! and block detection itself (from the Clash API the service reports). One pipe connection lives
-//! as long as the app: when the app closes or is killed, the service disconnects.
+//! and block detection itself (from the Clash API the service reports).
+//!
+//! Two pipe connections, each used by one thread only (Windows queues reads and writes on one
+//! synchronous pipe handle, so a reader thread would block every write): the command connection
+//! (write a request, read its reply) and the event connection (only read). Both live as long as
+//! the app; when the command connection closes (app closed or killed), the service disconnects.
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -19,8 +22,8 @@ use crate::supervisor::Status;
 use crate::{config, credentials, logs, traffic, tray};
 
 struct Session {
-    writer: File,
-    replies: Receiver<Reply>,
+    /// The command connection.
+    pipe: BufReader<File>,
 }
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
@@ -118,46 +121,61 @@ fn secrets_for(profile_id: Option<String>) -> Result<(String, String, Option<Str
 }
 
 fn open() -> Result<(), String> {
-    let pipe = service::open_trusted_pipe()?;
-    let reader = pipe.try_clone().map_err(|e| e.to_string())?;
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || read_loop(reader, tx));
+    let control = service::open_trusted_pipe()?;
+    let mut events = service::open_trusted_pipe()?;
+    // "hello" is written before the reader thread starts, so no write ever waits on a read.
+    events.write_all(b"{\"cmd\":\"hello\"}\n").map_err(|e| format!("后台服务断开了：{e}"))?;
+    thread::spawn(move || read_events(events));
     if let Ok(mut s) = SESSION.lock() {
-        *s = Some(Session { writer: pipe, replies: rx });
+        *s = Some(Session { pipe: BufReader::new(control) });
     }
-    let hello = request(&Request::Hello)?;
-    logs::info(format!("经后台服务连接（服务 v{}）", hello.version.unwrap_or_default()));
+    let pong = request(&Request::Ping)?;
+    logs::info(format!("经后台服务连接（服务 v{}）", pong.version.unwrap_or_default()));
     Ok(())
 }
 
+/// One request and its reply, on the command connection, under the lock (one at a time).
 fn request(req: &Request) -> Result<Reply, String> {
     let mut guard = SESSION.lock().map_err(|_| "内部错误")?;
     let s = guard.as_mut().ok_or("没有连上后台服务")?;
     let line = serde_json::to_string(req).map_err(|e| e.to_string())?;
-    s.writer.write_all(line.as_bytes()).and_then(|_| s.writer.write_all(b"\n")).and_then(|_| s.writer.flush()).map_err(|e| format!("后台服务断开了：{e}"))?;
-    s.replies.recv_timeout(Duration::from_secs(15)).map_err(|_| "后台服务没有回应".to_string())
+    let sent = {
+        let w = s.pipe.get_mut();
+        w.write_all(line.as_bytes()).and_then(|_| w.write_all(b"\n")).and_then(|_| w.flush())
+    };
+    let mut answer = String::new();
+    let got = sent.and_then(|_| s.pipe.read_line(&mut answer));
+    match got {
+        Ok(n) if n > 0 => serde_json::from_str::<Reply>(answer.trim()).map_err(|_| "后台服务的回应看不懂".to_string()),
+        _ => {
+            *guard = None;
+            Err("后台服务断开了".into())
+        }
+    }
 }
 
-fn read_loop(pipe: File, replies: Sender<Reply>) {
+fn read_events(pipe: File) {
     let mut lines = BufReader::new(pipe).lines();
     while let Some(Ok(line)) = lines.next() {
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
-        if v.get("event").is_some() {
-            if let Ok(ev) = serde_json::from_value::<Event>(v) {
-                on_event(ev);
-            }
-        } else if let Ok(r) = serde_json::from_value::<Reply>(v) {
-            let _ = replies.send(r);
+        // Replies ("hello") and heartbeats ("{}") have no "event": ignore them here.
+        if let Ok(ev) = serde_json::from_str::<Event>(&line) {
+            on_event(ev);
         }
     }
     // The service stopped or the pipe broke.
     if let Ok(mut s) = SESSION.lock() {
         *s = None;
     }
-    let was = MIRROR.lock().ok().and_then(|mut m| m.take());
+    let was = MIRROR.lock().ok().and_then(|m| m.clone());
     if !matches!(was, None | Some(Status::Disconnected)) {
         logs::error("后台服务断开了（服务被停止或出错）；它会自己清理网络");
-        show(&Status::Error { message: "后台服务断开了，连接已结束。可以按“重新连接”再试。".into(), retrying: false });
+        let st = Status::Error { message: "后台服务断开了，连接已结束。可以按“重新连接”再试。".into(), retrying: false };
+        if let Ok(mut m) = MIRROR.lock() {
+            *m = Some(st.clone());
+        }
+        show(&st);
+    } else if let Ok(mut m) = MIRROR.lock() {
+        *m = None;
     }
 }
 
