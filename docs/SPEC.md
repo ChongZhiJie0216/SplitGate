@@ -410,10 +410,12 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 
 ### 第 1 阶段：MVP
 
-- [ ] Tauri 项目骨架、sing-box sidecar 打包、管理员权限清单
-- [ ] profile 与凭据管理、规则集管理、内置 Xbox / Minecraft / Steam 预设；ExitAdapter trait，实现 Cisco 和 WireGuard 两种出口
-- [ ] 配置经 stdin 传入、连接状态机（含“出口真正可用才显示已连接”）、错误处理与清理
-- [ ] 连接页、规则页（含从运行中的程序挑选）、日志页、Profile 页、设置页、关于页、系统托盘
+- [x] Tauri 项目骨架、sing-box sidecar 打包、管理员权限清单（v0.1.0）
+- [x] profile 与凭据管理、规则集管理、内置 Xbox / Minecraft / Steam 预设；实现 Cisco 和 WireGuard 两种出口（v0.2.0–v0.4.0；ExitAdapter trait 还没抽出，见 `docs/progress.md`）
+- [ ] 配置经 stdin 传入、连接状态机（含“出口真正可用才显示已连接”）、错误处理与清理（代码已完成 v0.4.0，待真正连接测试）
+- [ ] 连接页、规则页（含从运行中的程序挑选）、日志页、Profile 页、设置页、关于页、系统托盘（已有：连接、规则、日志、Profile、关于；未做：设置页、系统托盘）
+
+进度记录：`docs/progress.md`。
 
 **验收**
 

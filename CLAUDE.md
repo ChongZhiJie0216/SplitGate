@@ -2,6 +2,7 @@
 
 完整规格：@docs/SPEC.md
 第 0 阶段结果：@docs/phase0-findings.md
+开发进度（接着做时先读）：@docs/progress.md
 
 ## 本项目例外（维护者定，2026-10-26）
 
