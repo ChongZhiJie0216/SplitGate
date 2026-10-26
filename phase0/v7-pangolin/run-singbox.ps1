@@ -8,6 +8,9 @@ param(
     [string[]]$VpnDomains = @('ifconfig.me'),
     # DNS for rule domains, sent through the Pangolin adapter
     [string]$VpnDns = '1.1.1.1',
+    # DNS for everything else, sent direct. Not 'local' (system list): with a route on the Pangolin adapter, Windows
+    # puts Pangolin's DNS (100.96.128.1) first, and sing-box dials it via the physical adapter -> timeouts. Empty = 'local'.
+    [string]$LocalDns = '1.1.1.1',
     [ValidateSet('trace', 'debug', 'info', 'warn', 'error')][string]$LogLevel = 'info',
     [switch]$CheckOnly
 )
@@ -21,10 +24,11 @@ if (-not $CheckOnly) {
     if (Get-OurProcesses) { Write-Host '[ERROR] sing-box is already running. Stop it first.'; exit 1 }
 }
 
+if ($LocalDns) { $localDnsServer = [ordered]@{ type = 'udp'; tag = 'local'; server = $LocalDns } } else { $localDnsServer = [ordered]@{ type = 'local'; tag = 'local' } }
 $config = [ordered]@{
     log       = [ordered]@{ level = $LogLevel; timestamp = $true }
     dns       = [ordered]@{
-        servers  = @([ordered]@{ type = 'local'; tag = 'local' }, [ordered]@{ type = 'udp'; tag = 'vpn-dns'; server = $VpnDns; detour = 'vpn' })
+        servers  = @($localDnsServer, [ordered]@{ type = 'udp'; tag = 'vpn-dns'; server = $VpnDns; detour = 'vpn' })
         rules    = @([ordered]@{ domain_suffix = $VpnDomains; server = 'vpn-dns' })
         final    = 'local'
         strategy = 'ipv4_only'

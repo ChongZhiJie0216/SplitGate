@@ -386,3 +386,11 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - 结论：**Windows 上 `bind_interface`（IP_UNICAST_IF）要求该网卡上有覆盖目标地址的路由**，否则直接返回“网络不可达”。SPEC 第 0 阶段这一项（“确认 bind_interface 在没有该网卡路由的情况下仍能把流量送进隧道”）**实测不成立**。
 - 处理：把 Exit Node 的 0/1、128/1 换成一条**最低优先级的 0.0.0.0/0**（跃点 9999）。一般程序仍走有线的默认路由（开 sing-box 时本来就先进 TUN），sing-box 绑定到 Pangolin 时就找得到路。`drop-routes.ps1 -LowPriorityDefault [-Restore] -Apply`。
 - 对 SPEC：Pangolin 出口（以及任何“外部 VPN 网卡 + bind_interface”的做法）在 Windows 上要“删全隧道路由 + 加低优先级默认路由”，而不是只删路由。
+### V7 第 3 步第 2 次（2026-10-26 14:58，加了低优先级 0.0.0.0/0 后，维护者同意并执行）— 部分成功
+
+- `drop-routes.ps1 -LowPriorityDefault -Apply` 之后，一般上网仍走有线（出口 219.92.246.113）。
+- **经 Pangolin 的 DNS 查询有回应**：`outbound/direct[vpn]: outbound packet connection to 1.1.1.1:53` → `exchanged A ifconfig.me ... 34.160.111.145`。→ 隧道是通的，`bind_interface` 加了路由之后能用。
+- 但**所有 DNS 都变慢**（本地域名 3–5 秒，vpn-dns 约 9 秒），ifconfig.me 测试超时，网页 False。不开 sing-box 时，系统 / 1.1.1.1 / 100.96.128.1 都只要 10–30 ms。
+- 判断：sing-box 的 `local` DNS 读系统 DNS 列表；Pangolin 网卡有了默认路由之后，它的 100.96.128.1 排在最前，而 sing-box 的直连都绑在有线网卡上，100.96.128.1 只能经 Pangolin 才到得了 → 每次先超时再换下一个。
+- 修改：run-singbox.ps1 的直连 DNS 改成明确的 `udp 1.1.1.1`（新参数 `-LocalDns`，留空 = 系统列表）。`-CheckOnly` 通过。
+- 对 SPEC：有外部 VPN 网卡时，直连 DNS 不能用 sing-box 的 `local`（系统列表），要用物理网卡自己的 DNS 服务器。
