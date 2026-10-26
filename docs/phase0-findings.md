@@ -336,3 +336,18 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 - **B. 自己改 Olm（fork）**：加一个真正的控制台模式（不装服务、secret 只从环境变量读）。需要装 Go 编译，属于新增依赖。
 - **C. 评估 Pangolin CLI 0.19.0**：之前下载被权限拦下，可由维护者手动下载；要先查它在 Windows 上是不是也走服务。
 - **D. SPEC 方案 B（WSL2 + Linux 版客户端 + SOCKS5）**。
+### 方向 C：Pangolin CLI 0.19.0（只读源码评估，2026-10-26）— ❌ 不采用
+
+维护者定（2026-10-26）：先评估 C，不行就用 A。
+
+源码（`cmd/up/client/service_windows.go`、`internal/svcmgr/svcmgr_windows.go`）：
+- 源码注释明说：Windows 上 olm 隧道**不能在普通控制台进程里跑，一定要用 Windows 服务**。`pangolin up client` 在 Windows 上 = 安装服务 `Pangolin Client` → 看它的日志 → 按 Ctrl+C 后卸载服务。Windows 上只支持 machine client（`--id` / `--secret` / `--endpoint`）。
+- Secret 可以用环境变量 `PANGOLIN_CLIENT_SECRET` 传给 CLI（不用放在命令行），但 CLI 会把它写进**注册表** `HKLM\SYSTEM\CurrentControlSet\Services\<服务名>\Environment`，让服务进程读取。服务运行期间 Secret 一直存在磁盘上（SYSTEM hive）。
+- 服务设成**开机自动启动**，还设了“失败自动重启”。如果窗口被直接关掉、或者程序崩溃，没来得及执行卸载，服务（连同注册表里的 Secret）就会留下来，开机后继续自动连接。
+- 日志在 `C:\ProgramData\pangolin\logs\`（和官方客户端共用文件夹）。
+
+→ 同样违反“凭据不写进文件 / 持久存储”，而且留下自启服务的风险比 Olm 更大。**不采用。** 按维护者的决定改用 **A（官方 Pangolin 客户端）**。
+
+### 方向 A：官方 Pangolin 客户端 — 准备观察
+
+做法：维护者照平常方式在官方 App 里连接；连上后用 `observe.ps1`（只读、不需管理员）看它建了哪张网卡、加了哪些路由、有没有改 DNS、出口 IP 是什么。再根据结果决定 sing-box 怎么接（`bind_interface` 到它的网卡）。SplitGate 不碰 Pangolin 的凭据。
