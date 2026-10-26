@@ -361,3 +361,15 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
   1. 只连 site 时，Pangolin 网卡只通到 site 资源（WireGuard AllowedIPs 只有这些网段），sing-box `bind_interface: Pangolin` 送上网流量**不会通**。要当“上网出口”，必须在 App 里选 Exit Node（会装 gateway 路由，见源码分析）。
   2. sing-box 的 TUN 用 0/0 拆分路由，Pangolin 的 /24、/32 更具体，所以 site 资源流量会绕过 sing-box 直接走 Pangolin，两者可以共存（待实测）。
   3. sing-box 的 hijack-dns 会接管 DNS，Pangolin 的 DNS 代理会被绕过：开着 SplitGate 时，**Pangolin 资源的别名（alias）可能解析不到**。第 1 阶段要处理（例如把 Pangolin 的域名后缀交给 100.96.128.1 解析）。
+### A 观察第 2 次（2026-10-26 14:46，后台开启 Exit Node 之后，只读）
+
+- 在 App 里选 Exit Node、断开重连都没有变化；维护者在**后台开启**之后才生效。日志：`Gateway set to sites [...] (site resource 10)`、`Exit node set to VPN.Node`、`Exit node active: removed resource routes/aliases for 7 site(s)`（App 的“Exit Node Takes Precedence Over Resources”开着）。
+- 路由：`Pangolin` 网卡加了 **0.0.0.0/1 和 128.0.0.0/1**（跃点 0），比 0.0.0.0/0 更具体，IPv4 全部被它接管（全隧道）。家里内网的 /24、/32 路由被拿掉。**IPv6 没有进隧道**（::/0 仍是 Wi-Fi）。
+- 出口 IP：**149.118.140.232**（VPN.Node，不是家里的 202.186.213.216）。
+- 和 SPEC 一致：Exit Node = 全隧道，会和 sing-box 的 TUN 抢流量。下一步按 SPEC 方案 A：删掉这两条路由，看隧道还能不能用、App 会不会加回来；再用 sing-box `bind_interface: Pangolin` 只送 ifconfig.me。
+
+### V7 验证准备
+
+- `drop-routes.ps1`：不带参数只显示要删的两条路由；`-Apply`（管理员）删除后每 5 秒检查一次，共 60 秒，看 App 会不会加回来；`-Restore` 把路由加回去（或在 App 断开重连）。
+- `run-singbox.ps1`：TUN + 两个 direct 出口，`vpn` 出口 `bind_interface: Pangolin`；vpn-dns 用 1.1.1.1 经该出口。没有任何凭据。`-CheckOnly` 通过。
+- cleanup-all：新增 `$ForeignAdapterNames = @('Pangolin')`，**永远不改官方 Pangolin 客户端的网卡**（只会提示它的路由，不会删除）。check 模式确认：只提示两条 Pangolin 路由。

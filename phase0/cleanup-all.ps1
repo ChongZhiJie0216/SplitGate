@@ -52,7 +52,7 @@ if (Test-Path $BaselinePath) {
     $now = @(Get-StaticDnsState)
     foreach ($b in @($base.StaticDns)) {
         $cur = $now | Where-Object { $_.Guid -eq $b.Guid } | Select-Object -First 1
-        if ($null -eq $cur -or $cur.Alias -like $OurAdapterPattern) { continue }
+        if ($null -eq $cur -or $cur.Alias -like $OurAdapterPattern -or $ForeignAdapterNames -contains $cur.Alias) { continue }
         if ([string]$cur.NameServer -ne [string]$b.NameServer) {
             $alias = $cur.Alias; $want = [string]$b.NameServer
             if ($want -eq '') {

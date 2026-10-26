@@ -11,6 +11,8 @@ $BaselinePath = Join-Path $LogDir 'baseline.json'
 # Every adapter SplitGate creates must match this pattern, so cleanup can find it.
 $OurAdapterPattern = 'SplitGate*'
 $OurProcessNames = @('sing-box', 'openconnect', 'olm', 'pangolin-cli')
+# Adapters owned by other VPN apps (official Pangolin client): cleanup must never change them.
+$ForeignAdapterNames = @('Pangolin')
 
 function Test-IsAdmin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
