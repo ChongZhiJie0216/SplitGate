@@ -32,4 +32,4 @@ SplitGate 是维护者**自己用的网络工具**，不是给老师用的程序
 
 ## 脚本格式
 
-- `phase0/*.ps1` 要兼容 Windows PowerShell 5.1，内容用纯 ASCII（输出的提示用英文），CRLF 换行。
+- `phase0/*.ps1`、`phase1/*.ps1` 要兼容 Windows PowerShell 5.1，内容用纯 ASCII（输出的提示用英文），CRLF 换行。
