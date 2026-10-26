@@ -4,7 +4,7 @@ Windows 上按域名 / 程序分流的 VPN 客户端：只有命中规则的流�
 
 用途举例：在学校网络里，只让 Xbox、Minecraft、Steam 经家里的 VPN 出去，绕过学校防火墙的拦截；上课用的网站、视频等照样走学校网络，不会变慢。
 
-当前版本：**v0.13.0**（[下载](https://github.com/ChongZhiJie0216/SplitGate/releases/latest)） · 更新记录：[CHANGELOG.md](CHANGELOG.md)
+下载：[最新版本](https://github.com/ChongZhiJie0216/SplitGate/releases/latest) · 更新记录：[CHANGELOG.md](CHANGELOG.md)（软件里在“关于”页也看得到）
 
 ## 功能
 
@@ -14,7 +14,7 @@ Windows 上按域名 / 程序分流的 VPN 客户端：只有命中规则的流�
 - **连接列表、流量画布**：实时看每条连接是哪个程序、去哪里、走 VPN 还是直连；画布用图显示“程序 → 规则集 → 出口”。
 - **拦截提示**：直连的网站如果被学校防火墙换了证书（Fortinet），会列出来，一键加进规则。
 - **稳定**：睡眠唤醒、断网、VPN 断线后会先清理让网络恢复，再自动重新连接（最多 5 次）。SplitGate 被强制结束时，网络也会在几秒内恢复。
-- **其他**：系统托盘、开机自启、诊断包（已脱敏）、检查更新。
+- **其他**：系统托盘、开机自启、诊断包（已脱敏）、检查更新、关于页看更新记录。
 
 ## 安装和使用
 

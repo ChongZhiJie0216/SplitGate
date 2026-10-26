@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useApp } from "../store/app";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
@@ -7,6 +8,13 @@ const L = T.about;
 
 export default function AboutPage() {
   const { info, update, updateError, checkingUpdate, checkUpdate } = useApp();
+  const [changelog, setChangelog] = useState<ipc.UpdateSection[]>([]);
+  useEffect(() => {
+    ipc
+      .getChangelog()
+      .then(setChangelog)
+      .catch(() => setChangelog([]));
+  }, []);
   return (
     <div className="stack">
       <div className="card">
@@ -49,7 +57,11 @@ export default function AboutPage() {
           )}
         </div>
         {updateError && <div className="banner bad">{updateError}</div>}
-        {update && !update.newer && <p className="muted">{update.latest ? L.upToDate(update.latest) : L.noRelease}</p>}
+        {update && !update.newer && (
+          <p className="muted">
+            {!update.latest ? L.noRelease : update.latest === update.current ? L.upToDate(update.latest) : L.ahead(update.latest)}
+          </p>
+        )}
         {update?.newer && (
           <>
             <div className="banner good">
@@ -67,6 +79,21 @@ export default function AboutPage() {
           </>
         )}
       </div>
+
+      {changelog.length > 0 && (
+        <div className="card">
+          <h2>{L.changelog}</h2>
+          <p className="muted small">{L.changelogHint}</p>
+          {changelog.map((n) => (
+            <details key={n.version} className="update-note" open={n.version === info?.version}>
+              <summary className="update-ver">
+                v{n.version} <span className="muted small">{n.title}</span>
+              </summary>
+              <Markdown text={n.body} />
+            </details>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

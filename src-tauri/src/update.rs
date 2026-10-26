@@ -9,6 +9,8 @@ use serde_json::Value;
 use crate::{logs, platform};
 
 pub const REPO: &str = "ChongZhiJie0216/SplitGate";
+/// This build's own CHANGELOG, for the About page (works offline, always matches the version).
+const OWN_CHANGELOG: &str = include_str!("../../CHANGELOG.md");
 
 /// Pure ASCII PowerShell 5.1. Prints one JSON object: {tag, url, changelog} or {none} / {error}.
 const SCRIPT: &str = r#"
@@ -89,12 +91,21 @@ fn parse(v: &str) -> Option<(u32, u32, u32)> {
 /// CHANGELOG.md sections "## x.y.z — title" with a version above `current`, in file order.
 fn sections_newer_than(changelog: &str, current: &str) -> Vec<Section> {
     let Some(cur) = parse(current) else { return Vec::new() };
+    sections(changelog, |v| v > cur)
+}
+
+/// Every released version of this build's CHANGELOG ("未发布" is skipped), newest first.
+pub fn own_changelog() -> Vec<Section> {
+    sections(OWN_CHANGELOG, |_| true)
+}
+
+fn sections(changelog: &str, keep: impl Fn((u32, u32, u32)) -> bool) -> Vec<Section> {
     let mut out: Vec<Section> = Vec::new();
     let mut open = false;
     for line in changelog.lines() {
         if let Some(head) = line.strip_prefix("## ") {
             let (ver, title) = head.split_once(' ').unwrap_or((head, ""));
-            open = parse(ver).is_some_and(|v| v > cur);
+            open = parse(ver).is_some_and(&keep);
             if open {
                 let title = title.trim_start_matches(['—', '-', ' ']).trim().to_string();
                 out.push(Section { version: ver.to_string(), title, body: String::new() });
@@ -163,6 +174,13 @@ mod tests {
         assert_eq!(none.latest, None);
         let odd = interpret("0.12.0", &serde_json::json!({"tag": "v0.13.0", "url": "https://evil.example/x"}));
         assert_eq!(odd.url, None, "only this repo's release pages");
+    }
+
+    #[test]
+    fn own_changelog_starts_with_this_version() {
+        let s = own_changelog();
+        assert_eq!(s[0].version, env!("CARGO_PKG_VERSION"), "CHANGELOG's first release is the current version");
+        assert!(s.iter().all(|x| !x.body.is_empty() && parse(&x.version).is_some()));
     }
 
     #[test]

@@ -143,10 +143,13 @@ export const T = {
     checking: "正在检查…",
     newVersion: (v: string) => `有新版本 v${v}`,
     upToDate: (v: string) => `已经是最新版本（GitHub 上最新是 v${v}）`,
+    ahead: (v: string) => `你用的这一版比 GitHub 上最新的 v${v} 还新（这一版还没发布）`,
     noRelease: "GitHub 上还没有发布任何版本。",
     openPage: "打开下载页",
     updateHint: "只提示，不会自动下载或安装。下载后关掉 SplitGate，用新的文件替换，旁边的 data 文件夹留着就行。",
     changes: "更新内容",
+    changelog: "更新记录",
+    changelogHint: "这一版自带的更新记录，不用联网。",
   },
   theme: { auto: "跟随系统", light: "亮", dark: "暗", label: "主题" },
   settings: {
