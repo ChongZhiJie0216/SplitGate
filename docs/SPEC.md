@@ -238,7 +238,12 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 
 ## 数据模型
 
-配置存放在 `%APPDATA%\SplitGate\`，均为 JSON，并带 `version` 字段，方便以后迁移。
+配置存放在 `SplitGate.exe` 旁边的 `data\` 文件夹（维护者 2026-10-26 定，v0.12.0 起；之前是 `%APPDATA%\SplitGate\`），均为 JSON，并带 `version` 字段，方便以后迁移。日志（`data\logs\`）、诊断包（`data\diagnostics\`）也在这里；`SPLITGATE_HOME` 环境变量可以改到别处（开发和测试用）。
+
+- 搬家：v0.12 启动时，`data\` 里还没有的 `profiles.json` / `rules.json` / `settings.json` 从 `%APPDATA%\SplitGate\` 复制过来；旧文件夹不动、不删，日志会记下复制了哪些。
+- 不在 `data\` 的：密码 / 私钥（Windows 凭据管理器）；WebView2 的缓存和界面主题（`%LOCALAPPDATA%\SplitGate\`，由 Tauri 管）；开机自启（任务计划程序）。
+- 每一份 SplitGate.exe 各有自己的 `data\`（例如仓库根目录那份和 `portable\SplitGate\` 那份是两套设置）。打包脚本重建便携版时保留 `data\`，zip 不包含它。
+- 以后改成 Windows 服务 + 安装到 Program Files 时，普通权限写不进程序文件夹，到时要重新决定位置（见组件 5）。
 
 **profiles.json**：VPN 连接配置（不含密码）
 
@@ -460,7 +465,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [ ] 连接期间，非规则流量的出口 IP 仍是学校网络
 - [x] 在任务管理器中结束 SplitGate 进程后，网络能在 5 秒内恢复正常（v0.6.0，手机热点 + WireGuard，1.6 秒，2026-10-26）
 - [x] 断开再连接 20 次，没有残留进程、网卡或路由（v0.6.0，手机热点 + WireGuard，每次断开后 0.7–1.1 秒清干净，2026-10-26）
-- [x] 日志、诊断包和 `%APPDATA%\SplitGate\` 中搜索不到密码（v0.6.0 日志、设置、WebView2 数据、便携版文件夹、命令行、任务计划都搜不到 Cisco 密码和 WireGuard 私钥；v0.11.1 诊断包解开后也搜不到，2026-10-26，`phase1\secret-scan.ps1`）
+- [x] 日志、诊断包和设置文件夹（v0.11 以前 `%APPDATA%\SplitGate\`，v0.12 起 `data\`）中搜索不到密码（v0.6.0 日志、设置、WebView2 数据、便携版文件夹、命令行、任务计划都搜不到 Cisco 密码和 WireGuard 私钥；v0.11.1 诊断包解开后也搜不到，2026-10-26，`phase1\secret-scan.ps1`）
 - [x] 用任务管理器核实 Xbox App 的进程，补进预设（`XboxPcApp.exe`、`XboxPcAppFT.exe`，v0.6.1）
 
 ### 第 2 阶段：可观测性与家里内网
@@ -478,6 +483,8 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 
 - [ ] ~~Duo push 和 SAML 登录~~（维护者 2026-10-26 定跳过：现在的 AnyLink 只要账号密码 + 组别；服务器以后改用 MFA 再做）
 - [ ] 用 Windows 服务取代整个应用以管理员身份运行（做法见组件 5，维护者 2026-10-26 同意；排在流量画布之后）
+- [x] 检查更新（v0.13.0，维护者 2026-10-26 定：会在别的电脑上用；先做“只提示、不安装”）：关于页“检查更新”和启动时自动检查（设置可关），来源是本仓库最新的 GitHub Release，更新内容取那个 tag 的 `CHANGELOG.md` 里比现在新的段落；有新版时导航“关于”旁亮一个点，“打开下载页”只接受本仓库 Release 的网址。经 PowerShell 读取，不加依赖。发布：维护者在 `main` 上执行 `scripts\publish-release.ps1 -Yes`（gh CLI，上传便携版 zip，说明取 CHANGELOG 那一段）。
+- [ ] 在线升级（下载并安装，排在 Windows 服务之后）：改用 NSIS 安装包、安装包签名（私钥维护者保管，不进 git）、升级时先停服务再换程序。
 - [x] React Flow 流量画布（v0.11.0；`@xyflow/react` 12.12.0，MIT，维护者 2026-10-26 同意新增；画布页按需加载，约 185 KB / gzip 61 KB）
 - [x] 评估备用做法（openconnect.exe）是否还需要 —— **不需要**（2026-10-26）：
   - sing-box 1.14.4 的 OpenConnect endpoint 已经实测可用：第 0 阶段 V3a 全自动连上 AnyLink（`auth_group` + `no_udp`），v0.4.0 起 SplitGate 用它连接，6 秒连上，断开 2.7 秒恢复。
@@ -498,7 +505,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [x] Cisco 服务器的认证方式：账号密码 + 组别，不需要 MFA（第 0 阶段实测，2026-10-26）
 - [ ] 这个 Cisco VPN 是你自己管理的，还是别人的？如果是自己的，服务器端的 dynamic split tunneling 可以作为备用方案
 - [ ] 家里路由器有没有转发 UDP 8443（决定 Cisco 能不能用 DTLS）
-- [ ] 是否需要支持多台电脑或便携版（免安装）
+- [x] 是否需要支持多台电脑或便携版（免安装）：**需要**，会在别的电脑上用（维护者 2026-10-26）；现在是便携版 + 检查更新，之后是安装包 + 在线升级
 - [x] 代码仓库：GitHub `ChongZhiJie0216/SplitGate`，由维护者自己推送（维护者定，2026-10-26）
 - [x] Pangolin 是自建，版本 1.24 以上，Exit Node 已在后台开启（维护者确认，2026-10-26）
 - [ ] 同时有 Pangolin 和 WireGuard 时，家里出口优先用哪一个

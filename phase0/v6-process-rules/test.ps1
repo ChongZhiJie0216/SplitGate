@@ -1,7 +1,8 @@
 # V6 test (read-only): the same URL (api.ipify.org, not a domain rule) from two programs.
 #   curl.exe        (process rule)  -> expect the VPN exit IP
 #   powershell.exe  (no rule)       -> expect the local exit IP
-param([string]$HomeIp = '202.186.213.216')
+# -HomeIp: the home public IP (not stored in the public repo).
+param([Parameter(Mandatory = $true)][string]$HomeIp)
 . (Join-Path $PSScriptRoot '..\common.ps1')
 $ErrorActionPreference = 'Continue'
 if (-not (Get-OurProcesses)) { Write-Host '[ERROR] sing-box is not running. Start phase0\v6-process-rules\run.ps1 first. Test NOT run.'; exit 1 }

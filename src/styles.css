@@ -807,3 +807,49 @@ button.link {
   background: var(--muted);
   border: 0;
 }
+
+/* 关于页：更新内容（CHANGELOG 的 Markdown） */
+.update-note {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.update-ver {
+  font-weight: 600;
+}
+
+.md h4 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.md p {
+  margin: 4px 0;
+}
+
+.md-li {
+  padding-left: 14px;
+  position: relative;
+  margin: 2px 0;
+}
+
+.md-li::before {
+  content: "•";
+  position: absolute;
+  left: 2px;
+  color: var(--muted);
+}
+
+.md-li.sub {
+  margin-left: 16px;
+}
+
+.md code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  background: var(--surface-2);
+  padding: 0 4px;
+  border-radius: 4px;
+}

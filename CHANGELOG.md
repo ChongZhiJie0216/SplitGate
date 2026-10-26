@@ -4,6 +4,22 @@
 
 ## 未发布
 
+## 0.13.0 — 2026-10-26（检查更新）
+
+### 新增
+- “关于”页的“检查更新”：去 GitHub 看有没有新版本；有的话显示比你现在新的每个版本的更新内容，可以按“打开下载页”。只提示，不会自动下载或安装：下载后关掉 SplitGate，用新的文件替换，旁边的 `data\` 留着就行。
+  - 启动时也会自动检查一次，有新版本时左侧导航的“关于”旁边亮一个点；“设置”页可以关掉。
+- `scripts\publish-release.ps1`：把当前版本发布到 GitHub Release（上传便携版 zip，说明取 CHANGELOG 里这个版本的那一段）。默认只检查，加 `-Yes` 才发布；要在 `main` 上执行，需要 GitHub CLI。
+
+## 0.12.0 — 2026-10-26（设置放在程序旁边）
+
+### 改变
+- 设置、日志、诊断包改放在 `SplitGate.exe` 旁边的 `data\` 文件夹（以前在 `%APPDATA%\SplitGate\`）。搬动整个文件夹，设置就跟着走；每一份 SplitGate 各有自己的设置。
+  - 第一次启动 v0.12 时，`data\` 里还没有的 Profile、规则、设置会从旧文件夹自动复制过来；旧文件夹不动，确认没问题后可以自己删掉。日志页会记下复制了哪些文件。
+  - 密码和私钥仍在 Windows 凭据管理器，不受影响；界面主题仍保存在 WebView 的资料里（`%LOCALAPPDATA%\SplitGate\`），也不受影响。
+- `build.bat` 重新打包时保留 `portable\SplitGate\data\`，zip 里不放 `data\`，免得把自己的 Profile 一起打包出去。
+- `phase1\` 验收脚本改成找 `data\`；`secret-scan.ps1` 也会搜旧的 `%APPDATA%\SplitGate\`。
+
 ## 0.11.1 — 2026-10-26（断网检测更快）
 
 ### 修正

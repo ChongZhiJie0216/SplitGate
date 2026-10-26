@@ -24,6 +24,9 @@ pub struct Settings {
     /// After a broken connection (sleep / wake, dead tunnel, sing-box stopped): reconnect on our own.
     #[serde(default = "yes")]
     pub auto_reconnect: bool,
+    /// Look for a newer GitHub release when the app starts (only a notice, nothing installed).
+    #[serde(default = "yes")]
+    pub check_updates: bool,
     #[serde(default = "default_level")]
     pub singbox_log_level: String,
     /// TUN adapter address with prefix, e.g. 172.19.0.1/30.
@@ -43,7 +46,7 @@ fn default_tun() -> String {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { version: SETTINGS_VERSION, auto_connect: false, auto_reconnect: true, singbox_log_level: default_level(), tun_ipv4: default_tun() }
+        Self { version: SETTINGS_VERSION, auto_connect: false, auto_reconnect: true, check_updates: true, singbox_log_level: default_level(), tun_ipv4: default_tun() }
     }
 }
 

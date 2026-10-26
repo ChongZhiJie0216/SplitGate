@@ -24,8 +24,16 @@ npx tauri build                                                       # 安装�
 build.bat                                                             # 便携版（双击也可以；先跑测试，失败就停）
 ```
 
-便携版输出在 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe` + `licenses\`），另有同名 zip。两个 exe 要放在同一个文件夹；双击 `SplitGate.exe` 会要求管理员权限。设置和日志仍保存在 `%APPDATA%\SplitGate\`。
+便携版输出在 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe` + `licenses\`），另有同名 zip。两个 exe 要放在同一个文件夹；双击 `SplitGate.exe` 会要求管理员权限。设置、日志、诊断包都保存在 `SplitGate.exe` 旁边的 `data\` 文件夹（每一份 SplitGate 各有自己的 `data\`）；重新打包时 `data\` 会保留，zip 里不会有它。v0.11 以前的设置在 `%APPDATA%\SplitGate\`，v0.12 第一次启动时会自动复制过来。密码和私钥一直在 Windows 凭据管理器里，不在这些文件里。
 
 为了方便测试，`SplitGate.exe` 和 `sing-box.exe` 也会复制一份到仓库根目录（不进 git），直接双击根目录的 `SplitGate.exe` 就行。打包前要先从托盘“退出”SplitGate，否则 exe 被占用，脚本会一开始就停下并提示。
+
+## 发布新版本（给别的电脑“检查更新”用）
+
+1. 改好版本号和 `CHANGELOG.md`，合并进 `main`，在 `main` 上双击 `build.bat`。
+2. 先检查：`powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1`（只显示要做什么）。
+3. 再发布：同一个指令加 `-Yes`。需要 GitHub CLI（`gh auth login` 登录过）。仓库是公开的，Release 谁都看得到。
+
+SplitGate 的关于页“检查更新”（启动时也会自动查一次，设置里可以关）只提示有新版本和更新内容，不会自动下载或安装：下载 zip 后关掉 SplitGate，用新的文件替换，旁边的 `data\` 留着就行。
 
 关闭窗口只是缩到托盘（连接不断开）；要完全退出，右键托盘图标 →“退出”。开机自启、自动连接等在“设置”页。

@@ -1,5 +1,6 @@
 # Build the portable SplitGate: portable\SplitGate\ (SplitGate.exe + sing-box.exe + licenses\)
-# and portable\SplitGate-<version>-portable.zip. No installer. Settings still go to %APPDATA%\SplitGate.
+# and portable\SplitGate-<version>-portable.zip. No installer. Settings, logs and diagnostics live in the
+# data\ folder next to SplitGate.exe: it is kept on rebuild and never goes into the zip.
 # For quick testing, SplitGate.exe + sing-box.exe are also copied to the repo root (ignored by git).
 # Usage: powershell -ExecutionPolicy Bypass -File scripts\build-portable.ps1
 $ErrorActionPreference = 'Stop'
@@ -47,14 +48,21 @@ if ($LASTEXITCODE -ne 0) { Fail 'tauri build failed.' }
 Write-Host '[5/5] Assemble portable folder'
 $rel = Join-Path $root 'src-tauri\target\release'
 $out = Join-Path $root 'portable\SplitGate'
-if (Test-Path $out) { Remove-Item -Recurse -Force $out }
+# Replace everything except data\ (the settings of whoever runs this copy).
+if (Test-Path $out) { Get-ChildItem $out -Force | Where-Object { $_.Name -ne 'data' } | Remove-Item -Recurse -Force }
 New-Item -ItemType Directory -Force (Join-Path $out 'licenses') | Out-Null
 Copy-Item (Join-Path $rel 'splitgate.exe') (Join-Path $out 'SplitGate.exe')
 Copy-Item (Join-Path $root 'third_party\bin\sing-box\sing-box.exe') (Join-Path $out 'sing-box.exe')
 Copy-Item (Join-Path $root 'third_party\licenses\*') (Join-Path $out 'licenses')
 $zip = Join-Path $root "portable\SplitGate-$version-portable.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
-Compress-Archive -Path $out -DestinationPath $zip
+# Zip a clean copy (same layout: SplitGate\...), so data\ with someone's profiles is never shipped.
+$stage = Join-Path $root 'portable\.zip-stage'
+if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+New-Item -ItemType Directory -Force (Join-Path $stage 'SplitGate') | Out-Null
+Get-ChildItem $out -Force | Where-Object { $_.Name -ne 'data' } | Copy-Item -Destination (Join-Path $stage 'SplitGate') -Recurse
+Compress-Archive -Path (Join-Path $stage 'SplitGate') -DestinationPath $zip
+Remove-Item -Recurse -Force $stage
 Copy-Item (Join-Path $out 'SplitGate.exe') (Join-Path $root 'SplitGate.exe') -Force
 Copy-Item (Join-Path $out 'sing-box.exe') (Join-Path $root 'sing-box.exe') -Force
 
@@ -63,3 +71,4 @@ Write-Host "[ok] SplitGate v$version"
 Write-Host "     folder: $out (SplitGate.exe $mb MB + sing-box.exe)"
 Write-Host "     zip:    $zip"
 Write-Host "     test:   $(Join-Path $root 'SplitGate.exe') (copy in the repo root, run it as Administrator)"
+Write-Host "     settings of each copy: the data\ folder next to its SplitGate.exe"

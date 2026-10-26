@@ -4,7 +4,7 @@ import { useProfiles } from "./store/profiles";
 import { useStatus } from "./store/status";
 import { useBlocked } from "./store/blocked";
 import { T } from "./lib/text";
-import { setActiveProfile } from "./lib/ipc";
+import { getSettings, setActiveProfile } from "./lib/ipc";
 import ConnectButton from "./components/ConnectButton";
 import AboutPage from "./pages/AboutPage";
 import BlockedPage from "./pages/BlockedPage";
@@ -21,7 +21,7 @@ const CanvasPage = lazy(() => import("./pages/CanvasPage"));
 const PAGES: Page[] = ["connect", "rules", "connections", "canvas", "blocked", "logs", "profiles", "settings", "about"];
 
 export default function App() {
-  const { page, setPage, info, infoError, loadInfo } = useApp();
+  const { page, setPage, info, infoError, loadInfo, update, checkUpdate } = useApp();
   const { view, load: loadProfiles, run } = useProfiles();
   const { status, start } = useStatus();
   const { unseen, start: startBlocked } = useBlocked();
@@ -32,7 +32,13 @@ export default function App() {
     loadProfiles();
     start();
     startBlocked();
-  }, [loadInfo, loadProfiles, start, startBlocked]);
+    // 启动时检查一次更新（设置里可以关）；只是提示，失败也不打扰。
+    getSettings()
+      .then((v) => {
+        if (v.settings.check_updates) checkUpdate(true);
+      })
+      .catch(() => {});
+  }, [loadInfo, loadProfiles, start, startBlocked, checkUpdate]);
 
   return (
     <div className="shell">
@@ -42,6 +48,7 @@ export default function App() {
           <button key={p} className={p === page ? "nav-item active" : "nav-item"} onClick={() => setPage(p)}>
             {T.nav[p]}
             {p === "blocked" && unseen > 0 && page !== "blocked" && <span className="nav-badge">{unseen}</span>}
+            {p === "about" && update?.newer && <span className="nav-badge" title={T.about.newVersion(update.latest ?? "")}>●</span>}
           </button>
         ))}
         <div className="nav-foot">{info ? `v${info.version}` : ""}</div>

@@ -134,6 +134,7 @@ export interface Settings {
   version: number;
   auto_connect: boolean;
   auto_reconnect: boolean;
+  check_updates: boolean;
   singbox_log_level: "info" | "debug" | "trace";
   tun_ipv4: string;
 }
@@ -202,6 +203,27 @@ export interface Blocked {
   /** 最后一次检测到的时间 HH:MM:SS。 */
   time: string;
 }
+
+/** 检查更新（update.rs）：只提示，不下载、不安装。 */
+export interface UpdateSection {
+  version: string;
+  title: string;
+  /** 这个版本的 CHANGELOG（Markdown）。 */
+  body: string;
+}
+
+export interface UpdateInfo {
+  current: string;
+  /** 还没有发布任何版本时为 null。 */
+  latest: string | null;
+  newer: boolean;
+  url: string | null;
+  /** 比现在新的版本，最新的在前面。 */
+  notes: UpdateSection[];
+}
+
+export const checkUpdate = () => invoke<UpdateInfo>("check_update");
+export const openReleasePage = (url: string) => invoke<void>("open_release_page", { url });
 
 /** 诊断包：返回 zip 的完整路径（设置文件夹的 diagnostics 里）。 */
 export const exportDiagnostics = () => invoke<string>("export_diagnostics");

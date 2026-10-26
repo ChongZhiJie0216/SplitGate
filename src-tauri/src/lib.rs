@@ -16,6 +16,7 @@ mod singbox;
 mod supervisor;
 mod traffic;
 mod tray;
+mod update;
 
 use tauri::Manager;
 
@@ -29,9 +30,14 @@ pub fn run() {
     let app = tauri::Builder::default()
         .setup(move |app| {
             let handle = app.handle().clone();
+            // Before logs::init creates the new folder and before any settings file is read.
+            let migrated = paths::migrate_old_data();
             logs::init(handle.clone());
             supervisor::init(handle.clone());
             logs::info(format!("SplitGate v{} 启动，设置文件夹：{}", app.package_info().version, paths::data_dir().display()));
+            for m in migrated {
+                logs::info(format!("已从旧的设置文件夹复制：{m}（旧文件夹没有改动，确认无误后可以自己删掉）"));
+            }
             let tray_ok = match tray::init(&handle) {
                 Ok(()) => true,
                 Err(e) => {
@@ -100,6 +106,8 @@ pub fn run() {
             commands::clear_blocked,
             commands::export_diagnostics,
             commands::show_diagnostics,
+            commands::check_update,
+            commands::open_release_page,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SplitGate");

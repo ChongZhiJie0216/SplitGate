@@ -1,16 +1,46 @@
 //! All file locations live here; other modules must not build paths themselves.
-//! Settings: %APPDATA%\SplitGate (SPEC "数据模型"). SPLITGATE_HOME overrides it (dev and tests).
+//! Settings, logs and diagnostics: the `data` folder next to SplitGate.exe (maintainer's choice
+//! 2026-10-26, v0.12.0; before that %APPDATA%\SplitGate). SPLITGATE_HOME overrides it (dev and tests).
 
+use std::fs;
 use std::path::PathBuf;
 
 pub const APP_DIR_NAME: &str = "SplitGate";
+pub const DATA_DIR_NAME: &str = "data";
+/// Settings files copied from the old location; logs and diagnostics are not.
+const MIGRATED_FILES: [&str; 3] = ["profiles.json", "rules.json", "settings.json"];
 
 pub fn data_dir() -> PathBuf {
     if let Some(home) = std::env::var_os("SPLITGATE_HOME") {
         return PathBuf::from(home);
     }
-    let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
-    base.join(APP_DIR_NAME)
+    exe_dir().join(DATA_DIR_NAME)
+}
+
+/// Where settings lived up to v0.11: %APPDATA%\SplitGate.
+fn old_data_dir() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join(APP_DIR_NAME))
+}
+
+/// Run once at startup, before anything reads a settings file: copies each settings file the new
+/// folder does not have yet from the old one. The old folder stays as it is. Returns what was copied.
+pub fn migrate_old_data() -> Vec<String> {
+    if std::env::var_os("SPLITGATE_HOME").is_some() {
+        return Vec::new();
+    }
+    let Some(old) = old_data_dir() else { return Vec::new() };
+    copy_missing(&old, &data_dir())
+}
+
+fn copy_missing(from: &std::path::Path, to: &std::path::Path) -> Vec<String> {
+    let mut done = Vec::new();
+    for name in MIGRATED_FILES {
+        let (src, dst) = (from.join(name), to.join(name));
+        if src.is_file() && !dst.exists() && fs::create_dir_all(to).is_ok() && fs::copy(&src, &dst).is_ok() {
+            done.push(format!("{} → {}", src.display(), dst.display()));
+        }
+    }
+    done
 }
 
 pub fn profiles_json() -> PathBuf {
@@ -54,6 +84,25 @@ mod tests {
         std::env::set_var("SPLITGATE_HOME", r"C:\tmp\sg-test");
         assert_eq!(data_dir(), PathBuf::from(r"C:\tmp\sg-test"));
         std::env::remove_var("SPLITGATE_HOME");
-        assert!(data_dir().ends_with(APP_DIR_NAME));
+        assert_eq!(data_dir(), exe_dir().join("data"), "next to the exe");
+    }
+
+    #[test]
+    fn migration_copies_only_missing_settings() {
+        let base = std::env::temp_dir().join(format!("sg-migrate-{}", std::process::id()));
+        let (old, new) = (base.join("old"), base.join("new"));
+        fs::create_dir_all(&old).unwrap();
+        fs::create_dir_all(&new).unwrap();
+        fs::write(old.join("profiles.json"), "old-profiles").unwrap();
+        fs::write(old.join("rules.json"), "old-rules").unwrap();
+        fs::write(new.join("rules.json"), "new-rules").unwrap();
+        fs::write(old.join("splitgate-2026-10-26.log"), "x").unwrap();
+        let done = copy_missing(&old, &new);
+        assert_eq!(done.len(), 1, "{done:?}");
+        assert_eq!(fs::read_to_string(new.join("profiles.json")).unwrap(), "old-profiles");
+        assert_eq!(fs::read_to_string(new.join("rules.json")).unwrap(), "new-rules", "never overwrite the new folder");
+        assert!(!new.join("splitgate-2026-10-26.log").exists(), "logs are not copied");
+        assert!(old.join("profiles.json").exists(), "old folder left as it is");
+        fs::remove_dir_all(&base).unwrap();
     }
 }

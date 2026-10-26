@@ -10,7 +10,7 @@ SplitGate 是维护者**自己用的网络工具**，不是给老师用的程序
 
 - 技术栈用 Tauri 2 + React 18 + TypeScript + Vite + zustand（全局规范是“不加前端框架和打包工具”）。
 - 交付形式是 Tauri 桌面应用 + NSIS 安装包，需要管理员权限（全局规范是“单一 exe + 黑色命令窗口、免安装”）。
-- 不用 `config.ini`；设置存在 `%APPDATA%\SplitGate\*.json`（见 SPEC“数据模型”）。
+- 不用 `config.ini`；设置存在 `SplitGate.exe` 旁边的 `data\*.json`，日志、诊断包也在 `data\`（维护者 2026-10-26 定，v0.12.0 起；之前是 `%APPDATA%\SplitGate\`，见 SPEC“数据模型”）。
 - 端口：只有 sing-box 的 Clash API，监听 127.0.0.1 的随机端口，不占端口表。
 
 其余照全局规范：中文沟通和中文 commit、版本号只有一个来源、CHANGELOG、不把凭据写进任何文件。
