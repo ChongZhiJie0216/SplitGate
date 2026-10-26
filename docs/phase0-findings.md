@@ -436,7 +436,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 | V6 按程序分流 | ✅ 只按程序路径；PrismLauncher 登录成功 |
 | V7 Pangolin | ✅ 改用官方客户端 |
 
-## 建议对 SPEC.md 做的修改（等维护者确认）
+## 建议对 SPEC.md 做的修改（维护者全部同意，2026-10-26，已写进 SPEC.md）
 
 **架构与出口**
 1. Cisco 出口改用 **sing-box 自带的 OpenConnect endpoint**：不打包 openconnect.exe、wintun、vpnc-script，不需要 tunnel.json，也不会另建 VPN 网卡、不改系统路由。Profile 字段：服务器、用户名、密码、组别（`auth_group`）、只用 TCP（`no_udp`）、出口网卡（`bind_interface`，留空 = 自动）。openconnect.exe 做法降为备用（未实测）。
