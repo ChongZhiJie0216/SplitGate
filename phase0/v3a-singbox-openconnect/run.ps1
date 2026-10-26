@@ -13,6 +13,8 @@ param(
     [string]$VpnDns = '',
     # Disable the DTLS (UDP) data channel and stay on TLS (TCP) only
     [switch]$NoUdp,
+    # Force the VPN's own packets out of this adapter (e.g. Wi-Fi hotspot). Empty = sing-box picks the default.
+    [string]$BindInterface = '',
     [ValidateSet('trace', 'debug', 'info', 'warn', 'error')][string]$LogLevel = 'info',
     # Developer check: build the config with a dummy user/password, run "sing-box check" and stop. No admin needed.
     [switch]$CheckOnly
@@ -41,6 +43,10 @@ try {
     }
     if ($AuthGroup) { $oc.auth_group = $AuthGroup }
     if ($NoUdp) { $oc.no_udp = $true }
+    if ($BindInterface) {
+        if (-not (Get-NetAdapter -Name $BindInterface -ErrorAction SilentlyContinue)) { Write-Host "[ERROR] Adapter '$BindInterface' not found (see Get-NetAdapter)."; exit 1 }
+        $oc.bind_interface = $BindInterface
+    }
 
     if ($VpnDns) { $vpnDnsServer = [ordered]@{ type = 'udp'; tag = 'vpn-dns'; server = $VpnDns; detour = 'vpn' } }
     else { $vpnDnsServer = [ordered]@{ type = 'openconnect'; tag = 'vpn-dns'; endpoint = 'vpn'; accept_default_resolvers = $true } }
@@ -84,6 +90,7 @@ try {
 
     if (-not $CheckOnly) { & (Join-Path $Phase0Dir 'snapshot.ps1') -Label 'v3a-before' | Out-Null }
     Write-Host "[config] server $Server, user $User, group $(if ($AuthGroup) { $AuthGroup } else { '(ask)' }), via VPN: $($VpnDomains -join ', ')"
+    if ($BindInterface) { Write-Host "[config] VPN packets forced out of adapter '$BindInterface'" }
     Write-Host ("[config] vpn-dns: " + $(if ($VpnDns) { "$VpnDns through the tunnel" } else { 'servers pushed by the VPN' }) + $(if ($NoUdp) { '; DTLS off' } else { '' }))
 
     $ErrorActionPreference = 'Continue'

@@ -3,6 +3,8 @@
 每一项写明：结果、实际命令、关键输出、和 SPEC 不符的地方。
 验证顺序（维护者同意，2026-10-26）：V0 环境 → V1 TUN 全直连 → V2 WireGuard → V3 openconnect → V4 Cisco + sing-box → V5 DNS → V6 Xbox 进程名 → V7 Pangolin。
 
+顺序调整（维护者定，2026-10-26）：V3a（sing-box 自带 OpenConnect）通过后，**跳过 V3b**（openconnect.exe + 连接脚本）；V4 改为测“VPN 外层连接固定走指定网卡（bind_interface）”。
+
 ---
 
 ## V0 环境准备 — ✅ 完成（2026-10-26）
@@ -212,3 +214,18 @@ cleanup-all.ps1（检查模式）：nothing left over
 - 分流结果和第 3 次相同：api.ipify.org → 219.92.246.113，ifconfig.me → 202.186.213.216，网页 True，无残留。
 - 结束后恢复时间 **5.1 秒**（V3a 五次：12.3 / 1.4 / 6.0 / 5.1 秒）。仍然待查，第 1 阶段处理。
 - 结论：学校网络下的 Cisco profile 默认用 `auth_group` + `no_udp`，就能一键连接。
+---
+
+## V3b openconnect.exe + 连接脚本 — ⏭ 跳过（维护者定，2026-10-26）
+
+V3a 已证明 sing-box 自带的 OpenConnect 可用，不需要另建 VPN 网卡和连接脚本。openconnect.exe 的下载记录保留在 VERSIONS.md，作为备用方案。
+
+---
+
+## V4 VPN 外层连接固定走指定网卡 — 准备好，等维护者执行
+
+目的：OpenConnect endpoint 加 `bind_interface`（Dial Fields）之后，VPN 自己的封包从指定网卡（Wi-Fi 手机热点）出去；不命中规则的流量照旧走默认网卡（有线）。顺便看热点上 DTLS（UDP）能不能用。
+
+- 脚本：`phase0/v4-bind-interface/run.ps1`（转调 V3a 的 run.ps1，默认 `-BindInterface Wi-Fi -AuthGroup "Master Network"`，**不**加 `-NoUdp`）。V3a 的 run.ps1 新增 `-BindInterface` 参数。
+- `test.ps1`：用 `Get-NetTCPConnection` 查 sing-box 到 202.186.213.216:8443 的连接，本地地址必须是 Wi-Fi 的 IP；再从日志看用的是 DTLS 还是 CSTP；最后跑共用的 split-test。
+- `-CheckOnly` 通过。
