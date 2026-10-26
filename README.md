@@ -26,4 +26,6 @@ build.bat                                                             # 便携�
 
 便携版输出在 `portable\SplitGate\`（`SplitGate.exe` + `sing-box.exe` + `licenses\`），另有同名 zip。两个 exe 要放在同一个文件夹；双击 `SplitGate.exe` 会要求管理员权限。设置和日志仍保存在 `%APPDATA%\SplitGate\`。
 
+为了方便测试，`SplitGate.exe` 和 `sing-box.exe` 也会复制一份到仓库根目录（不进 git），直接双击根目录的 `SplitGate.exe` 就行。打包前要先从托盘“退出”SplitGate，否则 exe 被占用，脚本会一开始就停下并提示。
+
 关闭窗口只是缩到托盘（连接不断开）；要完全退出，右键托盘图标 →“退出”。开机自启、自动连接等在“设置”页。

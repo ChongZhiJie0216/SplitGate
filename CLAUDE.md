@@ -51,6 +51,6 @@ SplitGate 是维护者**自己用的网络工具**，不是给老师用的程序
 ## 云端会话（Claude Code on the web）
 
 - 云端是 Linux：**不能**打包 Windows exe、不能运行程序、不能连接 VPN、不能用 CDP 看界面。能做的：写代码、`npm run build`、改文档；`cargo test` / `clippy` 需要 Tauri 的 Linux 系统库（`libwebkit2gtk-4.1-dev` 等），装不了就只跑前端检查，并在回报里说明没跑后端测试。
-- 打包和实测一律由维护者在 Windows 上做：`git pull` → 双击 `build.bat` → 以管理员身份运行 `portable\SplitGate\SplitGate.exe`。
+- 打包和实测一律由维护者在 Windows 上做：`git pull` → 双击 `build.bat` → 以管理员身份运行根目录的 `SplitGate.exe`（`build.bat` 复制过来的，和 `portable\SplitGate\` 里的相同）。
 - 维护者用 gpg 签名 commit；云端提交照云端环境的设置。
 - 仓库是**公开**的：不要把服务器地址、账号、IP 等新的个人信息写进文件。
