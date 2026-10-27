@@ -296,10 +296,12 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     step(generation, &name, Step::Start)?;
     let mut child = singbox::run_command(&exe).spawn().map_err(|e| format!("无法启动 sing-box：{e}"))?;
     #[cfg(windows)]
-    if let Some(job) = JOB.get() {
-        if let Err(e) = job.assign(&child) {
-            logs::warn(e);
-        }
+    match JOB.get() {
+        Some(job) => match job.assign(&child) {
+            Ok(()) => logs::info(format!("sing-box 已启动（pid {}），SplitGate 被强行结束时它会跟着结束", child.id())),
+            Err(e) => logs::error(e),
+        },
+        None => logs::error("没有 Job Object：SplitGate 被强行结束时 sing-box 不会跟着结束"),
     }
     let fed = match child.stdin.take() {
         // Dropping stdin closes it: sing-box then starts parsing.

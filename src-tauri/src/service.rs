@@ -250,6 +250,8 @@ mod win {
         set_state(SERVICE_START_PENDING);
         let sid = allowed_sid_from_args();
         service_log(&format!("后台服务启动（v{}），管道允许的用户：{}", env!("CARGO_PKG_VERSION"), sid.as_deref().unwrap_or("只有管理员")));
+        // Release builds abort on a panic with no trace anywhere; leave one in the service log.
+        std::panic::set_hook(Box::new(|info| service_log(&format!("后台服务出错退出：{info}"))));
         // The app's log file and the pipe get every line; status changes go to the pipe.
         crate::logs::init_service(|line| broadcast(&Event::Log { line: line.clone() }));
         crate::supervisor::init_service(|status| {
@@ -260,7 +262,7 @@ mod win {
         // Leftovers of a crash (SPEC "错误处理与清理"), as the app does at startup.
         thread::spawn(|| match crate::cleanup::run(true) {
             Ok(r) if r.is_clean() => crate::logs::info("后台服务启动检查：没有残留"),
-            Ok(_) => {}
+            Ok(r) => service_log(&format!("启动检查发现残留：{}；已清理：{}", r.found.join("；"), r.done.join("；"))),
             Err(e) => crate::logs::error(e),
         });
         thread::spawn(move || pipe_server(sid));
@@ -382,7 +384,12 @@ mod win {
         }
         if OWNER.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
             crate::logs::info("SplitGate 关掉了或被结束了，后台服务断开连接");
-            let _ = crate::supervisor::disconnect();
+            service_log("SplitGate 关掉了或被结束了，断开连接");
+            let r = crate::supervisor::disconnect();
+            service_log(&match r {
+                Ok(()) => "已断开".to_string(),
+                Err(e) => format!("断开失败：{e}"),
+            });
         }
     }
 
@@ -422,16 +429,20 @@ mod win {
         match req {
             Request::Connect { profile_id, main, preshared_key } => {
                 OWNER.store(id, Ordering::SeqCst);
+                service_log(&format!("收到连接请求（连接 #{id}）"));
                 let secrets = crate::singbox::Secrets { main, preshared_key };
                 match crate::supervisor::connect_with_secrets(profile_id, secrets) {
                     Ok(()) => Reply::ok(),
                     Err(e) => Reply::err(e),
                 }
             }
-            Request::Disconnect => match crate::supervisor::disconnect() {
-                Ok(()) => Reply::ok(),
-                Err(e) => Reply::err(e),
-            },
+            Request::Disconnect => {
+                service_log("收到断开请求");
+                match crate::supervisor::disconnect() {
+                    Ok(()) => Reply::ok(),
+                    Err(e) => Reply::err(e),
+                }
+            }
             Request::Ping | Request::Hello => Reply::ok(),
         }
     }

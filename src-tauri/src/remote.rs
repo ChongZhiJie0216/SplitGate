@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 use crate::service::{self, Event, Reply, Request};
-use crate::supervisor::Status;
-use crate::{config, credentials, logs, traffic, tray};
+use crate::supervisor::{self, Status};
+use crate::{cleanup, config, credentials, logs, traffic, tray};
 
 struct Session {
     /// The command connection.
@@ -168,12 +168,23 @@ fn read_events(pipe: File) {
     }
     let was = MIRROR.lock().ok().and_then(|m| m.clone());
     if !matches!(was, None | Some(Status::Disconnected)) {
-        logs::error("后台服务断开了（服务被停止或出错）；它会自己清理网络");
+        logs::error("后台服务断开了（服务被停止或出错）");
         let st = Status::Error { message: "后台服务断开了，连接已结束。可以按“重新连接”再试。".into(), retrying: false };
         if let Ok(mut m) = MIRROR.lock() {
             *m = Some(st.clone());
         }
         show(&st);
+        // A stopped service cleans up by itself; a killed one cannot, and its sing-box may be
+        // left with the routes. Give a stopping service a moment, then clean what is left.
+        // Not when a new connection started meanwhile: cleaning would end its sing-box.
+        thread::sleep(Duration::from_secs(5));
+        if !active() && matches!(supervisor::status(), Status::Disconnected | Status::Error { .. }) {
+            match cleanup::run(true) {
+                Ok(r) if r.is_clean() => logs::info("检查：后台服务没有留下残留"),
+                Ok(_) => {} // cleanup logs what it found and did
+                Err(e) => logs::error(e),
+            }
+        }
     } else if let Ok(mut m) = MIRROR.lock() {
         *m = None;
     }

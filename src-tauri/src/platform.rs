@@ -141,12 +141,18 @@ impl KillOnCloseJob {
 
     pub fn assign(&self, child: &std::process::Child) -> Result<(), String> {
         use std::os::windows::io::AsRawHandle;
-        let ok = unsafe { windows_sys::Win32::System::JobObjects::AssignProcessToJobObject(self.0, child.as_raw_handle() as _) };
-        if ok == 0 {
-            Err("无法把 sing-box 放进 Job Object".into())
-        } else {
-            Ok(())
+        use windows_sys::Win32::Foundation::GetLastError;
+        use windows_sys::Win32::System::JobObjects::{AssignProcessToJobObject, IsProcessInJob};
+        let h = child.as_raw_handle() as _;
+        if unsafe { AssignProcessToJobObject(self.0, h) } == 0 {
+            return Err(format!("无法把 sing-box 放进 Job Object（错误 {}）：SplitGate 被强行结束时它不会跟着结束", unsafe { GetLastError() }));
         }
+        // Checked, not assumed: without it a killed SplitGate leaves sing-box and its routes behind.
+        let mut inside = 0;
+        if unsafe { IsProcessInJob(h, self.0, &mut inside) } == 0 || inside == 0 {
+            return Err("sing-box 没有在 Job Object 里：SplitGate 被强行结束时它不会跟着结束".into());
+        }
+        Ok(())
     }
 }
 
