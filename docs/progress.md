@@ -5,7 +5,7 @@
 
 ## 现在在哪一步
 
-**项目功能全部完成。** Pangolin 出口（v0.21.0）和界面打磨、新图标（v0.22.0）维护者 2026-10-27 实测通过（`docs/test-plan.md` I、J），在 PR #9 里等合并，合并后发布 v0.22.0。
+**项目功能全部完成。** v0.22.0（含 v0.21.0 的 Pangolin 出口和 v0.22.0 的界面打磨、新图标）已合并进 `main`（PR #9）并发布到 GitHub Release（2026-10-27）。之后的改动按维护者的新要求来。
 
 ## 已完成
 
@@ -66,7 +66,7 @@
 
 ## 下一步（照顺序）
 
-1. 合并 PR #9（v0.21.0 + v0.22.0），发布 v0.22.0。（v0.20.0 发布后，从 v0.19.0 真正在线更新一次：H 最后一项。）
+1. ~~合并 PR #9、发布 v0.22.0~~（2026-10-27 完成）。（v0.20.0 发布后，从 v0.19.0 真正在线更新一次：H 最后一项。）
 2. 学校网络 B 部分维护者 2026-10-27 实测全部通过。有机会再看看 Pangolin 在学校网络下能不能用。
 3. SPEC“待决定的事”只剩项目正式名称。（已答：Cisco VPN 自己管理；家里路由器转发 UDP 8443 给 AnyLink；Pangolin 和 WireGuard 都留、Profile 页自己选。维护者 2026-10-27。）
 
@@ -81,7 +81,7 @@
 
 ## 分支
 
-- `main`：已合并到 v0.19.0（PR #1–#7），v0.19.0 已发布。
+- `main`：已合并到 v0.22.0（PR #1–#9），v0.22.0 已发布（发布页附 zip 和 `.sha256`）。
 - `claude/modest-bell-xe9osa`（云端会话的分支）：每个 PR 合并后从最新的 `main` 重新开始。维护者测试时：`git fetch origin claude/modest-bell-xe9osa` → `git checkout -B test/<版本> origin/claude/modest-bell-xe9osa`，之后 `git merge --ff-only origin/claude/modest-bell-xe9osa` 拉新的修改；合并后回 `main` `git pull`。
 
 ## 接着做时要记得
