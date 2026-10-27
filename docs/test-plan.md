@@ -129,7 +129,7 @@ Get-Content data\logs\service-*.log -Encoding UTF8 -Tail 30
 - [ ] 任务管理器“详细信息”里，`sing-box.exe` 的用户名是 `SYSTEM`
 - [ ] 按“断开”：正常断开，`phase1\residue-check.ps1` 显示 `[clean]`
 - [x] 先跑 `phase1\kill-recovery.ps1`，再到任务管理器只结束**用户名是你自己**的那个 `SplitGate.exe`（`SYSTEM` 那个是服务，不要结束）：`[PASS]`（服务自动断开、恢复网络）；服务日志有“SplitGate 关掉了或被结束了，断开连接”“已断开”
-- [ ] 再连接一次，任务管理器结束 `SYSTEM` 那个 `SplitGate.exe`（模拟服务当掉）：5 秒左右后 SplitGate 日志出现“清理：…”，网络恢复；之后执行 `sc.exe start SplitGateService` 把服务开回来
+- [x] 再连接一次，任务管理器结束 `SYSTEM` 那个 `SplitGate.exe`（模拟服务当掉）：5 秒左右后 SplitGate 日志出现“清理：…”，网络恢复；之后执行 `sc.exe start SplitGateService` 把服务开回来
 - [x] 已连接时结束 `sing-box.exe`：显示“等待重新连接”，几秒后自动连回去（重连由服务做）
 - [x] 已连接时用管理员 `sc.exe stop SplitGateService` 停掉服务：SplitGate 显示“后台服务断开了”，网络恢复；`sc.exe start SplitGateService` 后再按“连接”可以连
 - [ ] 在设置页移除后台服务后，按“连接”：照旧由 SplitGate 自己连接（日志有说明），一切正常
