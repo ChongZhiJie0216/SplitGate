@@ -2,18 +2,19 @@
 //! by the maintainer's decision 2026-10-26). While connected, a thread reads sing-box's Clash API
 //! once a second, keeps the latest snapshot for the Connections page, emits `traffic` and hands
 //! the connections to block detection. It also adds up how much each program sent and received
-//! through the VPN (the "流量统计" page, v0.24.0), from when SplitGate started or was last reset.
+//! through the VPN (the "流量统计" page, v0.24.0), from the last reset; kept in `data\usage.json`
+//! so it survives restarts (saved every 30 s while it changes, on disconnect, reset and exit).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 
-use crate::block_detect;
+use crate::{block_detect, config, logs, paths};
 use crate::singbox::{ClashApi, VPN_TAG};
 
 const POLL: Duration = Duration::from_secs(1);
@@ -63,7 +64,7 @@ struct Live {
 static LIVE: Mutex<Option<Live>> = Mutex::new(None);
 
 /// VPN bytes of one program, added up.
-#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct AppUsage {
     /// Empty for system traffic Windows does not attribute to a program.
     pub process_path: String,
@@ -73,7 +74,7 @@ pub struct AppUsage {
 
 #[derive(Serialize, Clone, Debug, Default, PartialEq)]
 pub struct Usage {
-    /// When counting started (ms since 1970); 0 = nothing counted yet.
+    /// When counting started (ms since 1970): the last reset, or the first time anything was counted.
     pub since_ms: u64,
     pub upload: u64,
     pub download: u64,
@@ -81,42 +82,107 @@ pub struct Usage {
     pub apps: Vec<AppUsage>,
 }
 
-/// Kept across connections (and after disconnecting) until reset or SplitGate quits. Bytes a
-/// connection moves between the last poll and its closing are not seen (under a second's worth).
-static USAGE: Mutex<Option<(u64, HashMap<String, AppUsage>)>> = Mutex::new(None);
+/// Kept across connections, disconnects and restarts until reset. Bytes a connection moves
+/// between the last poll and its closing are not seen (under a second's worth).
+struct UsageAcc {
+    since_ms: u64,
+    apps: HashMap<String, AppUsage>,
+    /// Changed since the last save.
+    dirty: bool,
+}
+
+static USAGE: Mutex<Option<UsageAcc>> = Mutex::new(None);
+const USAGE_VERSION: u32 = 1;
+/// Saved at most this often while traffic flows.
+const SAVE_EVERY: Duration = Duration::from_secs(30);
+
+#[derive(Serialize, Deserialize)]
+struct UsageFile {
+    version: u32,
+    since_ms: u64,
+    apps: Vec<AppUsage>,
+}
 
 fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+fn fresh() -> UsageAcc {
+    UsageAcc { since_ms: now_ms(), apps: HashMap::new(), dirty: false }
+}
+
+/// From `data\usage.json`; missing = start counting now. A broken file is kept aside as
+/// `usage.json.broken` (not overwritten silently) and counting starts again.
+fn load() -> UsageAcc {
+    let path = paths::usage_json();
+    let Ok(text) = std::fs::read_to_string(&path) else { return fresh() };
+    match serde_json::from_str::<UsageFile>(&text) {
+        Ok(f) => UsageAcc {
+            since_ms: f.since_ms,
+            apps: f.apps.into_iter().map(|a| (a.process_path.to_lowercase(), a)).collect(),
+            dirty: false,
+        },
+        Err(e) => {
+            let _ = std::fs::rename(&path, path.with_extension("json.broken"));
+            logs::warn(format!("流量统计文件读不懂（{e}），已改名成 usage.json.broken，重新开始统计"));
+            fresh()
+        }
+    }
+}
+
+fn with_usage<R>(f: impl FnOnce(&mut UsageAcc) -> R) -> Option<R> {
+    let mut g = USAGE.lock().ok()?;
+    Some(f(g.get_or_insert_with(load)))
 }
 
 fn add_usage(deltas: &HashMap<String, AppUsage>) {
     if deltas.is_empty() {
         return;
     }
-    if let Ok(mut g) = USAGE.lock() {
-        let (_, apps) = g.get_or_insert_with(|| (now_ms(), HashMap::new()));
+    with_usage(|u| {
         for (k, d) in deltas {
-            let a = apps.entry(k.clone()).or_insert_with(|| AppUsage { process_path: d.process_path.clone(), ..Default::default() });
+            let a = u.apps.entry(k.clone()).or_insert_with(|| AppUsage { process_path: d.process_path.clone(), ..Default::default() });
             a.upload += d.upload;
             a.download += d.download;
         }
-    }
+        u.dirty = true;
+    });
 }
 
 pub fn usage() -> Usage {
-    let Ok(g) = USAGE.lock() else { return Usage::default() };
-    let Some((since, apps)) = g.as_ref() else { return Usage::default() };
-    let mut list: Vec<AppUsage> = apps.values().cloned().collect();
-    list.sort_by_key(|a| std::cmp::Reverse(a.upload + a.download));
-    Usage { since_ms: *since, upload: list.iter().map(|a| a.upload).sum(), download: list.iter().map(|a| a.download).sum(), apps: list }
+    with_usage(|u| {
+        let mut list: Vec<AppUsage> = u.apps.values().cloned().collect();
+        list.sort_by_key(|a| std::cmp::Reverse(a.upload + a.download));
+        Usage { since_ms: u.since_ms, upload: list.iter().map(|a| a.upload).sum(), download: list.iter().map(|a| a.download).sum(), apps: list }
+    })
+    .unwrap_or_default()
+}
+
+fn reset_in_memory() {
+    with_usage(|u| {
+        *u = fresh();
+        u.dirty = true;
+    });
 }
 
 /// "清零": start counting again from now.
 pub fn reset_usage() -> Usage {
-    if let Ok(mut g) = USAGE.lock() {
-        *g = Some((now_ms(), HashMap::new()));
-    }
+    reset_in_memory();
+    save_usage();
     usage()
+}
+
+/// Writes `data\usage.json` if anything changed since the last save.
+pub fn save_usage() {
+    let file = {
+        let Ok(mut g) = USAGE.lock() else { return };
+        let Some(u) = g.as_mut().filter(|u| u.dirty) else { return };
+        u.dirty = false;
+        UsageFile { version: USAGE_VERSION, since_ms: u.since_ms, apps: u.apps.values().cloned().collect() }
+    };
+    if let Err(e) = config::atomic_write_json(&paths::usage_json(), &file) {
+        logs::warn(format!("保存流量统计失败：{e}"));
+    }
 }
 
 /// Starts polling; it stops by itself once `still_current()` turns false (disconnect, error).
@@ -127,6 +193,7 @@ pub fn start(app: AppHandle, api: ClashApi, still_current: impl Fn() -> bool + S
     block_detect::start_session();
     thread::spawn(move || {
         let mut rates = Rates::default();
+        let mut saved = Instant::now();
         while still_current() {
             let t = Instant::now();
             if let Ok((200, body)) = api.get("/connections", Duration::from_secs(3)) {
@@ -134,6 +201,10 @@ pub fn start(app: AppHandle, api: ClashApi, still_current: impl Fn() -> bool + S
                     let mut snap = parse(&v);
                     snap.traffic = rates.update(&snap, Instant::now());
                     add_usage(&rates.vpn_by_app);
+                    if saved.elapsed() >= SAVE_EVERY {
+                        save_usage();
+                        saved = Instant::now();
+                    }
                     let _ = app.emit("traffic", snap.traffic);
                     block_detect::observe(&app, &snap.connections);
                     if let Ok(mut l) = LIVE.lock() {
@@ -146,6 +217,7 @@ pub fn start(app: AppHandle, api: ClashApi, still_current: impl Fn() -> bool + S
             thread::sleep(POLL.saturating_sub(t.elapsed()));
         }
         stop();
+        save_usage();
         block_detect::end_session();
         let _ = app.emit("traffic", Traffic::default());
     });
@@ -324,7 +396,7 @@ mod tests {
 
     #[test]
     fn usage_adds_up_per_program() {
-        reset_usage();
+        reset_in_memory();
         let d = |p: &str, up, down| (p.to_lowercase(), AppUsage { process_path: p.into(), upload: up, download: down });
         add_usage(&HashMap::from([d(r"C:\Steam\steam.exe", 10, 100), d(r"C:\Xbox\XboxPcApp.exe", 1, 5)]));
         add_usage(&HashMap::from([d(r"C:\STEAM\steam.exe", 5, 50)]));
@@ -333,7 +405,15 @@ mod tests {
         assert_eq!(u.apps[0].process_path, r"C:\Steam\steam.exe", "same program, any case; biggest first");
         assert_eq!((u.apps[0].upload, u.apps[0].download), (15, 150));
         assert!(u.since_ms > 0);
-        assert!(reset_usage().apps.is_empty());
+        reset_in_memory();
+        assert!(usage().apps.is_empty());
+    }
+
+    #[test]
+    fn usage_file_round_trip() {
+        let f = UsageFile { version: USAGE_VERSION, since_ms: 1, apps: vec![AppUsage { process_path: "a.exe".into(), upload: 2, download: 3 }] };
+        let back: UsageFile = serde_json::from_str(&serde_json::to_string(&f).unwrap()).unwrap();
+        assert_eq!((back.since_ms, back.apps), (1, f.apps));
     }
 
     #[test]

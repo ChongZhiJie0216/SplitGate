@@ -80,6 +80,11 @@ pub fn settings_json() -> PathBuf {
     data_dir().join("settings.json")
 }
 
+/// VPN traffic per program (the "流量统计" page), v0.24.0.
+pub fn usage_json() -> PathBuf {
+    data_dir().join("usage.json")
+}
+
 pub fn logs_dir() -> PathBuf {
     data_dir().join("logs")
 }

@@ -100,7 +100,7 @@ export const T = {
     },
   },
   usagePage: {
-    intro: "只算走 VPN 的流量：按程序加起来，从 SplitGate 打开（或按“清零”）时开始，断开连接后数字还留着，关掉 SplitGate 才清空。",
+    intro: "只算走 VPN 的流量，按程序加起来。数字存在设置文件夹（data\\usage.json），关掉、重开 SplitGate 也会接着累加，按“清零”才重新开始。",
     since: (t: string) => `从 ${t} 开始统计`,
     up: "上传",
     down: "下载",
