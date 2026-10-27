@@ -1,7 +1,7 @@
 //! Exit adapters (SPEC 组件 0): one module per exit type. Each turns its Profile settings into
 //! the sing-box VPN endpoint and the DNS server that resolves through it (`ExitAdapter`); the
 //! Profile page's helpers live next to them (WireGuard .conf import, Cisco group list / test login).
-//! Adding an exit (Pangolin, last in the project) = a new module + one arm in `adapter`.
+//! Adding an exit = a new module + one arm in `adapter`.
 
 use serde_json::Value;
 
@@ -9,6 +9,7 @@ use crate::config::{ExitType, Profile};
 use crate::singbox::Secrets;
 
 pub mod cisco;
+pub mod pangolin;
 pub mod wireguard;
 
 /// What one exit adds to the sing-box config.
@@ -19,6 +20,11 @@ pub struct ExitParts {
     pub dns: Value,
     /// The VPN server's host (name or IP): always reached directly, never through the tunnel.
     pub server_host: String,
+    /// `endpoint` is a sing-box outbound (Pangolin's socks), not an endpoint (Cisco, WireGuard).
+    pub is_outbound: bool,
+    /// DNS server (IPv4) for everything else instead of the system resolver; Pangolin: Windows
+    /// lists the Pangolin client's DNS first, so the physical adapter's DNS is asked directly.
+    pub local_dns: Option<String>,
 }
 
 pub trait ExitAdapter {
@@ -30,6 +36,6 @@ pub fn adapter(profile: &Profile) -> Result<&dyn ExitAdapter, String> {
     match profile.kind {
         ExitType::Cisco => Ok(profile.cisco.as_ref().ok_or("缺少 Cisco 设置")?),
         ExitType::Wireguard => Ok(profile.wireguard.as_ref().ok_or("缺少 WireGuard 设置")?),
-        ExitType::Pangolin => Err("Pangolin 出口还不能连接（排在整个项目最后才做）。".into()),
+        ExitType::Pangolin => Ok(profile.pangolin.as_ref().ok_or("缺少 Pangolin 设置")?),
     }
 }

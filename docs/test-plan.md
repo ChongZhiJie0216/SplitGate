@@ -184,3 +184,19 @@ $env:SPLITGATE_PRETEND_VERSION='0.18.0'; .\SplitGate.exe
 - [x] 重新打包（`build.bat`）后打开：设置页提示“更新后台服务”，连接时日志说“这次由 SplitGate 自己连接”（不是管理员的话连不上，顶部提示）；按“更新后台服务”后恢复正常
 - [x] 移除后台服务：`C:\Program Files\SplitGate\` 里的两个文件被删掉（文件夹空了也删掉）
 - [ ] v0.20.0 发布后，用 `D:\SG-test\SplitGate` 那份 v0.19.0 测一次**真正的在线更新**（普通 PowerShell，不设 `SPLITGATE_PRETEND_VERSION`）：关于页提供 v0.20.0 → 下载 → 安装并重新启动 → 关于页显示 v0.20.0、检查更新说“已经是最新版本”。后台服务属于平常那份，这份的设置页显示“指向另一个位置”是正常的，**不要**按“改成这一个”
+
+## I. v0.21.0 Pangolin 出口
+
+准备：
+- 虚拟机上的代理在运行（`systemctl status splitgate-socks` 是 `active (running)`），Pangolin 后台 Exit Node 关着，虚拟机 IP 是 site 资源（V8 时已经确认过）。
+- 测试分支 `build.bat`，普通方式打开根目录的 `SplitGate.exe`。设置页提示“更新后台服务”的话先按一下。
+
+- [ ] Profile 页“新建 → Pangolin”：填代理 IP、密码（端口 1080、用户名 splitgate、网卡 Pangolin、DNS 9.9.9.9 是默认值），勾选规则集，保存成功；故意填 `abc` 当 IP 会被拒绝
+- [ ] **官方客户端没连**时按“连接”：停在错误“找不到网卡……”或“网卡没有连接……”，不会建虚拟网卡
+- [ ] 官方客户端连上后按“连接”：几秒后“已连接”，有“经 VPN 测试 xx ms”
+- [ ] 出口 IP：另开 PowerShell 执行 `curl.exe -s https://api.ipify.org`（本地 IP）；把 `ifconfig.me` 临时加进一个勾选的规则集、重新连接后 `curl.exe -s https://ifconfig.me`（家里的公网 IP）。**测完从规则集删掉 ifconfig.me**
+- [ ] 连接列表里规则流量的出口是 VPN；Xbox App / Steam 能登录、打开商店
+- [ ] 家里内网：PVE 管理网页（`https://<PVE IP>:8006`）能打开
+- [ ] 故意把代理密码改错保存、再连接：约 30 秒后错误“经 Pangolin 连不到家里的代理，或代理拒绝了……”。**测完改回正确的密码**
+- [ ] 断开后 `phase1\residue-check.ps1` 显示 `[clean]`；Pangolin 客户端仍然连着
+- [ ] `phase1\secret-scan.ps1` 输入代理密码：`[PASS]`；诊断包里代理 IP 是 `<pangolin-proxy-1>`

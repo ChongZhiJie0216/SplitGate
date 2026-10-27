@@ -103,7 +103,7 @@ pub fn build_config(
     api: &ClashApi,
     settings: &Settings,
 ) -> Result<Value, String> {
-    let ExitParts { endpoint, dns: vpn_dns, server_host } = exits::adapter(profile)?.parts(secrets)?;
+    let ExitParts { endpoint, dns: vpn_dns, server_host, is_outbound, local_dns } = exits::adapter(profile)?.parts(secrets)?;
 
     let mut route_rules = vec![
         json!({ "action": "sniff" }),
@@ -164,12 +164,24 @@ pub fn build_config(
     // Always look up the program: the Connections page shows it and "add rule" can use its path.
     route["find_process"] = json!(true);
 
-    Ok(json!({
+    // "local" (system resolver) is right for Cisco / WireGuard (phase 0 V1–V6); Pangolin asks the
+    // physical adapter's DNS directly (V8).
+    let local = match local_dns {
+        Some(ip) => json!({ "type": "udp", "tag": "local", "server": ip }),
+        None => json!({ "type": "local", "tag": "local" }),
+    };
+    let mut outbounds = vec![json!({ "type": "direct", "tag": "direct" })];
+    let mut endpoints = Vec::new();
+    if is_outbound {
+        outbounds.push(endpoint);
+    } else {
+        endpoints.push(endpoint);
+    }
+
+    let mut config = json!({
         "log": { "level": settings.singbox_log_level, "timestamp": true },
         "dns": {
-            // "local" (system resolver) is right for Cisco / WireGuard (phase 0 V1–V6). Pangolin will need
-            // the physical adapter's own DNS instead (SPEC 组件 3), added with that exit in phase 2.
-            "servers": [ { "type": "local", "tag": "local" }, vpn_dns ],
+            "servers": [ local, vpn_dns ],
             "rules": dns_rules,
             "final": "local",
             "strategy": "ipv4_only",
@@ -183,13 +195,16 @@ pub fn build_config(
             "auto_route": true,
             "strict_route": true,
         }],
-        "endpoints": [endpoint],
-        "outbounds": [ { "type": "direct", "tag": "direct" } ],
+        "outbounds": outbounds,
         "route": route,
         "experimental": {
             "clash_api": { "external_controller": format!("127.0.0.1:{}", api.port), "secret": api.secret },
         },
-    }))
+    });
+    if !endpoints.is_empty() {
+        config["endpoints"] = json!(endpoints);
+    }
+    Ok(config)
 }
 
 /// `sing-box check -c stdin`. Returns sing-box's own message on failure (it never echoes secrets).
@@ -304,7 +319,7 @@ fn parse_response(buf: &[u8]) -> Result<(u16, String), String> {
 mod tests {
     use super::*;
     use crate::config::tests::cisco;
-    use crate::config::{ExitType, WireguardPeer, WireguardProfile};
+    use crate::config::{ExitType, PangolinProfile, WireguardPeer, WireguardProfile};
     use crate::rules::presets;
 
     fn api() -> ClashApi {
@@ -425,11 +440,35 @@ mod tests {
         assert_eq!(parse_response(b"HTTP/1.1 204 No Content\r\n\r\n").unwrap().0, 204);
     }
 
-    #[test]
-    fn pangolin_not_yet() {
-        let mut p = cisco("p");
+    fn pangolin_profile() -> Profile {
+        let mut p = cisco("home-pg");
         p.kind = ExitType::Pangolin;
-        assert!(build_config(&p, &MergedRules::default(), &secrets(), &api(), &Settings::default()).is_err());
+        p.cisco = None;
+        p.pangolin = Some(PangolinProfile {
+            interface: "Pangolin".into(),
+            proxy_host: "192.168.1.20".into(),
+            proxy_port: 1080,
+            proxy_user: "splitgate".into(),
+            vpn_dns: vec!["9.9.9.9".into()],
+        });
+        p
+    }
+
+    #[test]
+    fn pangolin_uses_a_socks_outbound() {
+        let p = pangolin_profile();
+        let c = build_config(&p, &merge_rules(&p, &presets()), &secrets(), &api(), &Settings::default()).unwrap();
+        assert!(c.get("endpoints").is_none(), "no endpoint: the socks proxy is an outbound");
+        let vpn = c["outbounds"].as_array().unwrap().iter().find(|o| o["tag"] == VPN_TAG).unwrap();
+        assert_eq!(vpn["type"], "socks");
+        assert_eq!(vpn["bind_interface"], "Pangolin");
+        let local = &c["dns"]["servers"][0];
+        assert_eq!((local["tag"].as_str(), local["type"].as_str()), (Some("local"), Some("udp")), "not the system resolver (V8)");
+        assert_eq!(c["dns"]["servers"][1]["type"], "tcp");
+        // Cisco keeps its endpoint and the system resolver.
+        let cc = build_config(&cisco("c"), &MergedRules::default(), &secrets(), &api(), &Settings::default()).unwrap();
+        assert_eq!(cc["endpoints"][0]["type"], "openconnect");
+        assert_eq!(cc["dns"]["servers"][0]["type"], "local");
     }
 
     /// The generated configs must pass the pinned sing-box's own check (skipped when it is not downloaded).
@@ -453,5 +492,8 @@ mod tests {
         let w = wg_profile();
         let s = Secrets { main: "A".repeat(43) + "=", preshared_key: None };
         check(&exe, &build_config(&w, &MergedRules::default(), &s, &api(), &debug_settings()).unwrap()).unwrap();
+
+        let g = pangolin_profile();
+        check(&exe, &build_config(&g, &merge_rules(&g, &presets()), &secrets(), &api(), &Settings::default()).unwrap()).unwrap();
     }
 }

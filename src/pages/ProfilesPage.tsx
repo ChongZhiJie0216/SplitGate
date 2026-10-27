@@ -12,7 +12,7 @@ function blank(type: ipc.ExitType): ipc.Profile {
   if (type === "cisco")
     return { ...base, cisco: { server: "", user: "", auth_group: null, no_udp: true, bind_interface: null, mfa: "none" } };
   if (type === "pangolin")
-    return { ...base, pangolin: { interface: "Pangolin", vpn_dns: ["9.9.9.9"], alias_suffixes: [], alias_dns: "100.96.128.1" } };
+    return { ...base, pangolin: { interface: "Pangolin", proxy_host: "", proxy_port: 1080, proxy_user: "splitgate", vpn_dns: ["9.9.9.9"] } };
   return {
     ...base,
     wireguard: { address: [], peer: { endpoint: "", public_key: "", persistent_keepalive: null }, dns: [], mtu: 1420 },
@@ -251,15 +251,34 @@ export default function ProfilesPage() {
 
           {draft.type === "pangolin" && draft.pangolin && (
             <>
-              <p className="banner warn">{L.pangolin.note}</p>
-              <Field label={L.pangolin.iface}>
+              <p className="field-hint">{L.pangolin.note}</p>
+              <Field label={L.pangolin.host} hint={L.pangolin.hostHint}>
+                <input value={draft.pangolin.proxy_host} onChange={(e) => patch("pangolin", { proxy_host: e.target.value })} />
+              </Field>
+              <Field label={L.pangolin.port}>
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={draft.pangolin.proxy_port}
+                  onChange={(e) => patch("pangolin", { proxy_port: Number(e.target.value) || 0 })}
+                />
+              </Field>
+              <Field label={L.pangolin.user}>
+                <input value={draft.pangolin.proxy_user} autoComplete="off" onChange={(e) => patch("pangolin", { proxy_user: e.target.value })} />
+              </Field>
+              <Field label={L.pangolin.password} hint={hasSecret ? L.secretSaved : L.pangolin.passwordHint}>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={secrets.secret ?? ""}
+                  onChange={(e) => setSecrets({ ...secrets, secret: e.target.value })}
+                />
+              </Field>
+              <Field label={L.pangolin.iface} hint={L.pangolin.ifaceHint}>
                 <input value={draft.pangolin.interface} onChange={(e) => patch("pangolin", { interface: e.target.value })} />
               </Field>
               <ListField label={L.pangolin.vpnDns} hint={L.pangolin.vpnDnsHint} value={draft.pangolin.vpn_dns} onChange={(v) => patch("pangolin", { vpn_dns: v })} />
-              <ListField label={L.pangolin.aliasSuffixes} value={draft.pangolin.alias_suffixes} onChange={(v) => patch("pangolin", { alias_suffixes: v })} />
-              <Field label={L.pangolin.aliasDns}>
-                <input value={draft.pangolin.alias_dns} onChange={(e) => patch("pangolin", { alias_dns: e.target.value })} />
-              </Field>
             </>
           )}
 

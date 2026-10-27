@@ -424,7 +424,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 ---
 
-## V8 Pangolin 经家里 SOCKS5 代理（不用 Exit Node）— 准备好，延后（Pangolin 移到整个项目最后，维护者 2026-10-26 定）
+## V8 Pangolin 经家里 SOCKS5 代理（不用 Exit Node）— ✅ 通过（2026-10-27）
 
 维护者定（2026-10-26）：
 - Pangolin 出口不用 Exit Node，改成经 Pangolin 连到家里的 SOCKS5 代理，省掉 V7 的“删全隧道路由 + 低优先级默认路由 + 监视”。
@@ -444,6 +444,13 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 2. 开着 sing-box 时 PVE 管理网页（家里设备）连得到。
 3. sing-box 启动时，官方 Pangolin 客户端还会不会断线 10–15 秒（V7 是在 Exit Node 开着时看到的）。
 4. 经代理的 DNS（TCP 9.9.9.9）有没有回应、速度如何。
+
+### V8 结果（2026-10-27 约 11:13，维护者在 Windows 上执行，Exit Node 已关）
+- `test.ps1`：`api.ipify.org`（不在规则）和 `ifconfig.me`（在规则）出口不同；`ifconfig.me` 的出口 = 家里 DDNS 解析出的公网 IP（维护者用 `Resolve-DnsName` 核对）。第一次显示 `[FAIL]` 是脚本只认 IP、`-HomeIp` 填了域名，已改成先解析域名（`phase0/split-test.ps1`）。
+- 家里 PVE 管理网页（`<PVE IP>:8006`）不在任何规则里，经 `Pangolin` 网卡自己的路由连得到：`[PASS] reachable`。
+- sing-box 日志：`ifconfig.me` 的 DNS（`9.9.9.9:53`，TCP）和网页连接都是 `outbound/socks[vpn]`，DNS 58 ms；其他网站 `outbound/direct`；没有 ERROR / WARN。
+- 官方 Pangolin 客户端：维护者没注意到断线，**暂时以没有影响为准**（维护者 2026-10-27 定）；SplitGate 的 Pangolin 出口连接前检查网卡和路由，连上后照常做经 VPN 的测试，断线的话会测试失败并说明。
+- 结论：采用这个做法写 Pangolin 出口（v0.21.0）：`vpn` = sing-box `socks` 出口 + `bind_interface: <Pangolin 网卡>`；`vpn-dns` = TCP 9.9.9.9 经它；不加、不删任何路由。
 
 ---
 

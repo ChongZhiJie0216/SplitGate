@@ -175,6 +175,26 @@ pub fn local_ipv4_networks() -> Vec<(String, String)> {
         .collect()
 }
 
+/// IPv4 DNS servers of the adapters with a default route, best first, without SplitGate's TUN and
+/// `skip` (the Pangolin client's adapter). Empty when they cannot be read.
+pub fn physical_dns(skip: &str) -> Vec<String> {
+    let Ok(out) = powershell(PHYSICAL_DNS_SCRIPT).env("SG_SKIP", skip).output() else { return Vec::new() };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.parse::<std::net::Ipv4Addr>().is_ok())
+        .map(str::to_string)
+        .collect()
+}
+
+const PHYSICAL_DNS_SCRIPT: &str = r#"
+Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+    Where-Object { $_.InterfaceAlias -notlike 'SplitGate*' -and $_.InterfaceAlias -ne $env:SG_SKIP } |
+    Sort-Object RouteMetric |
+    ForEach-Object { (Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses } |
+    Select-Object -Unique
+"#;
+
 const LOCAL_NETS_SCRIPT: &str = r#"
 Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.InterfaceAlias -notlike 'SplitGate*' -and $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |

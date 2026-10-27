@@ -51,11 +51,13 @@ export interface CiscoProfile {
   mfa: string;
 }
 
+/** Pangolin 出口（v0.21.0）：经官方客户端的网卡，连到家里 VPN-Server 虚拟机上的 SOCKS5 代理。 */
 export interface PangolinProfile {
   interface: string;
+  proxy_host: string;
+  proxy_port: number;
+  proxy_user: string;
   vpn_dns: string[];
-  alias_suffixes: string[];
-  alias_dns: string;
 }
 
 export interface WireguardProfile {

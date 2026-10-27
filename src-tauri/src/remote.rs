@@ -111,10 +111,7 @@ fn secrets_for(profile_id: Option<String>) -> Result<(String, String, Option<Str
         file.profiles.into_iter().find(|p| p.id == id).ok_or("找不到这个 Profile")?
     };
     let acc = credentials::main_account(&profile).ok_or("这个出口还不能连接")?;
-    let main = credentials::get(&acc)?.ok_or(match profile.kind {
-        config::ExitType::Wireguard => "还没有保存 WireGuard 私钥。请到“Profile”页重新导入 .conf 并保存。",
-        _ => "还没有保存密码。请到“Profile”页填写密码并保存。",
-    })?;
+    let main = credentials::get(&acc)?.ok_or(credentials::missing_message(profile.kind))?;
     let psk = match credentials::psk_account(&profile) {
         Some(a) => credentials::get(&a)?,
         None => None,

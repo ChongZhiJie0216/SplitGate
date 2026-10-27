@@ -57,6 +57,9 @@ impl Scrubber {
             if let Some(w) = &p.wireguard {
                 pairs.push((host_of(&w.peer.endpoint), format!("<wireguard-endpoint-{n}>")));
             }
+            if let Some(g) = &p.pangolin {
+                pairs.push((g.proxy_host.trim().to_string(), format!("<pangolin-proxy-{n}>")));
+            }
         }
         if let Some(home) = std::env::var_os("USERPROFILE") {
             pairs.push((home.to_string_lossy().into_owned(), "%USERPROFILE%".into()));
