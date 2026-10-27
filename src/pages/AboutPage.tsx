@@ -3,6 +3,7 @@ import { useApp } from "../store/app";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
 import Markdown from "../components/Markdown";
+import { useStatus } from "../store/status";
 
 const L = T.about;
 
@@ -51,7 +52,7 @@ export default function AboutPage() {
             {checkingUpdate ? L.checking : L.check}
           </button>
           {update?.newer && update.url && (
-            <button className="btn primary" onClick={() => ipc.openReleasePage(update.url!)}>
+            <button className={`btn${update.download ? "" : " primary"}`} onClick={() => ipc.openReleasePage(update.url!)}>
               {L.openPage}
             </button>
           )}
@@ -65,8 +66,9 @@ export default function AboutPage() {
         {update?.newer && (
           <>
             <div className="banner good">
-              <b>{L.newVersion(update.latest ?? "")}</b>（{L.version} {update.current}）。{L.updateHint}
+              <b>{L.newVersion(update.latest ?? "")}</b>（{L.version} {update.current}）。{update.download ? L.updateHint : L.updateManual}
             </div>
+            {update.download && <UpdateSteps />}
             <h3>{L.changes}</h3>
             {update.notes.map((n) => (
               <div key={n.version} className="update-note">
@@ -94,6 +96,74 @@ export default function AboutPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+const mb = (n: number) => `${(n / 1_000_000).toFixed(1)} MB`;
+
+/** 下载 → 核对 → 安装并重新启动。正在连接时，按钮写明会先断开（这就是“先问”）。 */
+function UpdateSteps() {
+  const [job, setJob] = useState<ipc.UpdateJob>({ state: "idle" });
+  const [error, setError] = useState<string | null>(null);
+  const status = useStatus((s) => s.status);
+  const service = useApp((s) => s.service);
+  const connected = status.state !== "disconnected" && status.state !== "error";
+  const busy = job.state === "downloading" || job.state === "installing";
+
+  useEffect(() => {
+    ipc.getUpdateJob().then(setJob).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => ipc.getUpdateJob().then(setJob).catch(() => {}), 500);
+    return () => clearInterval(t);
+  }, [busy]);
+
+  const start = async () => {
+    setError(null);
+    try {
+      setJob(await ipc.downloadUpdate());
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+  const install = async () => {
+    setError(null);
+    setJob((j) => (j.state === "ready" ? { state: "installing", version: j.version } : j));
+    try {
+      await ipc.installUpdate();
+    } catch (e) {
+      setError(String(e));
+      ipc.getUpdateJob().then(setJob).catch(() => {});
+    }
+  };
+
+  return (
+    <div className="stack-sm">
+      {job.state === "downloading" && <p>{L.downloading(mb(job.done), job.total ? mb(job.total) : "")}</p>}
+      {job.state === "installing" && <p>{L.installing}</p>}
+      {job.state === "failed" && <div className="banner bad">{job.message}</div>}
+      {error && <div className="banner bad">{error}</div>}
+      {job.state === "ready" && (
+        <>
+          <p>{L.ready(job.version)}</p>
+          {connected && <div className="banner warn">{L.connectedWarn}</div>}
+          {service?.installed && service.matches_this_exe && <p className="muted small">{L.serviceWarn}</p>}
+        </>
+      )}
+      <div className="row">
+        {(job.state === "idle" || job.state === "failed") && (
+          <button className="btn primary" onClick={start}>
+            {job.state === "failed" ? L.retry : L.download}
+          </button>
+        )}
+        {job.state === "ready" && (
+          <button className="btn primary" onClick={install}>
+            {connected ? L.installConnected : L.install}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

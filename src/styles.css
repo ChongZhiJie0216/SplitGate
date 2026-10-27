@@ -638,6 +638,17 @@ button.link {
   max-width: 760px;
 }
 
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.stack-sm > p {
+  margin: 0;
+}
+
 .conn-head {
   justify-content: space-between;
 }

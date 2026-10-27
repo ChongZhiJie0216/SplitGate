@@ -1,5 +1,6 @@
 # Publish the current version as a GitHub Release, so "check for updates" in SplitGate can see it.
-# Uploads portable\SplitGate-<version>-portable.zip (build it first with build.bat) and uses that
+# Uploads portable\SplitGate-<version>-portable.zip and its .sha256 (build both first with build.bat;
+# the in-app updater needs the checksum, v0.19.0) and uses that
 # version's section of CHANGELOG.md as the release notes. Needs the GitHub CLI (gh), logged in.
 # The repo is public: the release (zip + notes) is visible to everyone.
 # Default: CHECK only (prints what it would do). Add -Yes to really create the release.
@@ -21,6 +22,10 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Fail 'GitHub CLI (gh)
 & gh auth status *> $null
 if ($LASTEXITCODE -ne 0) { Fail 'gh is not logged in. Run: gh auth login' }
 if (-not (Test-Path $zip)) { Fail "$zip not found. Run build.bat first." }
+$sha = "$zip.sha256"
+if (-not (Test-Path $sha)) { Fail "$sha not found. Run build.bat again (v0.19.0+ writes it)." }
+$want = ((Get-Content $sha -Raw).Trim() -split '\s+')[0]
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash -ne $want) { Fail "$sha does not match the zip. Run build.bat again." }
 
 # The release must point at what is on main, so the tag, the zip and CHANGELOG.md agree.
 $branch = (git rev-parse --abbrev-ref HEAD).Trim()
@@ -46,11 +51,11 @@ $notesFile = Join-Path $env:TEMP "splitgate-release-notes-$version.md"
 
 $mb = [Math]::Round((Get-Item $zip).Length / 1MB, 1)
 Write-Host "release: $tag on main ($((git rev-parse --short HEAD).Trim()))"
-Write-Host "asset:   $zip ($mb MB)"
+Write-Host "asset:   $zip ($mb MB) + .sha256"
 Write-Host "notes:   $notesFile ($($notes.Count) lines from CHANGELOG.md)"
 if (-not $Yes) { Write-Host '[check] nothing published. Re-run with -Yes to create the release.'; exit 0 }
 
-& gh release create $tag $zip --target main --title "SplitGate $tag" --notes-file $notesFile
+& gh release create $tag $zip $sha --target main --title "SplitGate $tag" --notes-file $notesFile
 if ($LASTEXITCODE -ne 0) { Fail 'gh release create failed.' }
 Remove-Item -Force $notesFile
 Write-Host "[ok] published $tag. SplitGate on other PCs will show it under About > Check for updates."

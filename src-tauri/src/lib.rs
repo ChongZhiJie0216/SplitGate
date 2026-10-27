@@ -21,6 +21,7 @@ mod supervisor;
 mod traffic;
 mod tray;
 mod update;
+mod updater;
 
 use tauri::Manager;
 
@@ -65,6 +66,8 @@ pub fn run() {
             }
             let h = handle.clone();
             platform::on_show_request(move || tray::show_window(&h));
+            // Files the last update replaced (SplitGate.exe.old …) and its download.
+            updater::clean_leftovers();
             // Leftovers from a crash or a forced exit (SPEC "错误处理与清理"), then the optional auto-connect.
             std::thread::spawn(|| {
                 match cleanup::run(true) {
@@ -129,6 +132,9 @@ pub fn run() {
             commands::remove_service,
             commands::restart_as_admin,
             commands::open_release_page,
+            commands::download_update,
+            commands::get_update_job,
+            commands::install_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building SplitGate");
