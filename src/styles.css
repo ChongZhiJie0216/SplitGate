@@ -1126,3 +1126,18 @@ summary.update-ver {
 .break {
   overflow-wrap: anywhere;
 }
+
+.row.tight {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.license-text {
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 6px 0 0;
+}

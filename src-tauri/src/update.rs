@@ -148,6 +148,37 @@ fn sections(changelog: &str, keep: impl Fn((u32, u32, u32)) -> bool) -> Vec<Sect
     out
 }
 
+/// One entry of the About page's "许可证" dialog (v0.22.0): texts built into the exe, so they
+/// are there even without the licenses folder.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct License {
+    pub name: &'static str,
+    pub license: &'static str,
+    pub url: &'static str,
+    /// Full text when SplitGate ships it; None = only named (libraries built into the program).
+    pub text: Option<&'static str>,
+}
+
+pub fn licenses() -> Vec<License> {
+    let lib = |name, license, url| License { name, license, url, text: None };
+    vec![
+        License { name: "SplitGate", license: "MIT", url: "https://github.com/ChongZhiJie0216/SplitGate", text: Some(include_str!("../../LICENSE")) },
+        License {
+            name: "sing-box（随附的独立程序）",
+            license: "GPL-3.0-or-later",
+            url: "https://github.com/SagerNet/sing-box",
+            text: Some(include_str!("../../third_party/licenses/sing-box-LICENSE.txt")),
+        },
+        lib("Tauri", "MIT / Apache-2.0", "https://tauri.app"),
+        lib("React", "MIT", "https://react.dev"),
+        lib("React Flow（@xyflow/react）", "MIT", "https://reactflow.dev"),
+        lib("zustand", "MIT", "https://github.com/pmndrs/zustand"),
+        lib("serde、serde_json", "MIT / Apache-2.0", "https://serde.rs"),
+        lib("keyring-core、windows-native-keyring-store", "MIT / Apache-2.0", "https://github.com/open-source-cooperative/keyring-rs"),
+        lib("windows-sys", "MIT / Apache-2.0", "https://github.com/microsoft/windows-rs"),
+    ]
+}
+
 /// Opens the release page in the default browser; nothing outside this repo's releases.
 pub fn open_release_page(url: &str) -> Result<(), String> {
     let ok = url.starts_with(&format!("https://github.com/{REPO}/releases/")) && !url.contains(['"', ' ', '\n']);
@@ -220,6 +251,13 @@ mod tests {
         let s = own_changelog();
         assert_eq!(s[0].version, env!("CARGO_PKG_VERSION"), "CHANGELOG's first release is the current version");
         assert!(s.iter().all(|x| !x.body.is_empty() && parse(&x.version).is_some()));
+    }
+
+    #[test]
+    fn license_texts_are_built_in() {
+        let l = licenses();
+        assert!(l[0].text.is_some_and(|t| t.starts_with("MIT License")));
+        assert!(l[1].text.is_some_and(|t| t.contains("GNU General Public License")));
     }
 
     #[test]

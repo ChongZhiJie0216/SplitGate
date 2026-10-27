@@ -239,4 +239,4 @@ v0.19.0 之前的版本没有这个按钮，或者发布页上没有校验文件
 
 - SplitGate 本身以 [MIT 许可证](LICENSE) 发布（zip 里是 `licenses\SplitGate-LICENSE.txt`）。
 - 附带的 [sing-box](https://github.com/SagerNet/sing-box) 是独立程序，GPL-3.0-or-later，许可证在 `licenses\` 文件夹。SplitGate 与 sing-box 项目没有关联。
-- **使用提醒**：通过 VPN 绕过学校网络限制，可能违反学校或 VPN 提供方的使用政策，使用前请自行确认。
+- 软件里也看得到：“关于”页右上角的天平图标，列出 SplitGate 和 sing-box 的许可证全文，以及程序里用到的开源组件。

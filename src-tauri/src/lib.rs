@@ -127,6 +127,7 @@ pub fn run() {
             commands::show_diagnostics,
             commands::check_update,
             commands::get_changelog,
+            commands::get_licenses,
             commands::get_service_state,
             commands::install_service,
             commands::remove_service,

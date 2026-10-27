@@ -280,6 +280,15 @@ export const installUpdate = () => invoke<void>("install_update");
 export const checkUpdate = () => invoke<UpdateInfo>("check_update");
 /** 这个版本自带的 CHANGELOG（打包时编进程序），最新的在前面。 */
 export const getChangelog = () => invoke<UpdateSection[]>("get_changelog");
+
+/** 关于页“许可证”：SplitGate 和 sing-box 附全文，其他开源组件只列名称和许可证。 */
+export interface License {
+  name: string;
+  license: string;
+  url: string;
+  text: string | null;
+}
+export const getLicenses = () => invoke<License[]>("get_licenses");
 export const openReleasePage = (url: string) => invoke<void>("open_release_page", { url });
 
 /** 诊断包：返回 zip 的完整路径（设置文件夹的 diagnostics 里）。 */
