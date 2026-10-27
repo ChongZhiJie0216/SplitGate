@@ -88,8 +88,11 @@ export function buildFlow(
   homeCidrs: string[],
   profileName: string,
   L: FlowLabels,
-): { nodes: FlowNode[]; edges: FlowEdge[] } {
+): { nodes: FlowNode[]; edges: FlowEdge[]; members: Map<string, Connection[]> } {
   const nodes = new Map<string, FlowNode>();
+  // 每个方块经过了哪些连接（点方块时的详情面板用）。
+  const members = new Map<string, Connection[]>();
+  const member = (id: string, c: Connection) => members.set(id, [...(members.get(id) ?? []), c]);
   const edges = new Map<string, FlowEdge>();
   const add = (id: string, column: Column, label: string, title: string, vpn: boolean, bytes: number) => {
     const n = nodes.get(id) ?? { id, column, label, title, vpn, count: 0, bytes: 0 };
@@ -138,6 +141,7 @@ export function buildFlow(
     add(exit, "exit", vpn ? L.vpnExit(profileName) : L.directExit, "", vpn, bytes);
     link(prog, rule, vpn, bytes);
     link(rule, exit, vpn, bytes);
+    for (const id of [prog, rule, exit]) member(id, c);
   }
   // 程序节点里 vpn 表示“至少有一条走 VPN”。
   for (const e of edges.values()) {
@@ -146,5 +150,5 @@ export function buildFlow(
   }
   const order = (n: FlowNode) => (n.vpn ? 0 : 1);
   const sorted = [...nodes.values()].sort((a, b) => order(a) - order(b) || b.bytes - a.bytes);
-  return { nodes: sorted, edges: [...edges.values()] };
+  return { nodes: sorted, edges: [...edges.values()], members };
 }

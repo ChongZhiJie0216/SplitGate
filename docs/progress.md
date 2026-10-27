@@ -1,11 +1,11 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-27，版本 v0.22.0。
+> 最后更新：2026-10-27，版本 v0.23.0。
 
 ## 现在在哪一步
 
-**项目功能全部完成。** Pangolin 出口（v0.21.0）和界面打磨、新图标（v0.22.0）维护者 2026-10-27 实测通过（`docs/test-plan.md` I、J），在 PR #9 里等合并，合并后发布 v0.22.0。
+**项目功能全部完成。** v0.22.0（含 v0.21.0 的 Pangolin 出口和 v0.22.0 的界面打磨、新图标）已合并进 `main`（PR #9）并发布到 GitHub Release（2026-10-27）。之后的改动按维护者的新要求来。
 
 ## 已完成
 
@@ -18,6 +18,7 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
+| 0.23.0 | — | 流量画布点方块看详情（维护者要求）：`buildFlow` 多回传每个方块经过的连接（`members`），`CanvasPage` 的 `NodeDetail` 面板显示规则集的规则 / 家里内网网段 / 说明，以及按目标合并的连接；选中方块加一圈主题色。云端用假数据看过；维护者 2026-10-27 实测 K 部分全部通过 |
 | 0.22.0 | — | 界面打磨（维护者 2026-10-27 定：自己画 SVG、不加依赖、布局不变）：`components/Icon.tsx`（28 个线条图标）、`Logo.tsx`、`Empty.tsx`；导航图标、连接页状态卡（圆环 + 小格子）、按钮图标、空白页、输入框焦点样式；关于页重排，更新记录改成右上角图标弹窗（维护者要求）。新程序图标（维护者选方案 B），原稿 `src-tauri/icons/source.svg`，`npx tauri icon` 生成各尺寸。云端用假数据看过亮 / 暗主题；维护者 2026-10-27 实测 J 部分全部通过 |
 | 0.21.0 | — | Pangolin 出口（第 0 阶段 V8 2026-10-27 通过）：`exits/pangolin.rs` = sing-box `socks` 出口 + `bind_interface`，vpn-dns TCP 经它，local DNS 用物理网卡的 DNS；连接前只读检查网卡和到代理的路由；代理密码存凭据管理器 `<id>:pangolin-proxy`；Profile 页新表单；诊断包脱敏代理 IP。云端用 sing-box 1.14.4（Linux）`check` 过生成的配置。维护者 2026-10-27 实测 I 部分全部通过 |
 | 0.20.0 | — | 后台服务改从 `%ProgramFiles%\SplitGate\` 运行自己的一份（`--app` 指回设置所在的那一份；版本不同 / 旧装法时设置页提示）；服务设失败恢复（5 秒后重启，启动清理恢复网络）；旧服务的说明文字会更新；清理认得两个位置的 sing-box；出口代码整理成 `exits/` 的 `ExitAdapter`；`progress.md` 整理。维护者 2026-10-27 实测 H 部分通过 |
@@ -66,7 +67,7 @@
 
 ## 下一步（照顺序）
 
-1. 合并 PR #9（v0.21.0 + v0.22.0），发布 v0.22.0。（v0.20.0 发布后，从 v0.19.0 真正在线更新一次：H 最后一项。）
+1. ~~合并 PR #9、发布 v0.22.0~~（2026-10-27 完成）。（v0.20.0 发布后，从 v0.19.0 真正在线更新一次：H 最后一项。）
 2. 学校网络 B 部分维护者 2026-10-27 实测全部通过。有机会再看看 Pangolin 在学校网络下能不能用。
 3. SPEC“待决定的事”只剩项目正式名称。（已答：Cisco VPN 自己管理；家里路由器转发 UDP 8443 给 AnyLink；Pangolin 和 WireGuard 都留、Profile 页自己选。维护者 2026-10-27。）
 
@@ -81,7 +82,7 @@
 
 ## 分支
 
-- `main`：已合并到 v0.19.0（PR #1–#7），v0.19.0 已发布。
+- `main`：已合并到 v0.22.0（PR #1–#9），v0.22.0 已发布（发布页附 zip 和 `.sha256`）。
 - `claude/modest-bell-xe9osa`（云端会话的分支）：每个 PR 合并后从最新的 `main` 重新开始。维护者测试时：`git fetch origin claude/modest-bell-xe9osa` → `git checkout -B test/<版本> origin/claude/modest-bell-xe9osa`，之后 `git merge --ff-only origin/claude/modest-bell-xe9osa` 拉新的修改；合并后回 `main` `git pull`。
 
 ## 接着做时要记得
