@@ -61,14 +61,13 @@
 - 之前用清理脚本在**已连接**时结束了 sing-box：SplitGate 断线，之后能重新连接，不是 bug。
 
 ### 还没有验证
-- 学校有线网络（`docs/test-plan.md` B）：Xbox App（登录、商店、Game Pass）、PrismLauncher、Steam 登录；非规则流量出口仍是学校网络（`phase1\exit-ip.ps1`）；拦截检测；Cisco 下访问家里内网。到学校先重新做基准 `phase0\snapshot.ps1 -Baseline`。
-- 从 v0.19.0 真正在线更新到 v0.20.0（H 最后一项，发布后测）。
+- Pangolin 出口在学校网络下能不能用（还没确认测过）。
 
 ## 下一步（照顺序）
 
 1. 合并 v0.21.0 的 PR、发布 v0.21.0。（v0.20.0 发布后，从 v0.19.0 真正在线更新一次：H 最后一项。）
-2. 有机会时补测学校网络（B），包括 Pangolin 在学校网络下能不能用。
-3. SPEC“待决定的事”里还没回答的：项目正式名称、Cisco VPN 是否自己管理、家里路由器是否转发 UDP 8443。（Pangolin 和 WireGuard 都留、Profile 页自己选：维护者 2026-10-27 定。）
+2. 学校网络 B 部分维护者 2026-10-27 实测全部通过。有机会再看看 Pangolin 在学校网络下能不能用。
+3. SPEC“待决定的事”只剩项目正式名称。（已答：Cisco VPN 自己管理；家里路由器转发 UDP 8443 给 AnyLink；Pangolin 和 WireGuard 都留、Profile 页自己选。维护者 2026-10-27。）
 
 回滚方法一律是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。验收辅助脚本在 `phase1\`（用法见 `docs/test-plan.md`）；结果日志在 `phase1\logs\`（不进 git）。
 

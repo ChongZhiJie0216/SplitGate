@@ -73,14 +73,14 @@
 - [x] 托盘右键菜单：连接、断开、打开主窗口、退出各点一次
 - [x] 设置页打开开机自启 → 注销再登录 → SplitGate 出现在托盘（不弹窗口）→ 回到设置页关掉开机自启
 
-## B. 要在学校有线网络测（Cisco 出口）
+## B. 要在学校有线网络测（Cisco 出口）— 2026-10-27 维护者实测全部通过
 
 到学校先重新记基准：`powershell -ExecutionPolicy Bypass -File phase0\snapshot.ps1 -Baseline`（SplitGate 断开时）。
 
-- [ ] 非规则流量出口：断开时跑 `powershell -ExecutionPolicy Bypass -File phase1\exit-ip.ps1`，连接 Cisco 后再跑一次，结果 `[PASS]`
-- [ ] Xbox App 能登录、浏览商店、打开 Game Pass；PrismLauncher、Steam 能登录
-- [ ] 拦截检测：暂时关掉 Steam 规则集，重新连接，打开 Steam → “拦截提示”出现 `store.steampowered.com` 等，原因“证书被 Fortinet 换掉”；导航显示个数；试“加规则”“忽略”“清空”。**测完把 Steam 规则集开回来**
-- [ ] 家里内网：连 Cisco 后打开 PVE 管理网页
+- [x] 非规则流量出口：断开时跑 `powershell -ExecutionPolicy Bypass -File phase1\exit-ip.ps1`，连接 Cisco 后再跑一次，结果 `[PASS]`
+- [x] Xbox App 能登录、浏览商店、打开 Game Pass；PrismLauncher、Steam 能登录
+- [x] 拦截检测：暂时关掉 Steam 规则集，重新连接，打开 Steam → “拦截提示”出现 `store.steampowered.com` 等，原因“证书被 Fortinet 换掉”；导航显示个数；试“加规则”“忽略”“清空”。**测完把 Steam 规则集开回来**
+- [x] 家里内网：连 Cisco 后打开 PVE 管理网页
 
 ## 测完发给 Claude
 
