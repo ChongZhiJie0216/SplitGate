@@ -162,6 +162,8 @@ export const T = {
     changes: "更新内容",
     changelog: "更新记录",
     changelogHint: "这一版自带的更新记录，不用联网。",
+    tagline: "按网址 / 程序分流的 VPN 客户端：只有指定的流量走 VPN，其他照常走本地网络。",
+    close: "关闭",
   },
   theme: { auto: "跟随系统", light: "亮", dark: "暗", label: "主题" },
   settings: {

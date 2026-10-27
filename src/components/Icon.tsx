@@ -30,6 +30,7 @@ const PATHS = {
   arrows: "M7 4v16 M3 8l4-4 4 4 M17 20V4 M13 16l4 4 4-4",
   key: "M8 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z M11.5 12H21 M18 12v3 M15 12v2",
   alert: "M12 4l9 16H3z M12 10v4 M12 17v.01",
+  history: "M3.5 12a8.5 8.5 0 1 0 2.5-6 M3 4v4.5h4.5 M12 8v4l3 2",
 } as const;
 
 export type IconName = keyof typeof PATHS;

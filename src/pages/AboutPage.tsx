@@ -4,7 +4,8 @@ import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
 import Markdown from "../components/Markdown";
 import { useStatus } from "../store/status";
-import Icon from "../components/Icon";
+import Icon, { IconName } from "../components/Icon";
+import Logo from "../components/Logo";
 
 const L = T.about;
 
@@ -17,37 +18,52 @@ export default function AboutPage() {
       .then(setChangelog)
       .catch(() => setChangelog([]));
   }, []);
+  const [showLog, setShowLog] = useState(false);
+  useEffect(() => {
+    if (!showLog) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setShowLog(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showLog]);
   return (
     <div className="stack">
+      <div className="card about-hero">
+        <Logo size={64} />
+        <div className="about-title">
+          <h2>
+            {T.appName} <span className="pill mono">v{info?.version ?? "…"}</span>
+          </h2>
+          <p className="muted">{L.tagline}</p>
+        </div>
+        {changelog.length > 0 && (
+          <button className="icon-btn" title={L.changelog} aria-label={L.changelog} onClick={() => setShowLog(true)}>
+            <Icon name="history" size={20} />
+          </button>
+        )}
+      </div>
+
       <div className="card">
-        <h2>{T.nav.about}</h2>
-        <table className="kv">
-          <tbody>
-            <tr>
-              <th>{L.version}</th>
-              <td className="mono">{info?.version ?? "…"}</td>
-            </tr>
-            <tr>
-              <th>sing-box</th>
-              <td className="mono">{info ? (info.singboxVersion ?? L.notFound) : "…"}</td>
-            </tr>
-            <tr>
-              <th>{L.admin}</th>
-              <td>{info ? (info.isAdmin ? L.yes : L.no) : "…"}</td>
-            </tr>
-            <tr>
-              <th>{L.dataDir}</th>
-              <td className="mono">{info?.dataDir ?? "…"}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p className="muted">{L.licenses}</p>
-        <p className="muted">{L.singboxNote}</p>
+        <div className="tiles">
+          <InfoTile icon="shield" label="sing-box" value={info ? (info.singboxVersion ?? L.notFound) : "…"} mono />
+          <InfoTile icon="key" label={L.admin} value={info ? (info.isAdmin ? L.yes : L.no) : "…"} />
+          <div className="tile wide">
+            <span className="tile-label">
+              <Icon name="folder" size={15} />
+              {L.dataDir}
+            </span>
+            <span className="mono small break">{info?.dataDir ?? "…"}</span>
+          </div>
+        </div>
+        <p className="muted small">{L.licenses}</p>
+        <p className="muted small">{L.singboxNote}</p>
         <p className="banner warn">{L.notice}</p>
       </div>
 
       <div className="card">
-        <h2>{L.update}</h2>
+        <h2 className="title-icon">
+          <Icon name="download" size={20} />
+          {L.update}
+        </h2>
         <div className="row">
           <button className="btn" onClick={() => checkUpdate()} disabled={checkingUpdate}>
             <Icon name="refresh" />
@@ -84,18 +100,29 @@ export default function AboutPage() {
         )}
       </div>
 
-      {changelog.length > 0 && (
-        <div className="card">
-          <h2>{L.changelog}</h2>
-          <p className="muted small">{L.changelogHint}</p>
-          {changelog.map((n) => (
-            <details key={n.version} className="update-note" open={n.version === info?.version}>
-              <summary className="update-ver">
-                v{n.version} <span className="muted small">{n.title}</span>
-              </summary>
-              <Markdown text={n.body} />
-            </details>
-          ))}
+      {showLog && (
+        <div className="modal-back" onClick={() => setShowLog(false)}>
+          <div className="card modal" role="dialog" aria-label={L.changelog} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>
+                <Icon name="history" size={20} /> {L.changelog}
+              </h2>
+              <button className="icon-btn" title={L.close} aria-label={L.close} onClick={() => setShowLog(false)}>
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+            <p className="muted small">{L.changelogHint}</p>
+            <div className="modal-body">
+              {changelog.map((n) => (
+                <details key={n.version} className="update-note" open={n.version === info?.version}>
+                  <summary className="update-ver">
+                    v{n.version} <span className="muted small">{n.title}</span>
+                  </summary>
+                  <Markdown text={n.body} />
+                </details>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -168,6 +195,18 @@ function UpdateSteps() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function InfoTile({ icon, label, value, mono }: { icon: IconName; label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="tile">
+      <span className="tile-label">
+        <Icon name={icon} size={15} />
+        {label}
+      </span>
+      <span className={mono ? "tile-value mono" : "tile-value"}>{value}</span>
     </div>
   );
 }

@@ -18,7 +18,7 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
-| 0.22.0 | — | 界面打磨（维护者 2026-10-27 定：自己画 SVG、不加依赖、布局不变）：`components/Icon.tsx`（28 个线条图标）、`Logo.tsx`、`Empty.tsx`；导航图标、连接页状态卡（圆环 + 小格子）、按钮图标、空白页、输入框焦点样式。新程序图标（维护者选方案 B），原稿 `src-tauri/icons/source.svg`，`npx tauri icon` 生成各尺寸。云端用假数据看过亮 / 暗主题。**还没在 Windows 上看过** |
+| 0.22.0 | — | 界面打磨（维护者 2026-10-27 定：自己画 SVG、不加依赖、布局不变）：`components/Icon.tsx`（28 个线条图标）、`Logo.tsx`、`Empty.tsx`；导航图标、连接页状态卡（圆环 + 小格子）、按钮图标、空白页、输入框焦点样式；关于页重排，更新记录改成右上角图标弹窗（维护者要求）。新程序图标（维护者选方案 B），原稿 `src-tauri/icons/source.svg`，`npx tauri icon` 生成各尺寸。云端用假数据看过亮 / 暗主题。**还没在 Windows 上看过** |
 | 0.21.0 | — | Pangolin 出口（第 0 阶段 V8 2026-10-27 通过）：`exits/pangolin.rs` = sing-box `socks` 出口 + `bind_interface`，vpn-dns TCP 经它，local DNS 用物理网卡的 DNS；连接前只读检查网卡和到代理的路由；代理密码存凭据管理器 `<id>:pangolin-proxy`；Profile 页新表单；诊断包脱敏代理 IP。云端用 sing-box 1.14.4（Linux）`check` 过生成的配置。维护者 2026-10-27 实测 I 部分全部通过 |
 | 0.20.0 | — | 后台服务改从 `%ProgramFiles%\SplitGate\` 运行自己的一份（`--app` 指回设置所在的那一份；版本不同 / 旧装法时设置页提示）；服务设失败恢复（5 秒后重启，启动清理恢复网络）；旧服务的说明文字会更新；清理认得两个位置的 sing-box；出口代码整理成 `exits/` 的 `ExitAdapter`；`progress.md` 整理。维护者 2026-10-27 实测 H 部分通过 |
 | 0.19.0 | — | 在线升级（便携版，维护者 2026-10-27 定）：`updater.rs` 下载 Release zip + `.sha256` 核对 → 改名 `*.old` 换文件（失败换回）→ 有服务时停 / 启（非管理员经 `elevate.rs` `apply-update`）→ `--wait-pid` 重启，新版本删旧文件；正在连接时按钮写“断开连接并更新”；`build.bat` 生成 `.sha256`、`publish-release.ps1` 上传；测试用 `SPLITGATE_PRETEND_VERSION`。维护者 2026-10-27 实测 G 部分全部通过 |

@@ -1040,3 +1040,89 @@ summary.update-ver {
   margin: 0;
   max-width: 420px;
 }
+
+.about-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.about-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.about-title h2 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.about-title p {
+  margin: 0;
+}
+
+.pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.icon-btn {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--accent-ink);
+}
+
+.title-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon .icon {
+  color: var(--accent-ink);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-head h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-body {
+  overflow: auto;
+  min-height: 0;
+}
+
+.break {
+  overflow-wrap: anywhere;
+}
