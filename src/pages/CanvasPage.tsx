@@ -10,6 +10,9 @@ import { buildFlow, Column, FlowNode } from "../lib/flow";
 import * as ipc from "../lib/ipc";
 import { TrafficBadges } from "./ConnectionsPage";
 import Empty from "../components/Empty";
+import Icon from "../components/Icon";
+import { useApp } from "../store/app";
+import { fileName } from "../lib/format";
 
 const L = T.canvasPage;
 const COLUMN_X: Record<Column, number> = { program: 0, rule: 340, exit: 660 };
@@ -19,7 +22,7 @@ const REFRESH_MS = 2000;
 /** 线的粗细跟着流量：1 KB 以下 1px，之后每多 10 倍加 1px，最多 7px。 */
 const strokeWidth = (b: number) => Math.min(7, Math.max(1, Math.log10(b + 1) - 2));
 
-function toFlow(list: FlowNode[]): Node[] {
+function toFlow(list: FlowNode[], selected: string | null): Node[] {
   const perColumn: Record<Column, FlowNode[]> = { program: [], rule: [], exit: [] };
   for (const n of list) perColumn[n.column].push(n);
   const tallest = Math.max(...Object.values(perColumn).map((c) => c.length), 1);
@@ -40,7 +43,7 @@ function toFlow(list: FlowNode[]): Node[] {
             </div>
           ),
         },
-        className: `flow-node ${column} ${n.vpn ? "vpn" : "direct"}`,
+        className: `flow-node ${column} ${n.vpn ? "vpn" : "direct"}${n.id === selected ? " picked" : ""}`,
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
         type: column === "program" ? "input" : column === "exit" ? "output" : "default",
@@ -61,6 +64,7 @@ export default function CanvasPage() {
   const [paused, setPaused] = useState(false);
   const [onlyVpn, setOnlyVpn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -83,7 +87,7 @@ export default function CanvasPage() {
   }, [connected, paused]);
 
   const profile = view?.profiles.find((p) => p.profile.id === view.active)?.profile;
-  const { nodes, edges } = useMemo(() => {
+  const { nodes, edges, flowNodes, members, sets } = useMemo(() => {
     const used = profile?.ruleset_ids ?? [];
     const sets = (rulesets ?? []).map((r) => r.ruleset).filter((r) => r.enabled && used.includes(r.id));
     const list = onlyVpn ? connections.filter((c) => c.outbound === "vpn") : connections;
@@ -97,8 +101,9 @@ export default function CanvasPage() {
       // 方向看三列就知道，不画箭头；数字写在两头的方块里，线上不再标。
       style: { strokeWidth: strokeWidth(e.bytes) },
     }));
-    return { nodes: toFlow(g.nodes), edges: flowEdges };
-  }, [connections, rulesets, profile, onlyVpn, status]);
+    return { nodes: toFlow(g.nodes, selected), edges: flowEdges, flowNodes: g.nodes, members: g.members, sets };
+  }, [connections, rulesets, profile, onlyVpn, status, selected]);
+  const picked = flowNodes.find((n) => n.id === selected) ?? null;
 
   if (!connected) {
     return (
@@ -139,6 +144,8 @@ export default function CanvasPage() {
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable={false}
+            onNodeClick={(_, n) => setSelected((cur) => (cur === n.id ? null : n.id))}
+            onPaneClick={() => setSelected(null)}
             minZoom={0.3}
             maxZoom={2}
           >
@@ -146,7 +153,97 @@ export default function CanvasPage() {
             <Controls showInteractive={false} />
           </ReactFlow>
         )}
+        {picked && (
+          <NodeDetail
+            node={picked}
+            conns={members.get(picked.id) ?? []}
+            set={picked.id.startsWith("r:set:") ? (sets.find((r) => `r:set:${r.id}` === picked.id) ?? null) : null}
+            homeCidrs={profile?.home_cidrs ?? []}
+            onClose={() => setSelected(null)}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+/** 点方块后的详情：规则集的规则、家里内网网段，以及经过这个方块的连接。 */
+function NodeDetail(props: { node: FlowNode; conns: ipc.Connection[]; set: ipc.RuleSet | null; homeCidrs: string[]; onClose: () => void }) {
+  const { node, conns, set, homeCidrs } = props;
+  const D = L.detail;
+  const setPage = useApp((s) => s.setPage);
+  const groups: [string, string[]][] = set
+    ? [
+        [D.domainSuffix, set.domain_suffix],
+        [D.domainKeyword, set.domain_keyword],
+        [D.processName, set.process_name],
+        [D.processPath, set.process_path],
+        [D.ipCidr, set.ip_cidr],
+      ]
+    : node.id === "r:home"
+      ? [[D.ipCidr, homeCidrs]]
+      : [];
+  const note = D.notes[node.id as keyof typeof D.notes];
+  // 同一个目标的多条连接合成一行，流量大的在前。
+  const rows = [...conns.reduce((m, c) => {
+    const target = c.host || c.ip;
+    const key = `${c.process_path}|${target}|${c.outbound}`;
+    const r = m.get(key) ?? { prog: c.process_path ? fileName(c.process_path) : L.labels.system, target, vpn: c.outbound === "vpn", rule: c.rule, n: 0, bytes: 0 };
+    r.n++;
+    r.bytes += c.upload + c.download;
+    return m.set(key, r);
+  }, new Map<string, { prog: string; target: string; vpn: boolean; rule: string; n: number; bytes: number }>()).values()].sort((a, b) => b.bytes - a.bytes);
+
+  return (
+    <aside className="flow-detail">
+      <div className="modal-head">
+        <h3>{node.label}</h3>
+        <button className="icon-btn small" title={T.about.close} aria-label={T.about.close} onClick={props.onClose}>
+          <Icon name="x" size={16} />
+        </button>
+      </div>
+      {node.title && node.title !== node.label && <p className="muted small mono break">{node.title}</p>}
+      <p className="muted small">{L.summary(node.count, bytes(node.bytes))}</p>
+      {note && <p className="small">{note}</p>}
+      {set && !set.enabled && <p className="banner warn small">{D.disabled}</p>}
+      {groups.map(
+        ([label, list]) =>
+          list.length > 0 && (
+            <div key={label} className="detail-group">
+              <div className="detail-label">
+                {label} <span className="muted">({list.length})</span>
+              </div>
+              <div className="chips">
+                {list.map((x) => (
+                  <span key={x} className="chip mono">
+                    {x}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ),
+      )}
+      {(set || node.id === "r:home") && (
+        <button className="btn small" onClick={() => setPage(set ? "rules" : "profiles")}>
+          <Icon name="rules" />
+          {set ? D.editRules : D.editHome}
+        </button>
+      )}
+      <div className="detail-label">{D.connections}</div>
+      <ul className="detail-conns">
+        {rows.slice(0, 60).map((r) => (
+          <li key={`${r.prog}|${r.target}|${r.vpn}`}>
+            <span className={r.vpn ? "tag good" : "tag"}>{r.vpn ? T.traffic.vpn : T.traffic.direct}</span>
+            <span className="mono break">{r.target}</span>
+            <span className="muted small">
+              {node.column === "program" ? "" : `${r.prog} · `}
+              {r.n > 1 ? `${D.count(r.n)} · ` : ""}
+              {bytes(r.bytes)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {rows.length > 60 && <p className="muted small">{D.more(rows.length - 60)}</p>}
+    </aside>
   );
 }
