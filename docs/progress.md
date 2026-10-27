@@ -68,7 +68,7 @@
 1. 合并 PR #8、发布 v0.20.0，再从 v0.19.0 真正在线更新一次（H 最后一项）。
 2. **最后：Pangolin**（SPEC“最后：Pangolin”）。做法已定：不用 Exit Node，经 Pangolin 连到家里 VPN-Server 虚拟机上的 SOCKS5 代理。要先由维护者在虚拟机上装好代理，跑第 0 阶段 V8（`phase0/v8-pangolin-socks/`），再写 `exits/pangolin.rs`（实现 `ExitAdapter`）。
 3. 有机会时补测学校网络（B）。
-4. SPEC“待决定的事”里还没回答的：项目正式名称、Cisco VPN 是否自己管理、家里路由器是否转发 UDP 8443、Pangolin 和 WireGuard 都有时回家优先用哪个。
+4. SPEC“待决定的事”里还没回答的：项目正式名称、Cisco VPN 是否自己管理、家里路由器是否转发 UDP 8443。（Pangolin 和 WireGuard 都留、Profile 页自己选：维护者 2026-10-27 定。）
 
 回滚方法一律是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。验收辅助脚本在 `phase1\`（用法见 `docs/test-plan.md`）；结果日志在 `phase1\logs\`（不进 git）。
 
