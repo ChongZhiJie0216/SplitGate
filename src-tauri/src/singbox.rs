@@ -11,7 +11,8 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use crate::config::{ExitType, Profile};
+use crate::config::Profile;
+use crate::exits::{self, ExitParts};
 use crate::rules::RuleSet;
 use crate::settings::Settings;
 
@@ -19,8 +20,6 @@ pub const TUN_NAME: &str = "SplitGate-TUN";
 pub const VPN_TAG: &str = "vpn";
 /// Fetched through the VPN to prove the tunnel carries traffic (Clash API delay test).
 pub const PROBE_URL: &str = "http://cp.cloudflare.com/generate_204";
-/// Used when a WireGuard .conf has no DNS line (phase 0 V2 did the same).
-const WG_FALLBACK_DNS: &str = "1.1.1.1";
 
 #[derive(Clone, serde::Deserialize)]
 pub struct Secrets {
@@ -97,76 +96,6 @@ pub fn host_of(server: &str) -> String {
     s.rsplit_once(':').map(|(h, _)| h).unwrap_or(s).to_string()
 }
 
-fn split_host_port(endpoint: &str) -> Result<(String, u16), String> {
-    let port = endpoint.rsplit_once(':').and_then(|(_, p)| p.parse::<u16>().ok());
-    match port {
-        Some(p) => Ok((host_of(endpoint), p)),
-        None => Err(format!("WireGuard Endpoint“{endpoint}”要写成 主机:端口")),
-    }
-}
-
-/// The VPN endpoint plus the vpn-dns server for this exit.
-fn exit_parts(profile: &Profile, secrets: &Secrets) -> Result<(Value, Value, String), String> {
-    match profile.kind {
-        ExitType::Cisco => {
-            let c = profile.cisco.as_ref().ok_or("缺少 Cisco 设置")?;
-            let mut ep = json!({
-                "type": "openconnect",
-                "tag": VPN_TAG,
-                "server": cisco_server_url(&c.server),
-                "username": c.user,
-                "password": secrets.main,
-            });
-            if let Some(g) = &c.auth_group {
-                ep["auth_group"] = json!(g);
-            }
-            if c.no_udp {
-                ep["no_udp"] = json!(true);
-            }
-            if let Some(i) = &c.bind_interface {
-                ep["bind_interface"] = json!(i);
-            }
-            // DNS servers pushed by the VPN (phase 0 V3a).
-            let dns = json!({ "type": "openconnect", "tag": "vpn-dns", "endpoint": VPN_TAG, "accept_default_resolvers": true });
-            Ok((ep, dns, host_of(&c.server)))
-        }
-        ExitType::Wireguard => {
-            let w = profile.wireguard.as_ref().ok_or("缺少 WireGuard 设置")?;
-            let (host, port) = split_host_port(&w.peer.endpoint)?;
-            let mut peer = json!({
-                "address": host,
-                "port": port,
-                "public_key": w.peer.public_key,
-                // Rules decide what enters the tunnel, so it must accept every destination (SPEC 组件 7).
-                "allowed_ips": ["0.0.0.0/0", "::/0"],
-            });
-            if let Some(psk) = &secrets.preshared_key {
-                peer["pre_shared_key"] = json!(psk);
-            }
-            if let Some(k) = w.peer.persistent_keepalive {
-                peer["persistent_keepalive_interval"] = json!(k);
-            }
-            let ep = json!({
-                "type": "wireguard",
-                "tag": VPN_TAG,
-                "address": w.address,
-                "private_key": secrets.main,
-                "mtu": w.mtu,
-                "peers": [peer],
-            });
-            let server = w
-                .dns
-                .iter()
-                .find(|d| d.parse::<IpAddr>().is_ok_and(|ip| ip.is_ipv4()))
-                .cloned()
-                .unwrap_or_else(|| WG_FALLBACK_DNS.to_string());
-            let dns = json!({ "type": "udp", "tag": "vpn-dns", "server": server, "detour": VPN_TAG });
-            Ok((ep, dns, host))
-        }
-        ExitType::Pangolin => Err("Pangolin 出口第 2 阶段才能连接".into()),
-    }
-}
-
 pub fn build_config(
     profile: &Profile,
     rules: &MergedRules,
@@ -174,7 +103,7 @@ pub fn build_config(
     api: &ClashApi,
     settings: &Settings,
 ) -> Result<Value, String> {
-    let (endpoint, vpn_dns, server_host) = exit_parts(profile, secrets)?;
+    let ExitParts { endpoint, dns: vpn_dns, server_host } = exits::adapter(profile)?.parts(secrets)?;
 
     let mut route_rules = vec![
         json!({ "action": "sniff" }),
@@ -375,7 +304,7 @@ fn parse_response(buf: &[u8]) -> Result<(u16, String), String> {
 mod tests {
     use super::*;
     use crate::config::tests::cisco;
-    use crate::config::{WireguardPeer, WireguardProfile};
+    use crate::config::{ExitType, WireguardPeer, WireguardProfile};
     use crate::rules::presets;
 
     fn api() -> ClashApi {
@@ -403,8 +332,6 @@ mod tests {
         assert_eq!(cisco_server_url("https://vpn.example.com/"), "https://vpn.example.com");
         assert_eq!(host_of("https://vpn.example.com:8443"), "vpn.example.com");
         assert_eq!(host_of("[fd00::1]:51820"), "fd00::1");
-        assert_eq!(split_host_port("home.example.com:51820").unwrap(), ("home.example.com".into(), 51820));
-        assert!(split_host_port("home.example.com").is_err());
     }
 
     #[test]
