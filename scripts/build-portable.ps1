@@ -23,7 +23,7 @@ foreach ($p in @(Get-Process -Name 'SplitGate', 'sing-box' -ErrorAction Silently
 $svc = Get-CimInstance Win32_Service -Filter "Name='SplitGateService'" -ErrorAction SilentlyContinue
 if ($svc -and $svc.State -eq 'Running' -and $svc.PathName -match '^"?([^"]+\\)SplitGate\.exe') {
     $svcDir = $Matches[1].TrimEnd('\\')
-    if ($targets -contains $svcDir) { Fail "the SplitGate background service runs from $svcDir. Stop it first (admin): sc stop SplitGateService - or remove it on the Settings page." }
+    if ($targets -contains $svcDir) { Fail "the SplitGate background service runs from $svcDir. Stop it first (admin): sc.exe stop SplitGateService - or remove it on the Settings page." }
 }
 
 # npm writes node_modules\.package-lock.json on every install: older than package-lock.json (or missing)

@@ -113,6 +113,8 @@
 
 ## E. v0.17.x 后台服务负责连接
 
+PowerShell 里要写 `sc.exe`（只写 `sc` 是 PowerShell 的 Set-Content，会建一个文件，什么都不做）。
+
 先在设置页确认后台服务“已安装，正在运行（v0.17.2）”（装过旧版的话按“改成这一个”或重新安装）。
 换了网络（热点 ↔ 有线）先在 SplitGate 断开时重新记基准：`phase0\snapshot.ps1 -Baseline`。
 
@@ -126,9 +128,9 @@ Get-Content data\logs\service-*.log -Encoding UTF8 -Tail 30
 - [ ] 按“连接”：日志出现“经后台服务连接（服务 v0.17.0）”，几秒后“已连接”；连接页、连接列表、流量画布、拦截提示都和以前一样
 - [ ] 任务管理器“详细信息”里，`sing-box.exe` 的用户名是 `SYSTEM`
 - [ ] 按“断开”：正常断开，`phase1\residue-check.ps1` 显示 `[clean]`
-- [ ] 先跑 `phase1\kill-recovery.ps1`，再到任务管理器只结束**用户名是你自己**的那个 `SplitGate.exe`（`SYSTEM` 那个是服务，不要结束）：`[PASS]`（服务自动断开、恢复网络）；服务日志有“SplitGate 关掉了或被结束了，断开连接”“已断开”
-- [ ] 再连接一次，任务管理器结束 `SYSTEM` 那个 `SplitGate.exe`（模拟服务当掉）：5 秒左右后 SplitGate 日志出现“清理：…”，网络恢复；之后执行 `sc start SplitGateService` 把服务开回来
-- [ ] 已连接时结束 `sing-box.exe`：显示“等待重新连接”，几秒后自动连回去（重连由服务做）
-- [ ] 已连接时用管理员 `sc stop SplitGateService` 停掉服务：SplitGate 显示“后台服务断开了”，网络恢复；`sc start SplitGateService` 后再按“连接”可以连
+- [x] 先跑 `phase1\kill-recovery.ps1`，再到任务管理器只结束**用户名是你自己**的那个 `SplitGate.exe`（`SYSTEM` 那个是服务，不要结束）：`[PASS]`（服务自动断开、恢复网络）；服务日志有“SplitGate 关掉了或被结束了，断开连接”“已断开”
+- [ ] 再连接一次，任务管理器结束 `SYSTEM` 那个 `SplitGate.exe`（模拟服务当掉）：5 秒左右后 SplitGate 日志出现“清理：…”，网络恢复；之后执行 `sc.exe start SplitGateService` 把服务开回来
+- [x] 已连接时结束 `sing-box.exe`：显示“等待重新连接”，几秒后自动连回去（重连由服务做）
+- [ ] 已连接时用管理员 `sc.exe stop SplitGateService` 停掉服务：SplitGate 显示“后台服务断开了”，网络恢复；`sc.exe start SplitGateService` 后再按“连接”可以连
 - [ ] 在设置页移除后台服务后，按“连接”：照旧由 SplitGate 自己连接（日志有说明），一切正常
-- [ ] `phase1\secret-scan.ps1`：日志、诊断包里仍然搜不到密码
+- [x] `phase1\secret-scan.ps1`：日志、诊断包里仍然搜不到密码
