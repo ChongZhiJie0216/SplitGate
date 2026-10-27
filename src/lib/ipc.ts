@@ -204,6 +204,24 @@ export interface ConnectionsSnapshot {
 }
 
 export const getConnections = () => invoke<ConnectionsSnapshot>("get_connections");
+
+/** 流量统计（traffic.rs）：只算走 VPN 的，按程序加起来。 */
+export interface AppUsage {
+  /** 空字符串 = Windows 没说是哪个程序（系统）。 */
+  process_path: string;
+  upload: number;
+  download: number;
+}
+export interface Usage {
+  /** 开始统计的时间（毫秒）；0 = 还没统计到。 */
+  since_ms: number;
+  upload: number;
+  download: number;
+  /** 合计最大的在前面。 */
+  apps: AppUsage[];
+}
+export const getVpnUsage = () => invoke<Usage>("get_vpn_usage");
+export const resetVpnUsage = () => invoke<Usage>("reset_vpn_usage");
 export const closeConnection = (id: string) => invoke<void>("close_connection", { id });
 export const onTraffic = (f: (t: Traffic) => void): Promise<UnlistenFn> => listen<Traffic>("traffic", (e) => f(e.payload));
 

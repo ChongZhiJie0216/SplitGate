@@ -1,7 +1,8 @@
 //! Connection list and traffic rates (SPEC "连接列表" / `traffic` event; phase 2 item, done early
 //! by the maintainer's decision 2026-10-26). While connected, a thread reads sing-box's Clash API
 //! once a second, keeps the latest snapshot for the Connections page, emits `traffic` and hands
-//! the connections to block detection.
+//! the connections to block detection. It also adds up how much each program sent and received
+//! through the VPN (the "流量统计" page, v0.24.0), from when SplitGate started or was last reset.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -61,6 +62,63 @@ struct Live {
 
 static LIVE: Mutex<Option<Live>> = Mutex::new(None);
 
+/// VPN bytes of one program, added up.
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct AppUsage {
+    /// Empty for system traffic Windows does not attribute to a program.
+    pub process_path: String,
+    pub upload: u64,
+    pub download: u64,
+}
+
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct Usage {
+    /// When counting started (ms since 1970); 0 = nothing counted yet.
+    pub since_ms: u64,
+    pub upload: u64,
+    pub download: u64,
+    /// Biggest total first.
+    pub apps: Vec<AppUsage>,
+}
+
+/// Kept across connections (and after disconnecting) until reset or SplitGate quits. Bytes a
+/// connection moves between the last poll and its closing are not seen (under a second's worth).
+static USAGE: Mutex<Option<(u64, HashMap<String, AppUsage>)>> = Mutex::new(None);
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+fn add_usage(deltas: &HashMap<String, AppUsage>) {
+    if deltas.is_empty() {
+        return;
+    }
+    if let Ok(mut g) = USAGE.lock() {
+        let (_, apps) = g.get_or_insert_with(|| (now_ms(), HashMap::new()));
+        for (k, d) in deltas {
+            let a = apps.entry(k.clone()).or_insert_with(|| AppUsage { process_path: d.process_path.clone(), ..Default::default() });
+            a.upload += d.upload;
+            a.download += d.download;
+        }
+    }
+}
+
+pub fn usage() -> Usage {
+    let Ok(g) = USAGE.lock() else { return Usage::default() };
+    let Some((since, apps)) = g.as_ref() else { return Usage::default() };
+    let mut list: Vec<AppUsage> = apps.values().cloned().collect();
+    list.sort_by_key(|a| std::cmp::Reverse(a.upload + a.download));
+    Usage { since_ms: *since, upload: list.iter().map(|a| a.upload).sum(), download: list.iter().map(|a| a.download).sum(), apps: list }
+}
+
+/// "清零": start counting again from now.
+pub fn reset_usage() -> Usage {
+    if let Ok(mut g) = USAGE.lock() {
+        *g = Some((now_ms(), HashMap::new()));
+    }
+    usage()
+}
+
 /// Starts polling; it stops by itself once `still_current()` turns false (disconnect, error).
 pub fn start(app: AppHandle, api: ClashApi, still_current: impl Fn() -> bool + Send + 'static) {
     if let Ok(mut l) = LIVE.lock() {
@@ -75,6 +133,7 @@ pub fn start(app: AppHandle, api: ClashApi, still_current: impl Fn() -> bool + S
                 if let Ok(v) = serde_json::from_str::<Value>(body.trim()) {
                     let mut snap = parse(&v);
                     snap.traffic = rates.update(&snap, Instant::now());
+                    add_usage(&rates.vpn_by_app);
                     let _ = app.emit("traffic", snap.traffic);
                     block_detect::observe(&app, &snap.connections);
                     if let Ok(mut l) = LIVE.lock() {
@@ -160,17 +219,29 @@ fn parse(v: &Value) -> Snapshot {
 struct Rates {
     last: Option<(Instant, u64, u64)>,
     seen: HashMap<String, (u64, u64)>,
+    /// VPN bytes per program since the previous update (key: lower-case path).
+    vpn_by_app: HashMap<String, AppUsage>,
 }
 
 impl Rates {
     fn update(&mut self, snap: &Snapshot, now: Instant) -> Traffic {
         let (mut vpn_up, mut vpn_down) = (0u64, 0u64);
         let mut seen = HashMap::with_capacity(snap.connections.len());
+        self.vpn_by_app.clear();
         for c in &snap.connections {
             let (pu, pd) = self.seen.get(&c.id).copied().unwrap_or((0, 0));
             if c.outbound == VPN_TAG {
-                vpn_up += c.upload.saturating_sub(pu);
-                vpn_down += c.download.saturating_sub(pd);
+                let (du, dd) = (c.upload.saturating_sub(pu), c.download.saturating_sub(pd));
+                vpn_up += du;
+                vpn_down += dd;
+                if du + dd > 0 {
+                    let a = self
+                        .vpn_by_app
+                        .entry(c.process_path.to_lowercase())
+                        .or_insert_with(|| AppUsage { process_path: c.process_path.clone(), ..Default::default() });
+                    a.upload += du;
+                    a.download += dd;
+                }
             }
             seen.insert(c.id.clone(), (c.upload, c.download));
         }
@@ -247,6 +318,22 @@ mod tests {
         };
         let t = r.update(&s2, t0 + Duration::from_secs(2));
         assert_eq!(t, Traffic { vpn_up: 100, vpn_down: 2000, direct_up: 25, direct_down: 250 });
+        let a = &r.vpn_by_app[""];
+        assert_eq!((a.upload, a.download), (200, 4000), "only the VPN connection, only what is new");
+    }
+
+    #[test]
+    fn usage_adds_up_per_program() {
+        reset_usage();
+        let d = |p: &str, up, down| (p.to_lowercase(), AppUsage { process_path: p.into(), upload: up, download: down });
+        add_usage(&HashMap::from([d(r"C:\Steam\steam.exe", 10, 100), d(r"C:\Xbox\XboxPcApp.exe", 1, 5)]));
+        add_usage(&HashMap::from([d(r"C:\STEAM\steam.exe", 5, 50)]));
+        let u = usage();
+        assert_eq!((u.upload, u.download), (16, 155));
+        assert_eq!(u.apps[0].process_path, r"C:\Steam\steam.exe", "same program, any case; biggest first");
+        assert_eq!((u.apps[0].upload, u.apps[0].download), (15, 150));
+        assert!(u.since_ms > 0);
+        assert!(reset_usage().apps.is_empty());
     }
 
     #[test]

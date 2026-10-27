@@ -1,7 +1,7 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-27，版本 v0.23.0。
+> 最后更新：2026-10-27，版本 v0.24.0。
 
 ## 现在在哪一步
 
@@ -18,6 +18,7 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
+| 0.24.0 | — | “流量统计”页（维护者要求）：`traffic.rs` 的 `Rates` 按程序记下每秒新增的 VPN 字节（`vpn_by_app`），加进全局 `USAGE`（打开 SplitGate 或“清零”起累加，跨连接保留）；`get_vpn_usage` / `reset_vpn_usage`；`UsagePage.tsx` 三个总数 + 各程序表格和占比条。云端用假数据看过。**还没在 Windows 上看过**，测试见 `docs/test-plan.md` L |
 | 0.23.0 | — | 流量画布点方块看详情（维护者要求）：`buildFlow` 多回传每个方块经过的连接（`members`），`CanvasPage` 的 `NodeDetail` 面板显示规则集的规则 / 家里内网网段 / 说明，以及按目标合并的连接；选中方块加一圈主题色。云端用假数据看过；维护者 2026-10-27 实测 K 部分全部通过 |
 | 0.22.0 | — | 界面打磨（维护者 2026-10-27 定：自己画 SVG、不加依赖、布局不变）：`components/Icon.tsx`（28 个线条图标）、`Logo.tsx`、`Empty.tsx`；导航图标、连接页状态卡（圆环 + 小格子）、按钮图标、空白页、输入框焦点样式；关于页重排，更新记录改成右上角图标弹窗（维护者要求）。新程序图标（维护者选方案 B），原稿 `src-tauri/icons/source.svg`，`npx tauri icon` 生成各尺寸。云端用假数据看过亮 / 暗主题；维护者 2026-10-27 实测 J 部分全部通过 |
 | 0.21.0 | — | Pangolin 出口（第 0 阶段 V8 2026-10-27 通过）：`exits/pangolin.rs` = sing-box `socks` 出口 + `bind_interface`，vpn-dns TCP 经它，local DNS 用物理网卡的 DNS；连接前只读检查网卡和到代理的路由；代理密码存凭据管理器 `<id>:pangolin-proxy`；Profile 页新表单；诊断包脱敏代理 IP。云端用 sing-box 1.14.4（Linux）`check` 过生成的配置。维护者 2026-10-27 实测 I 部分全部通过 |

@@ -1229,3 +1229,47 @@ summary.update-ver {
     0 0 0 2px var(--surface),
     0 0 0 4px var(--accent);
 }
+
+.wide-stack {
+  max-width: 960px;
+}
+
+.tiles.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
+.usage-table .num {
+  text-align: right;
+  width: 110px;
+}
+
+.usage-table .share {
+  width: 200px;
+}
+
+.share-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.share-cell .small {
+  width: 46px;
+  text-align: right;
+}
+
+.bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--good);
+  transition: width var(--dur) var(--ease);
+}
