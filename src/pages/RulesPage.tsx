@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRules } from "../store/rules";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
+import Icon from "../components/Icon";
 
 const L = T.rules;
 const FIELDS = ["domain_suffix", "domain_keyword", "process_path", "process_name", "ip_cidr"] as const;
@@ -105,6 +106,7 @@ export default function RulesPage() {
         </ul>
         <div className="row">
           <button className="btn" onClick={newSet}>
+            <Icon name="plus" />
             {L.new}
           </button>
         </div>
@@ -143,16 +145,19 @@ export default function RulesPage() {
           {msg && <div className={msg.ok ? "banner good" : "banner bad"}>{msg.text}</div>}
           <div className="row">
             <button className="btn primary" onClick={save}>
+              <Icon name="check" />
               {L.save}
             </button>
             <div className="spacer" />
             {isPreset && (
               <button className="btn" onClick={reset}>
+                <Icon name="refresh" />
                 {confirm === "reset" ? L.confirmReset : L.reset}
               </button>
             )}
             {draft.id && !isPreset && (
               <button className="btn danger" onClick={del}>
+                <Icon name="trash" />
                 {confirm === "del" ? L.confirmDel : L.del}
               </button>
             )}
@@ -186,6 +191,7 @@ function ProcessPicker({ chosen, onAdd, onClose }: { chosen: string[]; onAdd: (p
         <div className="row">
           <input className="grow" placeholder={T.rules.pickFilter} value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
           <button className="btn" onClick={refresh}>
+            <Icon name="refresh" />
             {T.rules.refresh}
           </button>
           <button className="btn" onClick={onClose}>

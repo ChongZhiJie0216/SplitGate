@@ -3,6 +3,7 @@ import { useApp } from "../store/app";
 import { T } from "../lib/text";
 import { Theme, applyTheme, loadTheme } from "../lib/theme";
 import * as ipc from "../lib/ipc";
+import Icon from "../components/Icon";
 
 const L = T.settings;
 const LEVELS = ["info", "debug", "trace"] as const;
@@ -152,6 +153,7 @@ export default function SettingsPage() {
         {msg && <div className={msg.ok ? "banner good" : "banner bad"}>{msg.text}</div>}
         <div className="row">
           <button className="btn primary" disabled={!dirty} onClick={save}>
+            <Icon name="check" />
             {L.save}
           </button>
           <button

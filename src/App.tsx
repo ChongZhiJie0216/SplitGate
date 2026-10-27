@@ -6,6 +6,8 @@ import { useBlocked } from "./store/blocked";
 import { T } from "./lib/text";
 import { getSettings, restartAsAdmin, serviceUsable, setActiveProfile } from "./lib/ipc";
 import ConnectButton from "./components/ConnectButton";
+import Icon, { IconName } from "./components/Icon";
+import Logo from "./components/Logo";
 import AboutPage from "./pages/AboutPage";
 import BlockedPage from "./pages/BlockedPage";
 import ConnectPage from "./pages/ConnectPage";
@@ -19,6 +21,17 @@ import SettingsPage from "./pages/SettingsPage";
 const CanvasPage = lazy(() => import("./pages/CanvasPage"));
 
 const PAGES: Page[] = ["connect", "rules", "connections", "canvas", "blocked", "logs", "profiles", "settings", "about"];
+const NAV_ICONS: Record<Page, IconName> = {
+  connect: "power",
+  rules: "rules",
+  connections: "connections",
+  canvas: "canvas",
+  blocked: "blocked",
+  logs: "logs",
+  profiles: "profiles",
+  settings: "settings",
+  about: "about",
+};
 
 export default function App() {
   const { page, setPage, info, infoError, loadInfo, update, checkUpdate, service, loadService } = useApp();
@@ -44,10 +57,14 @@ export default function App() {
   return (
     <div className="shell">
       <nav className="nav">
-        <div className="brand">{T.appName}</div>
+        <div className="brand">
+          <Logo />
+          {T.appName}
+        </div>
         {PAGES.map((p) => (
           <button key={p} className={p === page ? "nav-item active" : "nav-item"} onClick={() => setPage(p)}>
-            {T.nav[p]}
+            <Icon name={NAV_ICONS[p]} />
+            <span className="nav-label">{T.nav[p]}</span>
             {p === "blocked" && unseen > 0 && page !== "blocked" && <span className="nav-badge">{unseen}</span>}
             {p === "about" && update?.newer && <span className="nav-badge" title={T.about.newVersion(update.latest ?? "")}>●</span>}
           </button>

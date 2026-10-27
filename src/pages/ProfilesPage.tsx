@@ -3,6 +3,8 @@ import { useProfiles } from "../store/profiles";
 import { useRules } from "../store/rules";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
+import Icon from "../components/Icon";
+import Empty from "../components/Empty";
 
 const L = T.profile;
 const DEFAULT_RULESETS = ["xbox", "minecraft", "steam"];
@@ -138,7 +140,7 @@ export default function ProfilesPage() {
       <div className="card list-card">
         <h2>{L.list}</h2>
         {error && <div className="banner bad">{error}</div>}
-        {view && view.profiles.length === 0 && <p className="muted">{L.empty}</p>}
+        {view && view.profiles.length === 0 && <Empty icon="profiles" text={L.empty} />}
         <ul className="plist">
           {view?.profiles.map(({ profile, has_secret }) => (
             <li key={profile.id}>
@@ -157,6 +159,7 @@ export default function ProfilesPage() {
           <span className="muted">{L.new}：</span>
           {(["cisco", "wireguard", "pangolin"] as ipc.ExitType[]).map((t) => (
             <button key={t} className="btn" onClick={() => select(blank(t), false)}>
+              <Icon name="plus" />
               {L.types[t]}
             </button>
           ))}
@@ -240,6 +243,7 @@ export default function ProfilesPage() {
               <div className="field">
                 <div className="row">
                   <button className="btn" disabled={test.busy} onClick={runTest}>
+                    <Icon name="key" />
                     {test.busy ? L.cisco.testing : L.cisco.test}
                   </button>
                 </div>
@@ -298,6 +302,7 @@ export default function ProfilesPage() {
           {msg && <div className={msg.ok ? "banner good" : "banner bad"}>{msg.text}</div>}
           <div className="row">
             <button className="btn primary" onClick={save} disabled={test.busy}>
+              <Icon name="check" />
               {draft.type === "cisco" && saveAnyway && test.key === testKey(draft) ? L.cisco.saveAnyway : L.save}
             </button>
             {draft.id && view?.active !== draft.id && (
@@ -308,6 +313,7 @@ export default function ProfilesPage() {
             <div className="spacer" />
             {draft.id && (
               <button className="btn danger" onClick={del}>
+                <Icon name="trash" />
                 {confirmDel ? L.confirmDel : L.del}
               </button>
             )}
@@ -364,6 +370,7 @@ function GroupField(props: {
       <div className="row">
         <input className="grow" value={value} onChange={(e) => props.onChange(e.target.value || null)} />
         <button className="btn" disabled={busy} onClick={props.onFetch} type="button">
+          <Icon name="refresh" />
           {C.groupFetch}
         </button>
       </div>

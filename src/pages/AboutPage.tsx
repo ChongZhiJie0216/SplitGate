@@ -4,6 +4,7 @@ import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
 import Markdown from "../components/Markdown";
 import { useStatus } from "../store/status";
+import Icon from "../components/Icon";
 
 const L = T.about;
 
@@ -49,6 +50,7 @@ export default function AboutPage() {
         <h2>{L.update}</h2>
         <div className="row">
           <button className="btn" onClick={() => checkUpdate()} disabled={checkingUpdate}>
+            <Icon name="refresh" />
             {checkingUpdate ? L.checking : L.check}
           </button>
           {update?.newer && update.url && (
@@ -155,11 +157,13 @@ function UpdateSteps() {
       <div className="row">
         {(job.state === "idle" || job.state === "failed") && (
           <button className="btn primary" onClick={start}>
+            <Icon name="download" />
             {job.state === "failed" ? L.retry : L.download}
           </button>
         )}
         {job.state === "ready" && (
           <button className="btn primary" onClick={install}>
+            <Icon name="check" />
             {connected ? L.installConnected : L.install}
           </button>
         )}
