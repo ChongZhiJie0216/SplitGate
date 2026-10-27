@@ -7,7 +7,7 @@ use crate::exits::{cisco, wireguard};
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, backend, block_detect, credentials, diagnostics, logs, paths, platform, service, supervisor, traffic, update};
+use crate::{autostart, backend, block_detect, credentials, diagnostics, elevate, logs, paths, platform, service, supervisor, traffic, update};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -184,9 +184,10 @@ pub fn save_settings(settings: Settings) -> Result<Settings, String> {
     Ok(settings)
 }
 
+/// Async: it may wait for the user to answer Windows' administrator prompt.
 #[tauri::command]
-pub fn set_autostart(enabled: bool) -> Result<autostart::AutostartState, String> {
-    let r = autostart::set(enabled)?;
+pub async fn set_autostart(enabled: bool) -> Result<autostart::AutostartState, String> {
+    let r = tauri::async_runtime::spawn_blocking(move || autostart::set(enabled)).await.map_err(|e| e.to_string())??;
     logs::info(if r.enabled { "已开启开机自启（任务计划程序）" } else { "已关闭开机自启" });
     Ok(r)
 }
@@ -257,7 +258,7 @@ pub async fn get_service_state() -> Result<service::ServiceState, String> {
 
 #[tauri::command]
 pub async fn install_service() -> Result<service::ServiceState, String> {
-    let r = tauri::async_runtime::spawn_blocking(service::install).await.map_err(|e| e.to_string())?;
+    let r = tauri::async_runtime::spawn_blocking(service::install_from_app).await.map_err(|e| e.to_string())?;
     if r.is_ok() {
         logs::info("已安装后台服务（SplitGateService）");
     }
@@ -266,11 +267,20 @@ pub async fn install_service() -> Result<service::ServiceState, String> {
 
 #[tauri::command]
 pub async fn remove_service() -> Result<service::ServiceState, String> {
-    let r = tauri::async_runtime::spawn_blocking(service::remove).await.map_err(|e| e.to_string())?;
+    let r = tauri::async_runtime::spawn_blocking(service::remove_from_app).await.map_err(|e| e.to_string())?;
     if r.is_ok() {
         logs::info("已移除后台服务");
     }
     r
+}
+
+/// Start again as administrator (UAC prompt), then quit so the new copy takes over.
+#[tauri::command]
+pub async fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(elevate::relaunch_as_admin).await.map_err(|e| e.to_string())??;
+    logs::info("以管理员身份重新启动 SplitGate");
+    app.exit(0);
+    Ok(())
 }
 
 /// The AnyLink / Cisco server's group list, for the Profile page's drop-down.

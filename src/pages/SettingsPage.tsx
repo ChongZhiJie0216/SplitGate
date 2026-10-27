@@ -9,7 +9,7 @@ const LEVELS = ["info", "debug", "trace"] as const;
 const DEFAULT_TUN = "172.19.0.1/30";
 
 export default function SettingsPage() {
-  const isAdmin = useApp((s) => s.info?.isAdmin ?? false);
+  const service = useApp((s) => s.service);
   const [view, setView] = useState<ipc.SettingsView | null>(null);
   const [draft, setDraft] = useState<ipc.Settings | null>(null);
   const [theme, setTheme] = useState<Theme>(loadTheme());
@@ -74,7 +74,7 @@ export default function SettingsPage() {
       <div className="card">
         <h2>{L.startup}</h2>
         <label className="check">
-          <input type="checkbox" checked={a.enabled} disabled={!isAdmin || autoBusy} onChange={(e) => autostart(e.target.checked)} />
+          <input type="checkbox" checked={a.enabled} disabled={autoBusy} onChange={(e) => autostart(e.target.checked)} />
           {L.autostart}
         </label>
         <p className="field-hint">{L.autostartHint}</p>
@@ -82,8 +82,16 @@ export default function SettingsPage() {
           <div className="banner warn">
             {L.autostartOther}
             <span className="mono">{a.command}</span>{" "}
-            <button className="btn" disabled={!isAdmin || autoBusy} onClick={() => autostart(true)}>
+            <button className="btn" disabled={autoBusy} onClick={() => autostart(true)}>
               {L.autostartFix}
+            </button>
+          </div>
+        )}
+        {a.enabled && a.matches_this_exe && service && a.elevated === ipc.serviceUsable(service) && (
+          <div className="banner warn">
+            {a.elevated ? L.autostartElevated : L.autostartLimited}{" "}
+            <button className="btn" disabled={autoBusy} onClick={() => autostart(true)}>
+              {L.autostartRedo}
             </button>
           </div>
         )}
@@ -154,14 +162,15 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
-      <ServiceCard isAdmin={isAdmin} />
+      <ServiceCard />
     </div>
   );
 }
 
 /** 后台服务：安装 / 移除马上生效（和开机自启一样，不经“保存”）。 */
-function ServiceCard({ isAdmin }: { isAdmin: boolean }) {
-  const [state, setState] = useState<ipc.ServiceState | null>(null);
+function ServiceCard() {
+  const state = useApp((s) => s.service);
+  const setState = useApp((s) => s.setService);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
@@ -171,7 +180,7 @@ function ServiceCard({ isAdmin }: { isAdmin: boolean }) {
       .getServiceState()
       .then(setState)
       .catch((e) => setError(String(e)));
-  }, []);
+  }, [setState]);
 
   const run = async (op: () => Promise<ipc.ServiceState>) => {
     setBusy(true);
@@ -211,14 +220,14 @@ function ServiceCard({ isAdmin }: { isAdmin: boolean }) {
       {error && <div className="banner bad">{error}</div>}
       <div className="row">
         {(!s?.installed || !s.matches_this_exe || !s.running) && (
-          <button className="btn" disabled={!isAdmin || busy || !s} onClick={() => run(ipc.installService)}>
+          <button className="btn" disabled={busy || !s} onClick={() => run(ipc.installService)}>
             {busy ? L.serviceBusy : !s?.installed ? L.serviceInstall : !s.matches_this_exe ? L.serviceFix : L.serviceStart}
           </button>
         )}
         {s?.installed && (
           <button
             className="btn"
-            disabled={!isAdmin || busy}
+            disabled={busy}
             onClick={() => (confirm ? run(ipc.removeService) : setConfirm(true))}
           >
             {confirm ? L.serviceConfirmRemove : L.serviceRemove}

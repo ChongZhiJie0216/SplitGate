@@ -25,12 +25,13 @@ SplitGate（暂定名）是 Windows 上按网址 / 程序分流的 VPN 客户端
 **电脑要求**
 - Windows 10 / 11，64 位。
 - WebView2：Windows 11 自带；Windows 10 没有的话，装 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。
-- 管理员权限：建立虚拟网卡要用，每次打开 SplitGate 时 Windows 会问一次。
+- 管理员权限：建立虚拟网卡要用。推荐装“后台服务”（设置页，装的时候 Windows 问一次），之后打开 SplitGate 就不用管理员身份。不装的话，每次都要以管理员身份运行 SplitGate。
 
 **步骤**
 1. 从 [Releases](https://github.com/ChongZhiJie0216/SplitGate/releases/latest) 下载 `SplitGate-<版本>-portable.zip`。
 2. 解压到任意文件夹，例如 `D:\Apps\SplitGate\`。`SplitGate.exe` 和 `sing-box.exe` 要放在一起。
-3. 双击 `SplitGate.exe`，同意管理员权限。
+3. 双击 `SplitGate.exe`。
+4. 到**设置页 → 后台服务 → 安装后台服务**，Windows 问管理员权限时按“是”。只要装一次。
 
 不用安装。设置会存在 `SplitGate.exe` 旁边的 `data\` 文件夹（第一次打开时自动建立）。
 
@@ -132,14 +133,14 @@ SplitGate 和 sing-box 的日志，可以筛选、暂停滚动、复制。日志
 
 | 设置 | 说明 |
 |---|---|
-| 开机自启 | 登录 Windows 后在托盘里启动（不弹窗口、不会每次问管理员）。用的是 Windows 任务计划程序。搬了 SplitGate 的位置后，这里会提示“改成这一个” |
+| 开机自启 | 登录 Windows 后在托盘里启动（不弹窗口、不会每次问管理员）。用的是 Windows 任务计划程序：装了后台服务时以普通权限启动，没装时以管理员身份启动（开启时 Windows 问一次）。搬了 SplitGate 的位置，或者后来才装 / 移除后台服务，这里会提示重新设置 |
 | 启动后自动连接 | 打开后自动连接使用中的 Profile |
 | 启动时检查有没有新版本 | 只提示，不会自动下载或安装 |
 | 主题 | 跟随系统 / 亮 / 暗 |
 | 连接中断后自动重新连接 | 默认开；马上生效 |
 | sing-box 日志级别 | 平时用 info；排查问题时改 debug。下次连接生效 |
 | TUN 网段 | SplitGate 虚拟网卡的地址，只有和其他网络撞网段时才要改。下次连接生效 |
-| 后台服务（测试中） | 装了以后，连接由这个 Windows 服务负责，SplitGate 只负责显示；关掉 SplitGate 时服务会自动断开、恢复网络。没装时照旧由 SplitGate 自己连接。下一版起，装了服务就不用再以管理员身份打开 SplitGate |
+| 后台服务（推荐） | 装了以后，连接由这个 Windows 服务负责，SplitGate 不用以管理员身份运行；关掉 SplitGate 时服务会自动断开、恢复网络。没装时，要以管理员身份运行 SplitGate 才能连接。安装和移除时 Windows 会问一次管理员权限 |
 
 ### 关于
 
@@ -153,8 +154,8 @@ SplitGate 和 sing-box 的日志，可以筛选、暂停滚动、复制。日志
 
 ## 4. 常见问题
 
-**连接按钮是灰的 / 提示“需要以管理员身份运行”**
-SplitGate 要管理员权限才能连接。关掉后右键 `SplitGate.exe` →“以管理员身份运行”，或者打开开机自启。
+**连接按钮是灰的 / 提示“现在不能连接”**
+没装后台服务，SplitGate 也不是以管理员身份运行。按提示里的“到设置页安装后台服务”（推荐，只问一次管理员权限），或者“以管理员身份重新启动”。
 
 **WireGuard 在学校连不上，提示“可能被当前网络阻挡”**
 学校有线网络挡 WireGuard 用的 UDP。在学校请用 Cisco 出口（勾“只用 TCP”），或者改连手机热点。

@@ -155,6 +155,8 @@ export interface AutostartState {
   enabled: boolean;
   command: string | null;
   matches_this_exe: boolean;
+  /** 任务以管理员身份启动 SplitGate（没有后台服务时需要）。 */
+  elevated: boolean;
 }
 
 export interface SettingsView {
@@ -216,7 +218,7 @@ export interface Blocked {
   time: string;
 }
 
-/** 后台服务（service.rs，第 3 阶段第 1 步）：现在只回答“在不在、版本几号”，连接仍由 SplitGate 自己做。 */
+/** 后台服务（service.rs）：装了、在运行、指向这一份 SplitGate 时，连接由它负责，SplitGate 不用管理员身份。 */
 export interface ServiceState {
   installed: boolean;
   running: boolean;
@@ -230,6 +232,9 @@ export interface ServiceState {
 export const getServiceState = () => invoke<ServiceState>("get_service_state");
 export const installService = () => invoke<ServiceState>("install_service");
 export const removeService = () => invoke<ServiceState>("remove_service");
+/** 弹出 Windows 的管理员确认，新的 SplitGate 启动后这一个就退出。 */
+export const restartAsAdmin = () => invoke<void>("restart_as_admin");
+export const serviceUsable = (s: ServiceState | null) => !!s && s.installed && s.running && s.matches_this_exe;
 
 /** 检查更新（update.rs）：只提示，不下载、不安装。 */
 export interface UpdateSection {

@@ -126,7 +126,9 @@ export const T = {
     diagHint:
       "诊断包是一个 zip：最近 7 天的日志、设置、sing-box 配置、网络状态。密码、私钥换成 ***，服务器地址、账号、Windows 用户名也换成代号，可以放心发给别人。",
   },
-  notAdmin: "没有以管理员身份运行：可以浏览和编辑设置，但不能连接。",
+  notAdmin: "现在不能连接：没有装后台服务，SplitGate 也不是以管理员身份运行。装了后台服务就不用管理员身份（推荐，只在安装时确认一次）。",
+  notAdminInstall: "到设置页安装后台服务",
+  notAdminRestart: "以管理员身份重新启动",
   about: {
     version: "版本",
     components: "组件版本",
@@ -134,7 +136,7 @@ export const T = {
     dataDir: "设置文件夹",
     admin: "管理员身份",
     yes: "是",
-    no: "否（只能浏览和编辑设置）",
+    no: "否",
     notFound: "（未找到）",
     singboxNote: "sing-box 以独立程序附带（GPL-3.0-or-later），源码：https://github.com/SagerNet/sing-box",
     notice: "使用提醒：通过他人的 VPN 绕过学校网络限制，可能违反学校或 VPN 提供方的使用政策，使用前请自行确认。",
@@ -155,16 +157,20 @@ export const T = {
   settings: {
     startup: "启动",
     autostart: "开机自启（登录 Windows 后在托盘里启动，不弹窗口）",
-    autostartHint: "用 Windows 任务计划程序以管理员身份启动，不会每次弹出确认框。",
+    autostartHint:
+      "用 Windows 任务计划程序启动，不会每次弹出确认框。装了后台服务时以普通权限启动；没装时以管理员身份启动（开启时 Windows 会请你确认一次）。",
+    autostartElevated: "开机自启现在以管理员身份启动；装了后台服务就不需要了。",
+    autostartLimited: "开机自启以普通权限启动，但现在没有可用的后台服务：启动后不能连接。",
+    autostartRedo: "按现在的情况重新设置",
     autostartOther: "开机自启指向另一个位置的 SplitGate：",
     autostartFix: "改成这一个",
     autoConnect: "启动后自动连接（使用中的 Profile）",
     checkUpdates: "启动时检查有没有新版本（只提示，不会自动下载或安装）",
     look: "外观",
     connection: "连接",
-    service: "后台服务（测试中）",
+    service: "后台服务（推荐）",
     serviceHint:
-      "装了后台服务，连接就由它负责（建立虚拟网卡、启动 sing-box、断线重连）；SplitGate 只负责显示，关掉或被结束时服务会自动断开、恢复网络。没装时，照旧由 SplitGate 自己连接（要管理员）。下一版起，装了服务的 SplitGate 就不用再要求管理员。",
+      "装了后台服务，连接就由它负责（建立虚拟网卡、启动 sing-box、断线重连），SplitGate 不用以管理员身份运行；关掉或被结束时服务会自动断开、恢复网络。没装时，要以管理员身份运行 SplitGate 才能连接。安装和移除时 Windows 会请你确认一次。",
     serviceNone: "还没有安装。",
     serviceRunning: (v: string) => `已安装，正在运行（v${v}）`,
     serviceNoAnswer: "已安装，正在运行，但没有回应",
@@ -175,7 +181,7 @@ export const T = {
     serviceStart: "启动后台服务",
     serviceRemove: "移除后台服务",
     serviceConfirmRemove: "再按一次确认移除",
-    serviceBusy: "请稍候…",
+    serviceBusy: "请稍候（Windows 可能会请你确认）…",
     autoReconnect: "连接中断后自动重新连接",
     autoReconnectHint:
       "电脑睡眠后唤醒、VPN 出口没有回应、或 sing-box 意外停止时：先清理让网络恢复，再隔 2、4、8、16、32 秒重新连接，最多 5 次。这一项马上生效。",

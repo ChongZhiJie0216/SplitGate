@@ -1,6 +1,9 @@
-//! Start with Windows (settings page). The app needs administrator rights, and Windows skips
-//! elevated programs in the Run registry key, so this uses a Task Scheduler task with "highest
-//! privileges" that starts at the current user's logon. The task itself is the only record.
+//! Start with Windows (settings page): a Task Scheduler task that starts at the current user's
+//! logon; the task itself is the only record. Without the background service the app needs
+//! administrator rights to connect, and Windows skips elevated programs in the Run registry key,
+//! so then the task runs with "highest privileges". With the service (v0.18.0) it runs with
+//! normal rights. Changing a task that needs administrator rights goes through an elevated copy
+//! of SplitGate (elevate.rs).
 
 use std::path::Path;
 
@@ -19,28 +22,50 @@ pub struct AutostartState {
     pub command: Option<String>,
     /// False when the task points at another copy (e.g. the portable folder was moved).
     pub matches_this_exe: bool,
+    /// The task starts SplitGate with administrator rights ("highest privileges").
+    pub elevated: bool,
 }
 
 pub fn state() -> AutostartState {
     let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
     let out = platform::hidden_command(Path::new("schtasks.exe")).args(["/Query", "/TN", TASK_NAME, "/XML"]).output();
-    let Ok(out) = out else { return AutostartState { enabled: false, command: None, matches_this_exe: false } };
+    let none = AutostartState { enabled: false, command: None, matches_this_exe: false, elevated: false };
+    let Ok(out) = out else { return none };
     if !out.status.success() {
-        return AutostartState { enabled: false, command: None, matches_this_exe: false };
+        return none;
     }
-    let command = xml_tag(&decode(&out.stdout), "Command");
+    let xml = decode(&out.stdout);
+    let command = xml_tag(&xml, "Command");
     let matches_this_exe = command.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(&exe));
-    AutostartState { enabled: true, command, matches_this_exe }
+    let elevated = xml_tag(&xml, "RunLevel").as_deref() == Some("HighestAvailable");
+    AutostartState { enabled: true, command, matches_this_exe, elevated }
 }
 
+/// From the settings page. With the background service the task starts SplitGate with normal
+/// rights, without it with administrator rights. What this process may not do itself (a task
+/// with highest privileges, or replacing one) goes through an elevated copy (UAC prompt).
 pub fn set(enabled: bool) -> Result<AutostartState, String> {
-    if !platform::is_admin() {
-        return Err("需要以管理员身份运行 SplitGate 才能修改开机自启。".into());
+    let least = crate::service::usable();
+    let user = current_user();
+    // Only a new task with highest privileges surely needs administrator rights; the rest is
+    // tried here first (replacing or deleting a task made as administrator may still be refused).
+    let direct = if platform::is_admin() || least || !enabled { set_as(enabled, &user, least) } else { Err(String::new()) };
+    match direct {
+        Ok(s) => Ok(s),
+        Err(e) if platform::is_admin() => Err(e),
+        Err(_) => {
+            let task = if enabled { crate::elevate::Task::AutostartOn { user, least } } else { crate::elevate::Task::AutostartOff };
+            crate::elevate::run(&task)?;
+            Ok(state())
+        }
     }
+}
+
+/// Creates (or replaces) / deletes the task. `least`: start with normal rights.
+pub fn set_as(enabled: bool, user: &str, least: bool) -> Result<AutostartState, String> {
     if enabled {
         let exe = std::env::current_exe().map_err(|e| format!("找不到程序位置：{e}"))?;
-        let user = current_user();
-        let xml = task_xml(&exe.display().to_string(), &user);
+        let xml = task_xml(&exe.display().to_string(), user, least);
         // schtasks reads the XML file as UTF-16 with BOM.
         let path = std::env::temp_dir().join(format!("splitgate-task-{}.xml", std::process::id()));
         let mut bytes = vec![0xFF, 0xFE];
@@ -102,8 +127,9 @@ fn unescape(s: &str) -> String {
 }
 
 /// Defaults changed on purpose: no 72-hour time limit, and it also starts on battery (laptop).
-fn task_xml(exe: &str, user: &str) -> String {
+fn task_xml(exe: &str, user: &str, least: bool) -> String {
     let (exe, user) = (escape(exe), escape(user));
+    let level = if least { "LeastPrivilege" } else { "HighestAvailable" };
     format!(
         r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -121,7 +147,7 @@ fn task_xml(exe: &str, user: &str) -> String {
     <Principal id="Author">
       <UserId>{user}</UserId>
       <LogonType>InteractiveToken</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
+      <RunLevel>{level}</RunLevel>
     </Principal>
   </Principals>
   <Settings>
@@ -150,12 +176,13 @@ mod tests {
 
     #[test]
     fn task_xml_round_trip() {
-        let xml = task_xml(r"C:\Apps\A&B\SplitGate.exe", r"PC\测试甲");
+        let xml = task_xml(r"C:\Apps\A&B\SplitGate.exe", r"PC\测试甲", false);
         assert_eq!(xml_tag(&xml, "Command").as_deref(), Some(r"C:\Apps\A&B\SplitGate.exe"));
         assert_eq!(xml_tag(&xml, "Arguments").as_deref(), Some(AUTOSTART_ARG));
         assert!(xml.contains("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>"), "never stopped after 72 hours");
         assert!(xml.contains("<RunLevel>HighestAvailable</RunLevel>"));
         assert!(xml.contains(r"<UserId>PC\测试甲</UserId>"));
+        assert_eq!(xml_tag(&task_xml("a.exe", "u", true), "RunLevel").as_deref(), Some("LeastPrivilege"));
     }
 
     #[test]

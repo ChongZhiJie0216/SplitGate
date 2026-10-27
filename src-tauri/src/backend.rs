@@ -44,6 +44,5 @@ pub fn shutdown() {
 
 /// Connecting is possible without administrator rights when the service will do it.
 pub fn can_connect_without_admin() -> bool {
-    let s = service::state();
-    s.installed && s.running && s.matches_this_exe
+    service::usable()
 }

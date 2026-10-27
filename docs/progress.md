@@ -1,7 +1,7 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-27，版本 v0.17.2。
+> 最后更新：2026-10-27，版本 v0.18.0。
 
 ## 现在在哪一步
 
@@ -18,6 +18,7 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
+| 0.18.0 | — | 后台服务第 3 步：清单改 `asInvoker`；`elevate.rs`：要管理员的单个步骤（安装 / 移除服务、开机自启任务）以 `--admin-task` 临时提权（UAC），“以管理员身份重新启动”（`--wait-pid`）；开机自启有服务时普通权限（`LeastPrivilege`）、没有时最高权限，和现状不符时设置页提示；不是管理员又没有服务时顶部提示两条路；托盘“连接”不再因为不是管理员变灰。云端用假数据看过界面，**还没在 Windows 上跑过**，测试见 `docs/test-plan.md` F |
 | 0.17.2 | — | （维护者 2026-10-27 实测 E 部分全部通过）服务被强行结束时界面等 5 秒自己清理残留；sing-box 进 Job Object 要核对（`IsProcessInJob`），启动时记 pid；服务日志记连接 / 断开请求、界面关掉后断开的结果、启动清理、panic 原因。测试文档改用 `sc.exe`（PowerShell 的 `sc` 是 Set-Content） |
 | 0.17.1 | — | 修正 v0.17.0“后台服务没有回应”（同步管道上读写线程互等）：拆成命令连接 + 事件连接，每条连接一个线程；经服务连接失败也写日志；托盘连接 / 断开移出主线程 |
 | 0.17.0 | — | 后台服务第 2 步：状态机在服务里跑（`service.rs` hello / connect / disconnect + 事件、`remote.rs` 界面端、`backend.rs` 选择）；防冒充核对管道对方进程编号；界面断开管道 → 服务断开清理；Clash API 交给界面读。2026-10-27 实测通过（v0.17.2），见 `docs/test-plan.md` E |
@@ -63,7 +64,7 @@
 
 ## 下一步（照顺序）
 
-- **现在**：v0.15.0–v0.17.2（后台服务第 1、2 步 + Cisco 组别下拉）测试清单 C、D、E 全部通过，开 PR 合并进 `main`。之后做 v0.18.0 后台服务第 3 步：装了服务时界面不再要求管理员（清单 asInvoker、开机自启普通权限；注意连接按钮和托盘现在没管理员就灰掉）。再之后是完整在线升级，最后 Pangolin。
+- **现在**：v0.18.0（后台服务第 3 步：不用管理员身份）等维护者实测（`docs/test-plan.md` F）。通过后开 PR 合并进 `main`。再之后是完整在线升级（NSIS 安装包、签名、要考虑服务），最后 Pangolin。
 - **v0.13.0 已发布到 GitHub Release**（2026-10-26，维护者用 `scripts\publish-release.ps1 -Yes`；PR #2、#3 已合并进 `main`）。README 改成给使用者看的使用说明（v0.14.0 分支），开发与发布步骤在 `docs/development.md`。
 - **测试清单：`docs/test-plan.md`**：A 部分（热点，A1–A9）**2026-10-26 全部通过（v0.11.1）**，可以合并 PR #2；B 部分（学校有线 + Cisco）之后补测。合并后开始做 Windows 服务（v0.13 起；注意 v0.12 的 `data\` 放在程序旁边，装进 Program Files 时要重新决定）。
 - **第 3 阶段（维护者 2026-10-26 定进入）**：顺序 openconnect 评估（✅ 不需要，见 SPEC 第 3 阶段）→ React Flow 流量画布 v0.11（✅ 完成，`@xyflow/react` 12.12.0）→ Windows 服务（做法见 SPEC 组件 5，维护者已同意 6 点设计）。Duo / SAML 定跳过。第 2 阶段 v0.7.0–v0.10.0 的 Windows 实测和 PR [#2](https://github.com/ChongZhiJie0216/SplitGate/pull/2) 合并同时进行。

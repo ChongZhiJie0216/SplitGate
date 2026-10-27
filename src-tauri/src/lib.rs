@@ -6,6 +6,7 @@ mod commands;
 mod config;
 mod credentials;
 mod diagnostics;
+mod elevate;
 mod exits;
 mod logs;
 mod paths;
@@ -29,6 +30,10 @@ pub fn run() {
         service::run_service();
         return;
     }
+    // `--admin-task`: one administrator-only step for a copy without those rights; exits here.
+    elevate::run_task_from_args();
+    // `--wait-pid`: "restart as administrator"; the old copy must be gone before the check below.
+    elevate::wait_for_previous();
     if !platform::claim_single_instance() {
         return; // the running copy shows its window instead
     }
@@ -122,6 +127,7 @@ pub fn run() {
             commands::get_service_state,
             commands::install_service,
             commands::remove_service,
+            commands::restart_as_admin,
             commands::open_release_page,
         ])
         .build(tauri::generate_context!())
