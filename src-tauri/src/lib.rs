@@ -119,6 +119,8 @@ pub fn run() {
             commands::save_settings,
             commands::set_autostart,
             commands::get_connections,
+            commands::get_vpn_usage,
+            commands::reset_vpn_usage,
             commands::close_connection,
             commands::list_blocked,
             commands::dismiss_blocked,

@@ -16,16 +16,18 @@ import LogsPage from "./pages/LogsPage";
 import ProfilesPage from "./pages/ProfilesPage";
 import RulesPage from "./pages/RulesPage";
 import SettingsPage from "./pages/SettingsPage";
+import UsagePage from "./pages/UsagePage";
 
 // 流量画布带着 React Flow（约 190 KB），打开那一页才加载。
 const CanvasPage = lazy(() => import("./pages/CanvasPage"));
 
-const PAGES: Page[] = ["connect", "rules", "connections", "canvas", "blocked", "logs", "profiles", "settings", "about"];
+const PAGES: Page[] = ["connect", "rules", "connections", "canvas", "usage", "blocked", "logs", "profiles", "settings", "about"];
 const NAV_ICONS: Record<Page, IconName> = {
   connect: "power",
   rules: "rules",
   connections: "connections",
   canvas: "canvas",
+  usage: "chart",
   blocked: "blocked",
   logs: "logs",
   profiles: "profiles",
@@ -110,6 +112,8 @@ export default function App() {
             <Suspense fallback={<div className="card muted">…</div>}>
               <CanvasPage />
             </Suspense>
+          ) : page === "usage" ? (
+            <UsagePage />
           ) : page === "blocked" ? (
             <BlockedPage />
           ) : (

@@ -3,7 +3,7 @@
 //! auto-connect and app exit all go through here.
 
 use crate::supervisor::{self, Status};
-use crate::{logs, remote, service};
+use crate::{logs, remote, service, traffic};
 
 pub fn status() -> Status {
     remote::status().unwrap_or_else(supervisor::status)
@@ -40,6 +40,7 @@ pub fn disconnect() -> Result<(), String> {
 pub fn shutdown() {
     remote::shutdown();
     supervisor::shutdown();
+    traffic::save_usage();
 }
 
 /// Connecting is possible without administrator rights when the service will do it.

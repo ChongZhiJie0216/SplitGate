@@ -192,6 +192,17 @@ pub async fn set_autostart(enabled: bool) -> Result<autostart::AutostartState, S
     Ok(r)
 }
 
+/// VPN bytes per program, added up (the "流量统计" page).
+#[tauri::command]
+pub fn get_vpn_usage() -> traffic::Usage {
+    traffic::usage()
+}
+
+#[tauri::command]
+pub fn reset_vpn_usage() -> traffic::Usage {
+    traffic::reset_usage()
+}
+
 #[tauri::command]
 pub fn get_connections() -> traffic::Snapshot {
     traffic::snapshot()
