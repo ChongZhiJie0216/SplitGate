@@ -10,7 +10,7 @@ use tauri::{AppHandle, Manager, Wry};
 
 use crate::backend;
 use crate::supervisor::Status;
-use crate::{logs, platform};
+use crate::logs;
 
 struct Tray {
     icon: TrayIcon,
@@ -82,7 +82,7 @@ pub fn update(app: &AppHandle, status: &Status) {
     let _ = app.run_on_main_thread(move || {
         let Some(t) = TRAY.get() else { return };
         let idle = matches!(status, Status::Disconnected | Status::Error { retrying: false, .. });
-        let _ = t.connect.set_enabled(idle && platform::is_admin());
+        let _ = t.connect.set_enabled(idle);
         let _ = t.disconnect.set_enabled(!idle && status != Status::Disconnecting);
         let _ = t.icon.set_icon(Some(with_dot(&t.base, &status)));
         let _ = t.icon.set_tooltip(Some(tooltip(&status)));

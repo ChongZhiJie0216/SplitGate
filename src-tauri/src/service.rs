@@ -135,7 +135,31 @@ fn service_log(text: &str) {
 }
 
 #[cfg(windows)]
-pub use win::{install, open_trusted_pipe, remove, run_service, state};
+pub use win::{install, open_trusted_pipe, remove, run_service, state, user_sid};
+
+/// From the app: directly when it runs as administrator, otherwise in an elevated copy of
+/// SplitGate (Windows shows its UAC prompt) that installs for this user (v0.18.0).
+pub fn install_from_app() -> Result<ServiceState, String> {
+    if crate::platform::is_admin() {
+        return install(None);
+    }
+    crate::elevate::run(&crate::elevate::Task::InstallService { sid: user_sid()? })?;
+    Ok(state())
+}
+
+pub fn remove_from_app() -> Result<ServiceState, String> {
+    if crate::platform::is_admin() {
+        return remove();
+    }
+    crate::elevate::run(&crate::elevate::Task::RemoveService)?;
+    Ok(state())
+}
+
+/// The service can connect for this copy of SplitGate (no administrator rights needed then).
+pub fn usable() -> bool {
+    let s = state();
+    s.installed && s.running && s.matches_this_exe
+}
 
 #[cfg(not(windows))]
 pub fn run_service() {}
@@ -144,7 +168,11 @@ pub fn state() -> ServiceState {
     ServiceState::default()
 }
 #[cfg(not(windows))]
-pub fn install() -> Result<ServiceState, String> {
+pub fn user_sid() -> Result<String, String> {
+    Err("后台服务只支持 Windows".into())
+}
+#[cfg(not(windows))]
+pub fn install(_sid: Option<String>) -> Result<ServiceState, String> {
     Err("后台服务只支持 Windows".into())
 }
 #[cfg(not(windows))]
@@ -572,7 +600,8 @@ mod win {
         ServiceState { installed: true, running, command, matches_this_exe, version }
     }
 
-    fn current_user_sid() -> Result<String, String> {
+    /// The SID of the user running this process.
+    pub fn user_sid() -> Result<String, String> {
         unsafe {
             let mut token: HANDLE = null_mut();
             if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
@@ -616,12 +645,18 @@ mod win {
         }
     }
 
-    /// Installs (or points the existing service at this copy) and starts it.
-    pub fn install() -> Result<ServiceState, String> {
+    /// Installs (or points the existing service at this copy) and starts it. `sid`: the user
+    /// the pipe lets in; None = the user running this process.
+    pub fn install(sid: Option<String>) -> Result<ServiceState, String> {
         if !platform::is_admin() {
-            return Err("需要以管理员身份运行 SplitGate 才能安装后台服务。".into());
+            return Err("需要管理员权限才能安装后台服务。".into());
         }
-        let cmd = wide(&command_line(&this_exe(), &current_user_sid()?));
+        let sid = match sid {
+            Some(s) if valid_sid(&s) => s,
+            Some(_) => return Err("用户 SID 格式不对".into()),
+            None => user_sid()?,
+        };
+        let cmd = wide(&command_line(&this_exe(), &sid));
         if let Some(svc) = open(SERVICE_QUERY_STATUS | SERVICE_QUERY_CONFIG | SERVICE_START | SERVICE_STOP | SERVICE_ALL_ACCESS) {
             // Already there (maybe another copy): point it here, restart.
             stop_and_wait(&svc);
@@ -656,7 +691,7 @@ mod win {
                 return Err(format!("安装后台服务失败（{}）", unsafe { GetLastError() }));
             }
             let svc = Sc(h);
-            let mut text = wide("SplitGate 的后台部分（第 3 阶段测试中，现在只负责回答 SplitGate 的询问）。移除：SplitGate 设置页“移除后台服务”。");
+            let mut text = wide("SplitGate 的后台部分：负责连接（虚拟网卡、sing-box、断线重连），SplitGate 本身就不用以管理员身份运行。移除：SplitGate 设置页“移除后台服务”。");
             let desc = SERVICE_DESCRIPTIONW { lpDescription: text.as_mut_ptr() };
             unsafe { ChangeServiceConfig2W(svc.0, SERVICE_CONFIG_DESCRIPTION, &desc as *const _ as *const c_void) };
             start(&svc)?;
@@ -671,7 +706,7 @@ mod win {
 
     pub fn remove() -> Result<ServiceState, String> {
         if !platform::is_admin() {
-            return Err("需要以管理员身份运行 SplitGate 才能移除后台服务。".into());
+            return Err("需要管理员权限才能移除后台服务。".into());
         }
         let Some(svc) = open(SERVICE_QUERY_STATUS | SERVICE_STOP | DELETE) else { return Ok(state()) };
         stop_and_wait(&svc);

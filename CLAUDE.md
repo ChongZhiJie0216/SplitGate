@@ -10,7 +10,7 @@
 SplitGate 是维护者**自己用的网络工具**，不是给老师用的程序。以下几条不照全局规范：
 
 - 技术栈用 Tauri 2 + React 18 + TypeScript + Vite + zustand（全局规范是“不加前端框架和打包工具”）。
-- 交付形式是 Tauri 桌面应用 + NSIS 安装包，需要管理员权限（全局规范是“单一 exe + 黑色命令窗口、免安装”）。
+- 交付形式是 Tauri 桌面应用 + NSIS 安装包，连接需要管理员权限：v0.18.0 起由后台服务（`SplitGateService`）负责，界面以普通权限运行（全局规范是“单一 exe + 黑色命令窗口、免安装”）。
 - 不用 `config.ini`；设置存在 `SplitGate.exe` 旁边的 `data\*.json`，日志、诊断包也在 `data\`（维护者 2026-10-26 定，v0.12.0 起；之前是 `%APPDATA%\SplitGate\`，见 SPEC“数据模型”）。
 - 端口：只有 sing-box 的 Clash API，监听 127.0.0.1 的随机端口，不占端口表。
 
@@ -21,7 +21,7 @@ SplitGate 是维护者**自己用的网络工具**，不是给老师用的程序
 - 严格按 SPEC 的“开发阶段”推进。第 0 阶段已完成（2026-10-26），SPEC 已按实测修订；维护者 2026-10-26 同意进入第 1 阶段。
 - 版本号唯一来源：`package.json` 的 `version`；`src-tauri/Cargo.toml` 必须同值（`src-tauri/tests/structure.rs` 检查）。
 - 测试：`cd src-tauri; cargo test`、`cargo clippy --all-targets -- -D warnings`；前端 `npm run build`（含 `tsc`）。Windows 专用代码在云端也要检查：`cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings`（见 `docs/development.md`）。
-- 开发版不要求管理员（看界面用）；正式版清单要求管理员（`src-tauri/build.rs`）。
+- 清单 `asInvoker`，开发版和正式版都不要求管理员（`src-tauri/build.rs`，v0.18.0 起）；连接靠后台服务，或以管理员身份运行。要管理员的单个步骤由 `elevate.rs` 以 `--admin-task` 临时提权。
 - SPEC 里标“待核实”的内容一律以实测为准，结果写进 `docs/phase0-findings.md`。
 
 ## 安全
@@ -52,6 +52,6 @@ SplitGate 是维护者**自己用的网络工具**，不是给老师用的程序
 ## 云端会话（Claude Code on the web）
 
 - 云端是 Linux：**不能**打包 Windows exe、不能运行程序、不能连接 VPN、不能用 CDP 看界面。能做的：写代码、`npm run build`、改文档；`cargo test` / `clippy` 需要 Tauri 的 Linux 系统库（`libwebkit2gtk-4.1-dev` 等），装不了就只跑前端检查，并在回报里说明没跑后端测试。
-- 打包和实测一律由维护者在 Windows 上做：`git pull` → 双击 `build.bat` → 以管理员身份运行根目录的 `SplitGate.exe`（`build.bat` 复制过来的，和 `portable\SplitGate\` 里的相同）。
+- 打包和实测一律由维护者在 Windows 上做：`git pull` → 双击 `build.bat` → 运行根目录的 `SplitGate.exe`（装了后台服务就不用管理员身份）（`build.bat` 复制过来的，和 `portable\SplitGate\` 里的相同）。
 - 维护者用 gpg 签名 commit；云端提交照云端环境的设置。
 - 仓库是**公开**的：不要把服务器地址、账号、IP 等新的个人信息写进文件。

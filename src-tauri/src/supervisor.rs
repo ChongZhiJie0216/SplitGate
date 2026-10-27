@@ -213,7 +213,7 @@ pub fn connect(profile_id: Option<String>) -> Result<(), String> {
 fn begin_connect(only_if: Option<u64>) -> Result<u64, String> {
     // The background service runs as SYSTEM: it has the rights, whatever IsUserAnAdmin says.
     if !platform::is_admin() && SINK.get().is_none() {
-        return Err("需要以管理员身份运行 SplitGate 才能连接。".into());
+        return Err("没有可用的后台服务时，要以管理员身份运行 SplitGate 才能连接。可以到“设置”页安装后台服务（推荐），或者以管理员身份重新启动。".into());
     }
     let mut s = STATE.lock().map_err(|_| "内部错误")?;
     if matches!(s.status, Status::Connecting { .. } | Status::Connected { .. } | Status::Disconnecting) {

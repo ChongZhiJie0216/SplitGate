@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Page, useApp } from "./store/app";
 import { useProfiles } from "./store/profiles";
 import { useStatus } from "./store/status";
 import { useBlocked } from "./store/blocked";
 import { T } from "./lib/text";
-import { getSettings, setActiveProfile } from "./lib/ipc";
+import { getSettings, restartAsAdmin, serviceUsable, setActiveProfile } from "./lib/ipc";
 import ConnectButton from "./components/ConnectButton";
 import AboutPage from "./pages/AboutPage";
 import BlockedPage from "./pages/BlockedPage";
@@ -21,7 +21,7 @@ const CanvasPage = lazy(() => import("./pages/CanvasPage"));
 const PAGES: Page[] = ["connect", "rules", "connections", "canvas", "blocked", "logs", "profiles", "settings", "about"];
 
 export default function App() {
-  const { page, setPage, info, infoError, loadInfo, update, checkUpdate } = useApp();
+  const { page, setPage, info, infoError, loadInfo, update, checkUpdate, service, loadService } = useApp();
   const { view, load: loadProfiles, run } = useProfiles();
   const { status, start } = useStatus();
   const { unseen, start: startBlocked } = useBlocked();
@@ -29,6 +29,7 @@ export default function App() {
 
   useEffect(() => {
     loadInfo();
+    loadService();
     loadProfiles();
     start();
     startBlocked();
@@ -38,7 +39,7 @@ export default function App() {
         if (v.settings.check_updates) checkUpdate(true);
       })
       .catch(() => {});
-  }, [loadInfo, loadProfiles, start, startBlocked, checkUpdate]);
+  }, [loadInfo, loadService, loadProfiles, start, startBlocked, checkUpdate]);
 
   return (
     <div className="shell">
@@ -73,7 +74,7 @@ export default function App() {
           </label>
           <div className="spacer" />
         </header>
-        {info && !info.isAdmin && <div className="banner warn">{T.notAdmin}</div>}
+        {info && !info.isAdmin && service && !serviceUsable(service) && <NotAdminBanner />}
         {infoError && <div className="banner bad">{infoError}</div>}
         <section className="content">
           {page === "connect" ? (
@@ -99,6 +100,24 @@ export default function App() {
           )}
         </section>
       </main>
+    </div>
+  );
+}
+
+/** 不是管理员、也没有可用的后台服务：说明为什么连不了，给两条路。 */
+function NotAdminBanner() {
+  const setPage = useApp((s) => s.setPage);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="banner warn">
+      {T.notAdmin}{" "}
+      <button className="btn" onClick={() => setPage("settings")}>
+        {T.notAdminInstall}
+      </button>{" "}
+      <button className="btn" onClick={() => restartAsAdmin().catch((e) => setError(String(e)))}>
+        {T.notAdminRestart}
+      </button>
+      {error && <div>{error}</div>}
     </div>
   );
 }
