@@ -24,7 +24,7 @@ use crate::{backend, elevate, logs, paths, platform, service};
 
 /// Replaced on update. `licenses\` only when the copy already has that folder (the copy that
 /// build.bat puts in the repo root has none).
-const FILES: [&str; 2] = ["SplitGate.exe", "sing-box.exe"];
+pub const FILES: [&str; 2] = ["SplitGate.exe", "sing-box.exe"];
 const LICENSES: &str = "licenses";
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -203,8 +203,13 @@ pub fn apply_with_service(src: &Path) -> Result<(), String> {
     if !src.starts_with(&base) {
         return Err("新版本只能来自 data\\update".into());
     }
+    let protected = service::state().protected;
     let was_running = service::stop_installed()?;
-    let r = replace_files(&src, &paths::exe_dir());
+    let mut r = replace_files(&src, &paths::exe_dir());
+    // Since v0.20.0 the service runs its own copy: give it the new files as well.
+    if r.is_ok() && protected {
+        r = service::copy_to_service_dir();
+    }
     // Started again either way: with the new files, or with the old ones put back.
     if was_running {
         service::start_installed()?;
@@ -214,7 +219,7 @@ pub fn apply_with_service(src: &Path) -> Result<(), String> {
 
 /// Replace FILES (and `licenses\` when `dst` has one) in `dst` with those in `src`; on any
 /// failure everything already replaced is put back.
-fn replace_files(src: &Path, dst: &Path) -> Result<(), String> {
+pub fn replace_files(src: &Path, dst: &Path) -> Result<(), String> {
     let mut names: Vec<PathBuf> = FILES.iter().map(PathBuf::from).collect();
     if dst.join(LICENSES).is_dir() {
         if let Ok(entries) = std::fs::read_dir(src.join(LICENSES)) {
@@ -312,6 +317,17 @@ pub fn clean_leftovers() {
             thread::sleep(Duration::from_secs(3));
         }
     });
+}
+
+/// The `*.old` copies replace_files left in `dir` (not in use any more); best effort.
+// Only the Windows service installer calls this.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn remove_old_copies(dir: &Path) {
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if is_old_copy(&e.file_name().to_string_lossy(), false) {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
 }
 
 fn has_leftovers(dir: &Path, lic: &Path) -> bool {

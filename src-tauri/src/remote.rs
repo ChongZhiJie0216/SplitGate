@@ -59,8 +59,10 @@ pub fn clear() {
 pub fn try_connect(profile_id: Option<String>) -> Result<bool, String> {
     if !active() {
         let st = service::state();
-        if !(st.installed && st.running && st.matches_this_exe) {
-            if st.installed {
+        if !st.usable() {
+            if st.outdated {
+                logs::warn(format!("后台服务是 v{}，和这个 SplitGate 不同版：到设置页按“改成这一个”更新它。这次由 SplitGate 自己连接", st.version.as_deref().unwrap_or("?")));
+            } else if st.installed {
                 logs::warn("后台服务装了但没有在运行，或者指向另一个位置的 SplitGate：这次由 SplitGate 自己连接");
             }
             if let Ok(mut m) = MIRROR.lock() {
@@ -178,7 +180,11 @@ fn read_events(pipe: File) {
         // left with the routes. Give a stopping service a moment, then clean what is left.
         // Not when a new connection started meanwhile: cleaning would end its sing-box.
         thread::sleep(Duration::from_secs(5));
-        if !active() && matches!(supervisor::status(), Status::Disconnected | Status::Error { .. }) {
+        if !crate::platform::is_admin() {
+            // Since v0.20.0 Windows starts a killed service again after 5 s; its startup cleanup
+            // restores the network (this window has no rights to).
+            logs::info("后台服务如果是被强行结束的，Windows 会在几秒内重新启动它，它会清理留下的虚拟网卡和路由");
+        } else if !active() && matches!(supervisor::status(), Status::Disconnected | Status::Error { .. }) {
             match cleanup::run(true) {
                 Ok(r) if r.is_clean() => logs::info("检查：后台服务没有留下残留"),
                 Ok(_) => {} // cleanup logs what it found and did

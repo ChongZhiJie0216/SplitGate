@@ -225,8 +225,14 @@ export interface ServiceState {
   command: string | null;
   /** 服务指向的是不是这一份 SplitGate.exe（便携版搬了位置时为 false）。 */
   matches_this_exe: boolean;
+  /** 服务负责的那一份 SplitGate.exe。 */
+  app: string | null;
+  /** 服务从只有管理员能改的文件夹运行（v0.20.0 起）；false = 旧版装的，直接用程序文件夹里的文件。 */
+  protected: boolean;
   /** 服务经命名管道回报的版本；没回应时为 null。 */
   version: string | null;
+  /** 服务的版本和这个 SplitGate 不同。 */
+  outdated: boolean;
 }
 
 export const getServiceState = () => invoke<ServiceState>("get_service_state");
@@ -234,7 +240,7 @@ export const installService = () => invoke<ServiceState>("install_service");
 export const removeService = () => invoke<ServiceState>("remove_service");
 /** 弹出 Windows 的管理员确认，新的 SplitGate 启动后这一个就退出。 */
 export const restartAsAdmin = () => invoke<void>("restart_as_admin");
-export const serviceUsable = (s: ServiceState | null) => !!s && s.installed && s.running && s.matches_this_exe;
+export const serviceUsable = (s: ServiceState | null) => !!s && s.installed && s.running && s.matches_this_exe && !s.outdated;
 
 /** 检查更新（update.rs）：只提示，不下载、不安装。 */
 export interface UpdateSection {

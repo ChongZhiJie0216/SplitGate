@@ -4,17 +4,42 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 pub const APP_DIR_NAME: &str = "SplitGate";
 pub const DATA_DIR_NAME: &str = "data";
 /// Settings files copied from the old location; logs and diagnostics are not.
 const MIGRATED_FILES: [&str; 3] = ["profiles.json", "rules.json", "settings.json"];
 
+/// The background service runs its own copy from a protected folder (v0.20.0) but works for one
+/// SplitGate copy: its `--app` argument sets that copy's folder (the settings are there).
+static APP_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+// Only the Windows background service calls this.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn set_app_dir(dir: PathBuf) {
+    let _ = APP_DIR.set(dir);
+}
+
+/// Folder of the SplitGate copy whose settings are used: this exe's, or for the service the copy
+/// it was installed for.
+pub fn app_dir() -> PathBuf {
+    APP_DIR.get().cloned().unwrap_or_else(exe_dir)
+}
+
 pub fn data_dir() -> PathBuf {
     if let Some(home) = std::env::var_os("SPLITGATE_HOME") {
         return PathBuf::from(home);
     }
-    exe_dir().join(DATA_DIR_NAME)
+    app_dir().join(DATA_DIR_NAME)
+}
+
+/// Where the background service's own copy of SplitGate.exe and sing-box.exe lives (v0.20.0):
+/// `%ProgramFiles%\SplitGate`, which only administrators can change. The service runs as SYSTEM,
+/// so it must not run files any program of the user could replace.
+pub fn service_dir() -> PathBuf {
+    let pf = std::env::var_os("ProgramW6432").or_else(|| std::env::var_os("ProgramFiles")).map(PathBuf::from);
+    pf.unwrap_or_else(|| PathBuf::from(r"C:\Program Files")).join(APP_DIR_NAME)
 }
 
 /// Where settings lived up to v0.11: %APPDATA%\SplitGate.
@@ -73,6 +98,13 @@ pub fn exe_dir() -> PathBuf {
 
 pub fn singbox_exe() -> PathBuf {
     exe_dir().join("sing-box.exe")
+}
+
+/// Every sing-box.exe SplitGate may have started: this copy's and the service's (cleanup).
+pub fn our_singbox_exes() -> Vec<PathBuf> {
+    let mut v = vec![singbox_exe(), app_dir().join("sing-box.exe"), service_dir().join("sing-box.exe")];
+    v.dedup();
+    v
 }
 
 #[cfg(test)]

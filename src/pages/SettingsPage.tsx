@@ -214,14 +214,26 @@ function ServiceCard() {
       {s?.installed && !s.matches_this_exe && (
         <div className="banner warn">
           {L.serviceOther}
-          <span className="mono small">{s.command?.split('"')[1] ?? s.command}</span>
+          <span className="mono small">{s.app ?? s.command}</span>
         </div>
       )}
+      {s?.installed && s.matches_this_exe && s.outdated && <div className="banner warn">{L.serviceOutdated(s.version ?? "?")}</div>}
+      {s?.installed && s.matches_this_exe && !s.outdated && !s.protected && <div className="banner warn">{L.serviceUnprotected}</div>}
       {error && <div className="banner bad">{error}</div>}
       <div className="row">
-        {(!s?.installed || !s.matches_this_exe || !s.running) && (
+        {(!s?.installed || !s.matches_this_exe || !s.running || s.outdated || !s.protected) && (
           <button className="btn" disabled={busy || !s} onClick={() => run(ipc.installService)}>
-            {busy ? L.serviceBusy : !s?.installed ? L.serviceInstall : !s.matches_this_exe ? L.serviceFix : L.serviceStart}
+            {busy
+              ? L.serviceBusy
+              : !s?.installed
+                ? L.serviceInstall
+                : !s.matches_this_exe
+                  ? L.serviceFix
+                  : s.outdated
+                    ? L.serviceUpdate
+                    : !s.protected
+                      ? L.serviceReinstall
+                      : L.serviceStart}
           </button>
         )}
         {s?.installed && (

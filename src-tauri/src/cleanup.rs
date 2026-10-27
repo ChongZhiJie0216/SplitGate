@@ -11,9 +11,9 @@ use crate::{logs, paths, platform};
 const SCRIPT: &str = r#"
 $ErrorActionPreference = 'Continue'
 $apply = $env:SG_APPLY -eq '1'
-$sb = $env:SG_SINGBOX
+$sb = @($env:SG_SINGBOX -split ';' | Where-Object { $_ })
 foreach ($p in @(Get-Process -Name 'sing-box' -ErrorAction SilentlyContinue)) {
-    if ($p.Path -and ($p.Path -ieq $sb)) {
+    if ($p.Path -and ($sb -contains $p.Path)) {
         Write-Output "found: sing-box pid $($p.Id)"
         if ($apply) {
             try { Stop-Process -Id $p.Id -Force -ErrorAction Stop; Start-Sleep -Milliseconds 800; Write-Output "did: stopped sing-box pid $($p.Id)" }
@@ -56,7 +56,7 @@ pub fn run(apply: bool) -> Result<Report, String> {
     let apply = apply && platform::is_admin();
     let out = platform::powershell(SCRIPT)
         .env("SG_APPLY", if apply { "1" } else { "0" })
-        .env("SG_SINGBOX", paths::singbox_exe())
+        .env("SG_SINGBOX", paths::our_singbox_exes().iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(";"))
         .output()
         .map_err(|e| format!("无法执行清理：{e}"))?;
     let mut rep = Report::default();
