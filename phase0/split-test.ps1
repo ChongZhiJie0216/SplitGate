@@ -1,5 +1,5 @@
 # Shared split-routing check for V2/V3, run in a SECOND Administrator PowerShell while sing-box is running.
-#   -HomeIp <ip> : expected public IP of the VPN exit (to print PASS/FAIL)
+#   -HomeIp <ip> : expected public IP of the VPN exit (to print PASS/FAIL); a DDNS host name works too
 #   -Kill        : also force-kill sing-box and measure how long until the network works again
 param([string]$HomeIp = '', [switch]$Kill)
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -20,7 +20,13 @@ $viaVpn = (curl.exe -4 -s --max-time 10 https://ifconfig.me)
 Write-Host "api.ipify.org (not in rules, expect LOCAL): $local"
 Write-Host "ifconfig.me   (in rules,     expect VPN)  : $viaVpn"
 if ($viaVpn -and $local -and $viaVpn -ne $local) { Write-Host '[PASS] the two exits are different' } else { Write-Host '[FAIL] the two exits are the same or empty' }
-if ($HomeIp) { if ($viaVpn -eq $HomeIp) { Write-Host '[PASS] ifconfig.me exit = expected VPN IP' } else { Write-Host "[FAIL] ifconfig.me exit is not $HomeIp" } }
+# A host name (e.g. the home DDNS name) is looked up first; any of its IPv4 addresses counts.
+$expected = @($HomeIp)
+if ($HomeIp -and -not ($HomeIp -as [Net.IPAddress])) {
+    $expected = @(Resolve-DnsName $HomeIp -Type A -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress } | ForEach-Object { $_.IPAddress })
+    Write-Host "$HomeIp resolves to: $(if ($expected.Count) { $expected -join ', ' } else { '(nothing)' })"
+}
+if ($HomeIp) { if ($expected -contains $viaVpn) { Write-Host '[PASS] ifconfig.me exit = expected VPN IP' } else { Write-Host "[FAIL] ifconfig.me exit is not $HomeIp" } }
 
 Write-Host '--- DNS for ifconfig.me (sing-box log should show vpn-dns for it) ---'
 Resolve-DnsName ifconfig.me -Type A -DnsOnly -ErrorAction SilentlyContinue | Select-Object Name, IPAddress | Format-Table -AutoSize | Out-String | Write-Host
