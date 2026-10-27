@@ -32,6 +32,10 @@ Windows 专用的代码在 Linux 上也能检查（云端会话用）：`rustup 
 
 打包前要先从托盘“退出”SplitGate，否则 exe 被占用，脚本会一开始就停下并提示。
 
+## 程序图标
+
+原稿是 `src-tauri/icons/source.svg`（v0.22.0）。改了以后在仓库根目录执行 `npx tauri icon src-tauri/icons/source.svg`，它会重新生成 `src-tauri/icons/` 里的各尺寸 png、`icon.ico`、`icon.icns`；它另外生成的 `android\`、`ios\` 文件夹用不到，删掉就好。导航左上角的标志在 `src/components/Logo.tsx`，要跟着改。
+
 ## 发布新版本
 
 1. 改好 `package.json` 的版本号（唯一来源；`src-tauri/Cargo.toml` 要同值，测试会检查）和 `CHANGELOG.md`（第一个版本段落要是这次的版本），合并进 `main`。
