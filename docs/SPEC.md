@@ -507,7 +507,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 维护者 2026-10-26 定：放到整个项目最后做；在那之前 Profile 页的 Pangolin 类型维持“还不能连接”。
 
 - [x] 第 0 阶段 V8：经 Pangolin 连到家里 SOCKS5 代理，不用 Exit Node（`phase0/v8-pangolin-socks/`，维护者 2026-10-27 实测通过）
-- [ ] Pangolin 出口（`socks` 出口 + `bind_interface: Pangolin`，代理密码存凭据管理器）；Pangolin 下也能访问家里内网（v0.21.0，待维护者实测）
+- [x] Pangolin 出口（`socks` 出口 + `bind_interface: Pangolin`，代理密码存凭据管理器）；Pangolin 下也能访问家里内网（v0.21.0，维护者 2026-10-27 实测通过）
 
 ## 待确认事项
 
