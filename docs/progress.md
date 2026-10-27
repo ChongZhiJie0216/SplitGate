@@ -1,11 +1,11 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-27，版本 v0.19.0。
+> 最后更新：2026-10-27，版本 v0.20.0。
 
 ## 现在在哪一步
 
-**第 1 阶段验收：不靠学校网络的项目都在手机热点下通过了；剩下要在学校有线网络测的两项（App 登录、非规则流量出口）。** 维护者 2026-10-26 同意学校那两项延后，先做第 2 阶段（连接列表页 v0.6.0、拦截检测 v0.7.0、睡眠唤醒与自动重连 v0.8.0、诊断包 v0.9.0、访问家里内网 v0.10.0 已做，第 2 阶段功能全部完成；Pangolin 移到项目最后）。
+**第 0–3 阶段的功能都做完了，只剩 Pangolin（排在整个项目最后）。** Windows 服务三步（v0.15.0 / v0.17.x / v0.18.0）和在线更新（v0.19.0）已合并进 `main`；v0.19.0 已发布到 GitHub Release。v0.19.0 的在线更新维护者 2026-10-27 实测通过（G）。v0.20.0（服务改从 Program Files 运行、服务被结束后自动重启、出口代码整理）维护者 2026-10-27 实测通过（H），等合并 PR #8 和发布。
 
 ## 已完成
 
@@ -18,7 +18,8 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
-| 0.19.0 | — | 在线升级（便携版，维护者 2026-10-27 定）：`updater.rs` 下载 Release zip + `.sha256` 核对 → 改名 `*.old` 换文件（失败换回）→ 有服务时停 / 启（非管理员经 `elevate.rs` `apply-update`）→ `--wait-pid` 重启，新版本删旧文件；正在连接时按钮写“断开连接并更新”；`build.bat` 生成 `.sha256`、`publish-release.ps1` 上传；测试用 `SPLITGATE_PRETEND_VERSION`。**还没在 Windows 上跑过**，测试见 `docs/test-plan.md` G |
+| 0.20.0 | — | 后台服务改从 `%ProgramFiles%\SplitGate\` 运行自己的一份（`--app` 指回设置所在的那一份；版本不同 / 旧装法时设置页提示）；服务设失败恢复（5 秒后重启，启动清理恢复网络）；旧服务的说明文字会更新；清理认得两个位置的 sing-box；出口代码整理成 `exits/` 的 `ExitAdapter`；`progress.md` 整理。维护者 2026-10-27 实测 H 部分通过 |
+| 0.19.0 | — | 在线升级（便携版，维护者 2026-10-27 定）：`updater.rs` 下载 Release zip + `.sha256` 核对 → 改名 `*.old` 换文件（失败换回）→ 有服务时停 / 启（非管理员经 `elevate.rs` `apply-update`）→ `--wait-pid` 重启，新版本删旧文件；正在连接时按钮写“断开连接并更新”；`build.bat` 生成 `.sha256`、`publish-release.ps1` 上传；测试用 `SPLITGATE_PRETEND_VERSION`。维护者 2026-10-27 实测 G 部分全部通过 |
 | 0.18.0 | — | 后台服务第 3 步：清单改 `asInvoker`；`elevate.rs`：要管理员的单个步骤（安装 / 移除服务、开机自启任务）以 `--admin-task` 临时提权（UAC），“以管理员身份重新启动”（`--wait-pid`）；开机自启有服务时普通权限（`LeastPrivilege`）、没有时最高权限，和现状不符时设置页提示；不是管理员又没有服务时顶部提示两条路；托盘“连接”不再因为不是管理员变灰。维护者 2026-10-27 实测 F 部分全部通过 |
 | 0.17.2 | — | （维护者 2026-10-27 实测 E 部分全部通过）服务被强行结束时界面等 5 秒自己清理残留；sing-box 进 Job Object 要核对（`IsProcessInJob`），启动时记 pid；服务日志记连接 / 断开请求、界面关掉后断开的结果、启动清理、panic 原因。测试文档改用 `sc.exe`（PowerShell 的 `sc` 是 Set-Content） |
 | 0.17.1 | — | 修正 v0.17.0“后台服务没有回应”（同步管道上读写线程互等）：拆成命令连接 + 事件连接，每条连接一个线程；经服务连接失败也写日志；托盘连接 / 断开移出主线程 |
@@ -59,56 +60,34 @@
 - 之前用清理脚本在**已连接**时结束了 sing-box：SplitGate 断线，之后能重新连接，不是 bug。
 
 ### 还没有验证
-- 在学校有线网络下：Xbox App（登录、商店、Game Pass）、PrismLauncher、Steam 登录；非规则流量出口仍是学校网络（`phase1\exit-ip.ps1`）。到学校先重新做基准 `phase0\snapshot.ps1 -Baseline`。
-- 托盘右键菜单实际点一次；开机自启建立 / 删除、注销再登录在托盘启动。
-- v0.6.1 的 Xbox 预设：要在“规则”页对 Xbox 规则集按“恢复预设”才会加上程序名，之后在连接列表里看 Xbox App 的连接是不是走 VPN。
+- 学校有线网络（`docs/test-plan.md` B）：Xbox App（登录、商店、Game Pass）、PrismLauncher、Steam 登录；非规则流量出口仍是学校网络（`phase1\exit-ip.ps1`）；拦截检测；Cisco 下访问家里内网。到学校先重新做基准 `phase0\snapshot.ps1 -Baseline`。
+- 从 v0.19.0 真正在线更新到 v0.20.0（H 最后一项，发布后测）。
 
 ## 下一步（照顺序）
 
-- **现在**：v0.19.0（在线升级，便携版）等维护者实测：先合并、发布 v0.19.0，再照 `docs/test-plan.md` G 测。之后最后一项是 Pangolin；学校网络的 B 部分有机会再补测。
-- **v0.13.0 已发布到 GitHub Release**（2026-10-26，维护者用 `scripts\publish-release.ps1 -Yes`；PR #2、#3 已合并进 `main`）。README 改成给使用者看的使用说明（v0.14.0 分支），开发与发布步骤在 `docs/development.md`。
-- **测试清单：`docs/test-plan.md`**：A 部分（热点，A1–A9）**2026-10-26 全部通过（v0.11.1）**，可以合并 PR #2；B 部分（学校有线 + Cisco）之后补测。合并后开始做 Windows 服务（v0.13 起；注意 v0.12 的 `data\` 放在程序旁边，装进 Program Files 时要重新决定）。
-- **第 3 阶段（维护者 2026-10-26 定进入）**：顺序 openconnect 评估（✅ 不需要，见 SPEC 第 3 阶段）→ React Flow 流量画布 v0.11（✅ 完成，`@xyflow/react` 12.12.0）→ Windows 服务（做法见 SPEC 组件 5，维护者已同意 6 点设计）。Duo / SAML 定跳过。第 2 阶段 v0.7.0–v0.10.0 的 Windows 实测和 PR [#2](https://github.com/ChongZhiJie0216/SplitGate/pull/2) 合并同时进行。
-0. **流程（维护者 2026-10-26 定）**：Pangolin 只是备用出口，**移到整个项目的最后**（SPEC“最后：Pangolin”）。做法已定：不用 Exit Node，经 Pangolin 连到家里 VPN-Server 虚拟机上的 SOCKS5 代理；V8 脚本已备好（`phase0/v8-pangolin-socks/`），到时再测。第 2 阶段的“访问家里内网”v0.10.0 完成（Profile 的“家里内网网段” + 撞号检查）。**第 2 阶段功能全部完成，等维护者实测 v0.7.0–v0.10.0 后再进第 3 阶段。**
-1. ~~第一次真正连接测试~~（2026-10-26 完成，Cisco 和 WireGuard 都通过，见上）。回滚方法仍是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。
-2. 按 SPEC 第 1 阶段验收逐条测（2026-10-26 热点下能测的都通过，见上；剩学校网络两项）：Xbox App / PrismLauncher / Steam 能登录；非规则流量出口仍是学校网络；任务管理器结束 SplitGate 后 5 秒内恢复；断开再连接 20 次没有残留；日志和 `%APPDATA%\SplitGate\` 搜不到密码；核实 Xbox App 进程名补进预设。
-   辅助脚本在 `phase1\`（2026-10-26 写好，**还没在 Windows 上跑过**，第一次用时留意报错）。除 `kill-recovery.ps1 -KillNow` 会结束 SplitGate 外都只读；回滚一律是 `phase0\cleanup-all.ps1 -Apply`。先在断开状态跑一次 `phase0\snapshot.ps1 -Baseline` 当基准。
+1. 合并 PR #8、发布 v0.20.0，再从 v0.19.0 真正在线更新一次（H 最后一项）。
+2. **最后：Pangolin**（SPEC“最后：Pangolin”）。做法已定：不用 Exit Node，经 Pangolin 连到家里 VPN-Server 虚拟机上的 SOCKS5 代理。要先由维护者在虚拟机上装好代理，跑第 0 阶段 V8（`phase0/v8-pangolin-socks/`），再写 `exits/pangolin.rs`（实现 `ExitAdapter`）。
+3. 有机会时补测学校网络（B）。
+4. SPEC“待决定的事”里还没回答的：项目正式名称、Cisco VPN 是否自己管理、家里路由器是否转发 UDP 8443、Pangolin 和 WireGuard 都有时回家优先用哪个。
 
-   | 验收项 | 脚本 | 怎么用 |
-   |---|---|---|
-   | 非规则流量出口仍是学校网络 | `exit-ip.ps1` | 断开时跑一次（记下公网 IP），连接后再跑一次，相同就 PASS |
-   | 结束 SplitGate 后 5 秒内恢复 | `kill-recovery.ps1` | 连接后启动，再到任务管理器“详细信息”结束 `SplitGate.exe`（或加 `-KillNow`，要管理员）；从进程消失算起，到没有残留且直连 DNS + TCP 成功 |
-   | 断开再连接 20 次没有残留 | `reconnect-watch.ps1` | 断开时启动，然后自己按 20 次连接 / 断开；每次断开后 10 秒内要清干净 |
-   | 搜不到密码 | `secret-scan.ps1` | 隐藏输入密码 / 私钥（不显示、不落盘），按 UTF-8 和 UTF-16 搜设置文件夹、`%LOCALAPPDATA%\SplitGate`（WebView2 数据）、`-Extra` 指定的文件夹，以及 SplitGate / sing-box 命令行和任务计划 |
-   | Xbox App 进程名 | `find-process.ps1` | 打开 Xbox App 进商店后跑；列出名字含 xbox / gaming 的进程和它们的联网数，建议填 `process_name`（商店应用路径带版本号，不能用 `process_path`） |
-   | 随时检查残留 | `residue-check.ps1` | 断开后跑，0 = 干净 |
-
-   结果日志在 `phase1\logs\`（不进 git）。
-3. ~~第 1 阶段剩下的页面~~（v0.5.0 完成）。托盘右键菜单、开机自启（建立 / 删除任务计划、注销再登录在托盘启动）2026-10-26 实测通过。
-4. ~~第 1 阶段全部验收后才进入第 2 阶段~~：维护者 2026-10-26 同意学校网络两项延后，先做第 2 阶段（连接列表 v0.6.0、拦截检测 v0.7.0、睡眠唤醒与自动重连 v0.8.0、诊断包 v0.9.0、访问家里内网 v0.10.0 已做；接下来等实测，然后第 3 阶段；Pangolin 移到项目最后）。
-   v0.10.0 要实测：Profile 填“家里内网网段”，删掉（或取消勾选）之前手动建的规则集，连接后打开 PVE 管理网页；用手机热点时把家里网段故意填成热点的网段（例如 172.20.10.0/28），连接页应出现黄色“注意”提示。
-   v0.9.0 要实测：日志页“导出诊断包” → “在文件夹中显示” → 解开 zip 看内容；再跑 `phase1\secret-scan.ps1`（会解开 zip 搜），应该 PASS。
-   v0.8.0 要实测（热点 + WireGuard 就可以）：① 连接后让电脑睡眠 1 分钟以上再唤醒：日志应出现“电脑从睡眠中恢复”，接着“睡眠唤醒后 VPN 出口正常”，或者“连接中断”后自动重连成功。② 已连接时用任务管理器只结束 `sing-box.exe`：应显示“等待重新连接”，2 秒后自动连回去。③ 等待时按“停止自动重连”，应变成“已断开”，不再重连。
-   v0.7.0 要实测：热点下打开几个网站，“拦截提示”页应该是空的（热点不拦截）；到学校有线 + Cisco 时，暂时把某条规则关掉（例如 Steam），打开 Steam，`store.steampowered.com` 等应该出现在“拦截提示”，原因是“证书被 Fortinet 换掉”。
+回滚方法一律是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。验收辅助脚本在 `phase1\`（用法见 `docs/test-plan.md`）；结果日志在 `phase1\logs\`（不进 git）。
 
 ## 与 SPEC 不完全一样的地方（要告诉维护者）
 
-- 关窗口缩到托盘后，只有托盘菜单“退出”才会断开并结束。删除便携版前，先在设置页关掉开机自启（否则任务计划里会留一个指向旧位置的任务）。
-
-- SPEC 写“ExitAdapter trait”：目前是 `singbox.rs` 里按出口类型分开生成（`match`），还没抽成 trait；第 2 阶段加 Pangolin 时再整理。
-- 便携版是文件夹（SplitGate.exe + sing-box.exe），不是单一 exe：sing-box 本身 78 MB，单一 exe 要每次解压。设置仍在 `%APPDATA%\SplitGate\`。
-- Cisco 服务器要求额外登录信息时，目前只提示“请填写组别”，还不能在界面里回答（留到之后）。
+- 关窗口缩到托盘后，只有托盘菜单“退出”才会断开并结束。删除便携版前，先在设置页关掉开机自启、移除后台服务（否则任务计划和服务里会留下指向旧位置的项目）。
+- 便携版是文件夹（SplitGate.exe + sing-box.exe），不是单一 exe：sing-box 本身 78 MB，单一 exe 要每次解压。设置在程序旁边的 `data\`（v0.12.0 起）。后台服务用的那一份在 `C:\Program Files\SplitGate\`（v0.20.0 起）。
+- Cisco 服务器要求额外登录信息时，只提示“请填写组别”，还不能在界面里回答（Duo / SAML 维护者定跳过）。
+- 在线更新的 `.sha256` 只防下载损坏，不是签名（维护者定不做安装包和签名）。
 
 ## 分支
 
-- `main`：v0.5.0（`cb05976`）。
-- `claude/modest-bell-xe9osa`（云端会话的分支）：`feature/connections-page` + `phase1\` 验收脚本 + v0.6.1 Xbox 预设 + v0.7.0 拦截检测。维护者用 `git merge --ff-only origin/claude/modest-bell-xe9osa` 拉进 `feature/connections-page`。
-- `feature/connections-page`：v0.6.0 连接列表页。**维护者在 Windows 上实测通过后再合并进 `main`**。要测：连接页速率、连接列表（VPN / 直连标示、搜索、关闭单条、加规则 + 现在重新连接）。
+- `main`：已合并到 v0.19.0（PR #1–#7），v0.19.0 已发布。
+- `claude/modest-bell-xe9osa`（云端会话的分支）：每个 PR 合并后从最新的 `main` 重新开始。维护者测试时：`git fetch origin claude/modest-bell-xe9osa` → `git checkout -B test/<版本> origin/claude/modest-bell-xe9osa`，之后 `git merge --ff-only origin/claude/modest-bell-xe9osa` 拉新的修改；合并后回 `main` `git pull`。
 
 ## 接着做时要记得
 
-- 编辑含反斜杠的内容（Rust / TS 字符串转义、Windows 路径）用编辑工具，不要用 Bash heredoc 里的 python / sed：本机的 Bash 会吞掉 `\\`。
-
-- 提交用 gpg 签名，密码缓存过期会卡住：用 20 秒超时的 job 提交，超时就请维护者自己 `git commit`，之后用 `git log` 核对。
-- 开发时看界面：`SPLITGATE_HOME` 指向临时文件夹，`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` 再用 CDP 操作，不动真正的 `%APPDATA%\SplitGate\`。
-- 远端推送（origin）由维护者自己决定，目前没推。
+- 云端（Linux）也能检查 Windows 代码：`cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings`（见 `docs/development.md`）；`cleanup::tests::check_mode_runs` 要 Windows PowerShell，云端必定失败。
+- 界面在云端用 Playwright + 假的 `window.__TAURI_INTERNALS__` 截图看。
+- 在 PowerShell 里停 / 启服务要写 `sc.exe`（`sc` 是 Set-Content）；读日志加 `-Encoding UTF8`。
+- 维护者本机编辑含反斜杠的内容（Rust / TS 字符串转义、Windows 路径）用编辑工具，不要用 Bash heredoc 里的 python / sed：本机的 Bash 会吞掉 `\\`。
+- 维护者用 gpg 签名 commit，密码缓存过期会卡住：用 20 秒超时的 job 提交，超时就请维护者自己 `git commit`。

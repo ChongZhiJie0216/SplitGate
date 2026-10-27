@@ -20,7 +20,7 @@ build.bat                                                             # 便携�
 
 Windows 专用的代码在 Linux 上也能检查（云端会话用）：`rustup target add x86_64-pc-windows-msvc` 后执行 `cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings`（`src-tauri\binaries\` 里要有一个 `sing-box-x86_64-pc-windows-msvc.exe`，空文件也行）。
 
-装了后台服务（`SplitGateService`）、而且它正从仓库根目录或 `portable\SplitGate\` 运行时，`build.bat` 会停下：先在设置页移除服务，或者用管理员执行 `sc.exe stop SplitGateService`。
+后台服务（`SplitGateService`）从 v0.20.0 起运行自己那一份（`C:\Program Files\SplitGate\`），重新打包不受影响；打包后服务的版本和新的 SplitGate 不同，设置页会提示“更新后台服务”，按一下（Windows 确认一次）就把新文件复制过去。v0.15–v0.19 装的服务直接从仓库根目录或 `portable\SplitGate\` 运行，那时 `build.bat` 会停下：先在设置页移除服务，或者用管理员执行 `sc.exe stop SplitGateService`。
 
 开发版看界面时，把环境变量 `SPLITGATE_HOME` 指向一个临时文件夹，就不会动到真正的 `data\`。
 

@@ -12,7 +12,36 @@ use std::process::Stdio;
 use serde::Serialize;
 use serde_json::Value;
 
+use serde_json::json;
+
+use super::{ExitAdapter, ExitParts};
+use crate::config::CiscoProfile;
+use crate::singbox::{Secrets, VPN_TAG};
 use crate::{platform, singbox};
+
+/// sing-box's OpenConnect endpoint (phase 0 V3a), with the DNS servers the VPN pushes.
+impl ExitAdapter for CiscoProfile {
+    fn parts(&self, secrets: &Secrets) -> Result<ExitParts, String> {
+        let mut ep = json!({
+            "type": "openconnect",
+            "tag": VPN_TAG,
+            "server": singbox::cisco_server_url(&self.server),
+            "username": self.user,
+            "password": secrets.main,
+        });
+        if let Some(g) = &self.auth_group {
+            ep["auth_group"] = json!(g);
+        }
+        if self.no_udp {
+            ep["no_udp"] = json!(true);
+        }
+        if let Some(i) = &self.bind_interface {
+            ep["bind_interface"] = json!(i);
+        }
+        let dns = json!({ "type": "openconnect", "tag": "vpn-dns", "endpoint": VPN_TAG, "accept_default_resolvers": true });
+        Ok(ExitParts { endpoint: ep, dns, server_host: singbox::host_of(&self.server) })
+    }
+}
 
 /// Pure ASCII PowerShell 5.1. Inputs: SG_URL, SG_MODE (groups / login), SG_USER, SG_GROUP; the
 /// password is the first stdin line (login only). Prints {init, reply} (raw server XML) or {error}.

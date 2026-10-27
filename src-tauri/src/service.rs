@@ -17,6 +17,8 @@ pub const SERVICE_NAME: &str = "SplitGateService";
 pub const SERVICE_ARG: &str = "--service";
 /// The installing user's SID, passed in the service command line (a SID is not a secret).
 const ALLOW_SID_ARG: &str = "--allow-sid";
+/// The SplitGate copy (its exe) the service works for: its settings and logs (v0.20.0).
+const APP_ARG: &str = "--app";
 pub const PIPE_NAME: &str = r"\\.\pipe\SplitGate";
 /// Longest request line the service reads.
 const MAX_LINE: usize = 64 * 1024;
@@ -27,10 +29,17 @@ pub struct ServiceState {
     pub running: bool,
     /// The service's command line (None when not installed).
     pub command: Option<String>,
-    /// False when the service runs another copy (e.g. the portable folder was moved).
+    /// False when the service works for another copy (e.g. the portable folder was moved).
     pub matches_this_exe: bool,
+    /// The SplitGate copy it works for (None when not installed).
+    pub app: Option<String>,
+    /// It runs its own copy from the protected folder (v0.20.0); false = installed by an older
+    /// version straight from the program folder, which a user's program could replace.
+    pub protected: bool,
     /// Version the service reported over the pipe; None when it did not answer.
     pub version: Option<String>,
+    /// It answered with another version than this SplitGate (needs "改成这一个").
+    pub outdated: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -91,9 +100,26 @@ pub fn is_service_launch() -> bool {
     std::env::args().any(|a| a == SERVICE_ARG)
 }
 
-/// `"C:\x\SplitGate.exe" --service --allow-sid S-1-5-21-...`
-fn command_line(exe: &str, sid: &str) -> String {
-    format!("\"{exe}\" {SERVICE_ARG} {ALLOW_SID_ARG} {sid}")
+/// `"C:\Program Files\SplitGate\SplitGate.exe" --service --allow-sid S-1-5-21-... --app "D:\x\SplitGate.exe"`
+/// (paths cannot contain `"`).
+fn command_line(exe: &str, sid: &str, app: &str) -> String {
+    format!("\"{exe}\" {SERVICE_ARG} {ALLOW_SID_ARG} {sid} {APP_ARG} \"{app}\"")
+}
+
+/// The `--app` value in a service command line; None for services installed before v0.20.0.
+fn app_of(command: &str) -> Option<&str> {
+    let rest = command.split_once(&format!(" {APP_ARG} "))?.1;
+    match rest.strip_prefix('"') {
+        Some(r) => r.split('"').next(),
+        None => rest.split(' ').next(),
+    }
+    .filter(|a| !a.is_empty())
+}
+
+/// In the service process: the copy it works for, from its own command line.
+fn app_from_args() -> Option<std::path::PathBuf> {
+    let args: Vec<String> = std::env::args().collect();
+    args.iter().position(|a| a == APP_ARG).and_then(|i| args.get(i + 1)).map(std::path::PathBuf::from)
 }
 
 /// The exe path at the start of a service command line.
@@ -135,7 +161,7 @@ fn service_log(text: &str) {
 }
 
 #[cfg(windows)]
-pub use win::{install, open_trusted_pipe, remove, run_service, start_installed, state, stop_installed, user_sid};
+pub use win::{copy_to_service_dir, install, open_trusted_pipe, remove, run_service, start_installed, state, stop_installed, user_sid};
 
 /// From the app: directly when it runs as administrator, otherwise in an elevated copy of
 /// SplitGate (Windows shows its UAC prompt) that installs for this user (v0.18.0).
@@ -157,8 +183,13 @@ pub fn remove_from_app() -> Result<ServiceState, String> {
 
 /// The service can connect for this copy of SplitGate (no administrator rights needed then).
 pub fn usable() -> bool {
-    let s = state();
-    s.installed && s.running && s.matches_this_exe
+    state().usable()
+}
+
+impl ServiceState {
+    pub fn usable(&self) -> bool {
+        self.installed && self.running && self.matches_this_exe && !self.outdated
+    }
 }
 
 #[cfg(not(windows))]
@@ -177,6 +208,10 @@ pub fn install(_sid: Option<String>) -> Result<ServiceState, String> {
 }
 #[cfg(not(windows))]
 pub fn remove() -> Result<ServiceState, String> {
+    Err("后台服务只支持 Windows".into())
+}
+#[cfg(not(windows))]
+pub fn copy_to_service_dir() -> Result<(), String> {
     Err("后台服务只支持 Windows".into())
 }
 #[cfg(not(windows))]
@@ -225,7 +260,8 @@ mod win {
         SERVICE_CONTROL_SHUTDOWN, SERVICE_CONTROL_STOP, SERVICE_DESCRIPTIONW, SERVICE_ERROR_NORMAL, SERVICE_NO_CHANGE,
         SERVICE_QUERY_CONFIG, SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START, SERVICE_START_PENDING, SERVICE_STATUS,
         SERVICE_STATUS_CURRENT_STATE, SERVICE_STATUS_HANDLE, SERVICE_STOP, SERVICE_STOPPED, SERVICE_STOP_PENDING,
-        SERVICE_TABLE_ENTRYW, SERVICE_WIN32_OWN_PROCESS,
+        SERVICE_TABLE_ENTRYW, SERVICE_WIN32_OWN_PROCESS, SC_ACTION, SC_ACTION_RESTART, SERVICE_CONFIG_FAILURE_ACTIONS,
+        SERVICE_FAILURE_ACTIONSW,
     };
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
@@ -284,6 +320,10 @@ mod win {
         }
         STATUS_HANDLE.store(h, Ordering::SeqCst);
         set_state(SERVICE_START_PENDING);
+        // Settings and logs of the copy it works for (before anything writes a log).
+        if let Some(dir) = app_from_args().as_deref().and_then(std::path::Path::parent) {
+            crate::paths::set_app_dir(dir.to_path_buf());
+        }
         let sid = allowed_sid_from_args();
         service_log(&format!("后台服务启动（v{}），管道允许的用户：{}", env!("CARGO_PKG_VERSION"), sid.as_deref().unwrap_or("只有管理员")));
         // Release builds abort on a panic with no trace anywhere; leave one in the service log.
@@ -603,9 +643,13 @@ mod win {
         let Some(svc) = open(SERVICE_QUERY_STATUS | SERVICE_QUERY_CONFIG) else { return ServiceState::default() };
         let running = current_state(&svc) == Some(SERVICE_RUNNING);
         let command = command(&svc);
-        let matches_this_exe = command.as_deref().is_some_and(|c| exe_of(c).eq_ignore_ascii_case(&this_exe()));
+        // Since v0.20.0 `--app` names the copy; before, the service ran that copy's exe itself.
+        let app = command.as_deref().map(|c| app_of(c).unwrap_or(exe_of(c)).to_string());
+        let protected = command.as_deref().is_some_and(|c| app_of(c).is_some());
+        let matches_this_exe = app.as_deref().is_some_and(|a| a.eq_ignore_ascii_case(&this_exe()));
         let version = if running { ping().ok() } else { None };
-        ServiceState { installed: true, running, command, matches_this_exe, version }
+        let outdated = version.as_deref().is_some_and(|v| v != env!("CARGO_PKG_VERSION"));
+        ServiceState { installed: true, running, command, matches_this_exe, app, protected, version, outdated }
     }
 
     /// The SID of the user running this process.
@@ -654,7 +698,8 @@ mod win {
     }
 
     /// Installs (or points the existing service at this copy) and starts it. `sid`: the user
-    /// the pipe lets in; None = the user running this process.
+    /// the pipe lets in; None = the user running this process. The service runs its own copy of
+    /// SplitGate.exe and sing-box.exe in `paths::service_dir()` (v0.20.0), copied from here.
     pub fn install(sid: Option<String>) -> Result<ServiceState, String> {
         if !platform::is_admin() {
             return Err("需要管理员权限才能安装后台服务。".into());
@@ -664,16 +709,24 @@ mod win {
             Some(_) => return Err("用户 SID 格式不对".into()),
             None => user_sid()?,
         };
-        let cmd = wide(&command_line(&this_exe(), &sid));
-        if let Some(svc) = open(SERVICE_QUERY_STATUS | SERVICE_QUERY_CONFIG | SERVICE_START | SERVICE_STOP | SERVICE_ALL_ACCESS) {
-            // Already there (maybe another copy): point it here, restart.
-            stop_and_wait(&svc);
+        let existing = open(SERVICE_QUERY_STATUS | SERVICE_QUERY_CONFIG | SERVICE_START | SERVICE_STOP | SERVICE_ALL_ACCESS);
+        // Its files are in use while it runs.
+        if let Some(svc) = &existing {
+            stop_and_wait(svc);
+        }
+        let dir = crate::paths::service_dir();
+        copy_to_service_dir()?;
+        let exe = dir.join("SplitGate.exe").display().to_string();
+        let cmd = wide(&command_line(&exe, &sid, &this_exe()));
+        if let Some(svc) = existing {
+            // Already there (maybe for another copy, or an older layout): point it here, restart.
             let ok = unsafe {
                 ChangeServiceConfigW(svc.0, SERVICE_NO_CHANGE, SERVICE_NO_CHANGE, SERVICE_NO_CHANGE, cmd.as_ptr(), null(), null_mut(), null(), null(), null(), null())
             };
             if ok == 0 {
                 return Err(format!("修改后台服务失败（{}）", unsafe { GetLastError() }));
             }
+            describe(&svc);
             start(&svc)?;
         } else {
             let m = manager(SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE)?;
@@ -699,9 +752,7 @@ mod win {
                 return Err(format!("安装后台服务失败（{}）", unsafe { GetLastError() }));
             }
             let svc = Sc(h);
-            let mut text = wide("SplitGate 的后台部分：负责连接（虚拟网卡、sing-box、断线重连），SplitGate 本身就不用以管理员身份运行。移除：SplitGate 设置页“移除后台服务”。");
-            let desc = SERVICE_DESCRIPTIONW { lpDescription: text.as_mut_ptr() };
-            unsafe { ChangeServiceConfig2W(svc.0, SERVICE_CONFIG_DESCRIPTION, &desc as *const _ as *const c_void) };
+            describe(&svc);
             start(&svc)?;
         }
         // Give it a moment to open the pipe before the UI asks.
@@ -710,6 +761,40 @@ mod win {
             thread::sleep(Duration::from_millis(250));
         }
         Ok(state())
+    }
+
+    /// Description and recovery, also for services installed by older versions (they kept the
+    /// old text). Recovery: killed or crashed → Windows starts it again after 5 s, and its startup
+    /// cleanup restores the network even when the SplitGate window has no administrator rights.
+    fn describe(svc: &Sc) {
+        let mut text = wide("SplitGate 的后台部分：负责连接（虚拟网卡、sing-box、断线重连），SplitGate 本身就不用以管理员身份运行。移除：SplitGate 设置页“移除后台服务”。");
+        let desc = SERVICE_DESCRIPTIONW { lpDescription: text.as_mut_ptr() };
+        unsafe { ChangeServiceConfig2W(svc.0, SERVICE_CONFIG_DESCRIPTION, &desc as *const _ as *const c_void) };
+        let mut actions = [SC_ACTION { Type: SC_ACTION_RESTART, Delay: 5000 }, SC_ACTION { Type: SC_ACTION_RESTART, Delay: 5000 }, SC_ACTION { Type: SC_ACTION_RESTART, Delay: 60_000 }];
+        let fa = SERVICE_FAILURE_ACTIONSW {
+            dwResetPeriod: 24 * 3600,
+            lpRebootMsg: null_mut(),
+            lpCommand: null_mut(),
+            cActions: actions.len() as u32,
+            lpsaActions: actions.as_mut_ptr(),
+        };
+        if unsafe { ChangeServiceConfig2W(svc.0, SERVICE_CONFIG_FAILURE_ACTIONS, &fa as *const _ as *const c_void) } == 0 {
+            crate::logs::warn(format!("设置后台服务的自动重启失败（{}）", unsafe { GetLastError() }));
+        }
+    }
+
+    /// Copies this copy's SplitGate.exe and sing-box.exe into the service's folder (administrator,
+    /// service stopped). Files still locked by a process that has not ended yet are renamed away.
+    pub fn copy_to_service_dir() -> Result<(), String> {
+        let dir = crate::paths::service_dir();
+        let same = |a: &std::path::Path, b: &std::path::Path| a.canonicalize().ok().is_some_and(|a| b.canonicalize().ok() == Some(a));
+        if same(&crate::paths::exe_dir(), &dir) {
+            return Err(format!("这是后台服务自己用的那一份（{}），请打开你平常用的 SplitGate 再安装", dir.display()));
+        }
+        std::fs::create_dir_all(&dir).map_err(|e| format!("无法建立 {}：{e}", dir.display()))?;
+        crate::updater::replace_files(&crate::paths::exe_dir(), &dir).map_err(|e| format!("复制到 {} 失败：{e}", dir.display()))?;
+        crate::updater::remove_old_copies(&dir);
+        Ok(())
     }
 
     /// For an update (administrator): stop the service if it is there; true = it was running.
@@ -746,6 +831,14 @@ mod win {
             return Err(format!("移除后台服务失败（{}）", unsafe { GetLastError() }));
         }
         drop(svc);
+        // Its own copy goes too: only the files it put there, then the folder if that left it empty.
+        let dir = crate::paths::service_dir();
+        crate::updater::remove_old_copies(&dir);
+        let left: Vec<_> = crate::updater::FILES.iter().filter(|f| dir.join(f).exists() && std::fs::remove_file(dir.join(f)).is_err()).collect();
+        let _ = std::fs::remove_dir(&dir);
+        if !left.is_empty() {
+            crate::logs::warn(format!("没能删掉 {} 里的 {}（还在使用中），可以之后自己删", dir.display(), left.iter().map(|f| f.to_string()).collect::<Vec<_>>().join("、")));
+        }
         Ok(state())
     }
 }
@@ -776,10 +869,25 @@ mod tests {
 
     #[test]
     fn command_line_round_trip() {
-        let c = command_line(r"D:\Apps\Split Gate\SplitGate.exe", "S-1-5-21-1-2-3-1001");
-        assert_eq!(c, r#""D:\Apps\Split Gate\SplitGate.exe" --service --allow-sid S-1-5-21-1-2-3-1001"#);
-        assert_eq!(exe_of(&c), r"D:\Apps\Split Gate\SplitGate.exe", "spaces in the path survive");
+        let c = command_line(r"C:\Program Files\SplitGate\SplitGate.exe", "S-1-5-21-1-2-3-1001", r"D:\Apps\Split Gate\SplitGate.exe");
+        assert_eq!(
+            c,
+            r#""C:\Program Files\SplitGate\SplitGate.exe" --service --allow-sid S-1-5-21-1-2-3-1001 --app "D:\Apps\Split Gate\SplitGate.exe""#
+        );
+        assert_eq!(exe_of(&c), r"C:\Program Files\SplitGate\SplitGate.exe", "spaces in the path survive");
+        assert_eq!(app_of(&c), Some(r"D:\Apps\Split Gate\SplitGate.exe"));
         assert_eq!(exe_of(r"C:\x\SplitGate.exe --service"), r"C:\x\SplitGate.exe");
+        // installed by v0.15–v0.19: no --app, the service ran straight from the program folder
+        assert_eq!(app_of(r#""D:\x\SplitGate.exe" --service --allow-sid S-1-5-21-1"#), None);
+    }
+
+    #[test]
+    fn another_version_is_not_used() {
+        let ok = ServiceState { installed: true, running: true, matches_this_exe: true, protected: true, ..Default::default() };
+        assert!(ok.usable());
+        assert!(!ServiceState { outdated: true, ..ok.clone() }.usable(), "protocol may differ: update it first");
+        assert!(!ServiceState { matches_this_exe: false, ..ok.clone() }.usable());
+        assert!(ServiceState { protected: false, ..ok }.usable(), "old layout still works; the page asks to reinstall");
     }
 
     #[test]

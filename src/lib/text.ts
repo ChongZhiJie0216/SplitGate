@@ -126,8 +126,8 @@ export const T = {
     diagHint:
       "诊断包是一个 zip：最近 7 天的日志、设置、sing-box 配置、网络状态。密码、私钥换成 ***，服务器地址、账号、Windows 用户名也换成代号，可以放心发给别人。",
   },
-  notAdmin: "现在不能连接：没有装后台服务，SplitGate 也不是以管理员身份运行。装了后台服务就不用管理员身份（推荐，只在安装时确认一次）。",
-  notAdminInstall: "到设置页安装后台服务",
+  notAdmin: "现在不能连接：后台服务不能用（没装、没在运行，或者版本和 SplitGate 不同），SplitGate 也不是以管理员身份运行。装好后台服务就不用管理员身份（推荐，只在安装时确认一次）。",
+  notAdminInstall: "到设置页处理后台服务",
   notAdminRestart: "以管理员身份重新启动",
   about: {
     version: "版本",
@@ -180,12 +180,17 @@ export const T = {
     connection: "连接",
     service: "后台服务（推荐）",
     serviceHint:
-      "装了后台服务，连接就由它负责（建立虚拟网卡、启动 sing-box、断线重连），SplitGate 不用以管理员身份运行；关掉或被结束时服务会自动断开、恢复网络。没装时，要以管理员身份运行 SplitGate 才能连接。安装和移除时 Windows 会请你确认一次。",
+      "装了后台服务，连接就由它负责（建立虚拟网卡、启动 sing-box、断线重连），SplitGate 不用以管理员身份运行；关掉或被结束时服务会自动断开、恢复网络。没装时，要以管理员身份运行 SplitGate 才能连接。安装和移除时 Windows 会请你确认一次。服务用的程序会复制一份到 Program Files\\SplitGate（只有管理员能改）。",
     serviceNone: "还没有安装。",
     serviceRunning: (v: string) => `已安装，正在运行（v${v}）`,
     serviceNoAnswer: "已安装，正在运行，但没有回应",
     serviceStopped: "已安装，但没有在运行",
     serviceOther: "后台服务指向另一个位置的 SplitGate：",
+    serviceOutdated: (v: string) => `后台服务是 v${v}，和这个 SplitGate 版本不同，现在不会用它连接。按“更新后台服务”。`,
+    serviceUnprotected:
+      "后台服务是旧版装的：它直接用程序文件夹里的文件，以最高权限运行，别的程序换掉这些文件就能拿到最高权限。按“重新安装”，改用只有管理员能改的 Program Files\\SplitGate。",
+    serviceUpdate: "更新后台服务",
+    serviceReinstall: "重新安装",
     serviceInstall: "安装后台服务",
     serviceFix: "改成这一个",
     serviceStart: "启动后台服务",

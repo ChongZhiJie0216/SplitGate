@@ -3,7 +3,60 @@
 
 use serde::Serialize;
 
+use std::net::IpAddr;
+
+use serde_json::json;
+
+use super::{ExitAdapter, ExitParts};
 use crate::config::{WireguardPeer, WireguardProfile};
+use crate::singbox::{self, Secrets, VPN_TAG};
+
+/// Used when a WireGuard .conf has no DNS line (phase 0 V2 did the same).
+const FALLBACK_DNS: &str = "1.1.1.1";
+
+/// sing-box's WireGuard endpoint (phase 0 V2); DNS goes to the .conf's DNS through the tunnel.
+impl ExitAdapter for WireguardProfile {
+    fn parts(&self, secrets: &Secrets) -> Result<ExitParts, String> {
+        let (host, port) = split_host_port(&self.peer.endpoint)?;
+        let mut peer = json!({
+            "address": host,
+            "port": port,
+            "public_key": self.peer.public_key,
+            // Rules decide what enters the tunnel, so it must accept every destination (SPEC 组件 7).
+            "allowed_ips": ["0.0.0.0/0", "::/0"],
+        });
+        if let Some(psk) = &secrets.preshared_key {
+            peer["pre_shared_key"] = json!(psk);
+        }
+        if let Some(k) = self.peer.persistent_keepalive {
+            peer["persistent_keepalive_interval"] = json!(k);
+        }
+        let ep = json!({
+            "type": "wireguard",
+            "tag": VPN_TAG,
+            "address": self.address,
+            "private_key": secrets.main,
+            "mtu": self.mtu,
+            "peers": [peer],
+        });
+        let server = self
+            .dns
+            .iter()
+            .find(|d| d.parse::<IpAddr>().is_ok_and(|ip| ip.is_ipv4()))
+            .cloned()
+            .unwrap_or_else(|| FALLBACK_DNS.to_string());
+        let dns = json!({ "type": "udp", "tag": "vpn-dns", "server": server, "detour": VPN_TAG });
+        Ok(ExitParts { endpoint: ep, dns, server_host: host })
+    }
+}
+
+fn split_host_port(endpoint: &str) -> Result<(String, u16), String> {
+    let port = endpoint.rsplit_once(':').and_then(|(_, p)| p.parse::<u16>().ok());
+    match port {
+        Some(p) => Ok((singbox::host_of(endpoint), p)),
+        None => Err(format!("WireGuard Endpoint“{endpoint}”要写成 主机:端口")),
+    }
+}
 
 #[derive(Serialize, Debug)]
 pub struct ImportedConf {
@@ -76,6 +129,12 @@ fn list(v: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn endpoint_needs_a_port() {
+        assert_eq!(split_host_port("home.example.com:51820").unwrap(), ("home.example.com".into(), 51820));
+        assert!(split_host_port("home.example.com").is_err());
+    }
 
     // Synthetic keys (not real): 43 base64 chars + '='.
     const PRIV: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
