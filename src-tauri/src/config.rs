@@ -61,15 +61,20 @@ pub struct CiscoProfile {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PangolinProfile {
+    /// The official Pangolin client's adapter: the proxy is reached through it (phase 0 V8).
     #[serde(default = "pangolin_if")]
     pub interface: String,
-    /// Must avoid the client's bypass list (it bypasses 1.1.1.1), phase 0 V7.
+    /// SOCKS5 proxy on the home VM (phase0/v8-pangolin-socks/server), an IPv4 address that is a
+    /// Pangolin site resource. Its password is in the Credential Manager.
+    #[serde(default)]
+    pub proxy_host: String,
+    #[serde(default = "socks_port")]
+    pub proxy_port: u16,
+    #[serde(default = "socks_user")]
+    pub proxy_user: String,
+    /// DNS for rule domains, asked over TCP through the proxy (V8: 9.9.9.9).
     #[serde(default = "pangolin_dns")]
     pub vpn_dns: Vec<String>,
-    #[serde(default)]
-    pub alias_suffixes: Vec<String>,
-    #[serde(default = "pangolin_alias_dns")]
-    pub alias_dns: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -102,8 +107,11 @@ fn pangolin_if() -> String {
 fn pangolin_dns() -> Vec<String> {
     vec!["9.9.9.9".into()]
 }
-fn pangolin_alias_dns() -> String {
-    "100.96.128.1".into()
+fn socks_port() -> u16 {
+    1080
+}
+fn socks_user() -> String {
+    "splitgate".into()
 }
 fn wg_mtu() -> u16 {
     1420
@@ -182,10 +190,22 @@ pub fn validate(p: &Profile) -> Result<(), String> {
             if g.interface.trim().is_empty() {
                 return Err("请填写 Pangolin 网卡名称".into());
             }
-            if g.vpn_dns.is_empty() {
-                return Err("请至少填一个 vpn-dns".into());
+            if g.proxy_host.trim().is_empty() {
+                return Err("请填写家里代理的 IP（VPN-Server 虚拟机的内网 IP）".into());
             }
-            for d in g.vpn_dns.iter().chain(std::iter::once(&g.alias_dns)) {
+            if g.proxy_host.trim().parse::<std::net::Ipv4Addr>().is_err() {
+                return Err(format!("家里代理要填 IPv4 地址（例：192.168.1.20），不是“{}”", g.proxy_host.trim()));
+            }
+            if g.proxy_port == 0 {
+                return Err("请填写代理端口（默认 1080）".into());
+            }
+            if g.proxy_user.trim().is_empty() {
+                return Err("请填写代理用户名（默认 splitgate）".into());
+            }
+            if g.vpn_dns.is_empty() {
+                return Err("请至少填一个规则域名用的 DNS".into());
+            }
+            for d in &g.vpn_dns {
                 check_ip(d)?;
             }
         }
@@ -305,6 +325,7 @@ pub(crate) mod tests {
         let g = f.profiles[1].pangolin.as_ref().unwrap();
         assert_eq!(g.interface, "Pangolin");
         assert_eq!(g.vpn_dns, vec!["9.9.9.9"]);
+        assert_eq!((g.proxy_port, g.proxy_user.as_str()), (1080, "splitgate"));
     }
 
     #[test]

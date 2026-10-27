@@ -1,5 +1,6 @@
 //! Secrets in the Windows Credential Manager (SPEC "凭据"): service "SplitGate",
-//! account "<profile_id>:<user>" for Cisco, "<profile_id>:wireguard" / ":wireguard-psk" for WireGuard.
+//! account "<profile_id>:<user>" for Cisco, "<profile_id>:wireguard" / ":wireguard-psk" for WireGuard,
+//! "<profile_id>:pangolin-proxy" for the Pangolin exit's home proxy (v0.21.0).
 //! Secrets are never logged or returned to the frontend.
 
 use keyring_core::{Entry, Error};
@@ -18,12 +19,21 @@ pub fn init() -> Result<(), String> {
     Ok(())
 }
 
-/// Account key of the main secret (Cisco password or WireGuard private key); None for Pangolin.
+/// Account key of the main secret (Cisco password, WireGuard private key or Pangolin proxy password).
 pub fn main_account(p: &Profile) -> Option<String> {
     match p.kind {
         ExitType::Cisco => p.cisco.as_ref().map(|c| format!("{}:{}", p.id, c.user.trim())),
         ExitType::Wireguard => Some(format!("{}:wireguard", p.id)),
-        ExitType::Pangolin => None,
+        ExitType::Pangolin => Some(format!("{}:pangolin-proxy", p.id)),
+    }
+}
+
+/// What to tell the user when the main secret is not stored yet.
+pub fn missing_message(kind: ExitType) -> &'static str {
+    match kind {
+        ExitType::Wireguard => "还没有保存 WireGuard 私钥。请到“Profile”页重新导入 .conf 并保存。",
+        ExitType::Pangolin => "还没有保存家里代理的密码。请到“Profile”页填写代理密码并保存。",
+        ExitType::Cisco => "还没有保存密码。请到“Profile”页填写密码并保存。",
     }
 }
 

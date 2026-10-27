@@ -9,6 +9,7 @@ import { bytes } from "../lib/format";
 import { buildFlow, Column, FlowNode } from "../lib/flow";
 import * as ipc from "../lib/ipc";
 import { TrafficBadges } from "./ConnectionsPage";
+import Empty from "../components/Empty";
 
 const L = T.canvasPage;
 const COLUMN_X: Record<Column, number> = { program: 0, rule: 340, exit: 660 };
@@ -103,7 +104,7 @@ export default function CanvasPage() {
     return (
       <div className="card">
         <h2>{T.nav.canvas}</h2>
-        <p className="muted">{L.notConnected}</p>
+        <Empty icon="canvas" text={L.notConnected} />
       </div>
     );
   }

@@ -1,11 +1,11 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-27，版本 v0.20.0。
+> 最后更新：2026-10-27，版本 v0.22.0。
 
 ## 现在在哪一步
 
-**第 0–3 阶段的功能都做完了，只剩 Pangolin（排在整个项目最后）。** Windows 服务三步（v0.15.0 / v0.17.x / v0.18.0）和在线更新（v0.19.0）已合并进 `main`；v0.19.0 已发布到 GitHub Release。v0.19.0 的在线更新维护者 2026-10-27 实测通过（G）。v0.20.0（服务改从 Program Files 运行、服务被结束后自动重启、出口代码整理）维护者 2026-10-27 实测通过（H），等合并 PR #8 和发布。
+**项目功能全部完成。** Pangolin 出口（v0.21.0）和界面打磨、新图标（v0.22.0）维护者 2026-10-27 实测通过（`docs/test-plan.md` I、J），在 PR #9 里等合并，合并后发布 v0.22.0。
 
 ## 已完成
 
@@ -18,6 +18,8 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
+| 0.22.0 | — | 界面打磨（维护者 2026-10-27 定：自己画 SVG、不加依赖、布局不变）：`components/Icon.tsx`（28 个线条图标）、`Logo.tsx`、`Empty.tsx`；导航图标、连接页状态卡（圆环 + 小格子）、按钮图标、空白页、输入框焦点样式；关于页重排，更新记录改成右上角图标弹窗（维护者要求）。新程序图标（维护者选方案 B），原稿 `src-tauri/icons/source.svg`，`npx tauri icon` 生成各尺寸。云端用假数据看过亮 / 暗主题；维护者 2026-10-27 实测 J 部分全部通过 |
+| 0.21.0 | — | Pangolin 出口（第 0 阶段 V8 2026-10-27 通过）：`exits/pangolin.rs` = sing-box `socks` 出口 + `bind_interface`，vpn-dns TCP 经它，local DNS 用物理网卡的 DNS；连接前只读检查网卡和到代理的路由；代理密码存凭据管理器 `<id>:pangolin-proxy`；Profile 页新表单；诊断包脱敏代理 IP。云端用 sing-box 1.14.4（Linux）`check` 过生成的配置。维护者 2026-10-27 实测 I 部分全部通过 |
 | 0.20.0 | — | 后台服务改从 `%ProgramFiles%\SplitGate\` 运行自己的一份（`--app` 指回设置所在的那一份；版本不同 / 旧装法时设置页提示）；服务设失败恢复（5 秒后重启，启动清理恢复网络）；旧服务的说明文字会更新；清理认得两个位置的 sing-box；出口代码整理成 `exits/` 的 `ExitAdapter`；`progress.md` 整理。维护者 2026-10-27 实测 H 部分通过 |
 | 0.19.0 | — | 在线升级（便携版，维护者 2026-10-27 定）：`updater.rs` 下载 Release zip + `.sha256` 核对 → 改名 `*.old` 换文件（失败换回）→ 有服务时停 / 启（非管理员经 `elevate.rs` `apply-update`）→ `--wait-pid` 重启，新版本删旧文件；正在连接时按钮写“断开连接并更新”；`build.bat` 生成 `.sha256`、`publish-release.ps1` 上传；测试用 `SPLITGATE_PRETEND_VERSION`。维护者 2026-10-27 实测 G 部分全部通过 |
 | 0.18.0 | — | 后台服务第 3 步：清单改 `asInvoker`；`elevate.rs`：要管理员的单个步骤（安装 / 移除服务、开机自启任务）以 `--admin-task` 临时提权（UAC），“以管理员身份重新启动”（`--wait-pid`）；开机自启有服务时普通权限（`LeastPrivilege`）、没有时最高权限，和现状不符时设置页提示；不是管理员又没有服务时顶部提示两条路；托盘“连接”不再因为不是管理员变灰。维护者 2026-10-27 实测 F 部分全部通过 |
@@ -60,15 +62,13 @@
 - 之前用清理脚本在**已连接**时结束了 sing-box：SplitGate 断线，之后能重新连接，不是 bug。
 
 ### 还没有验证
-- 学校有线网络（`docs/test-plan.md` B）：Xbox App（登录、商店、Game Pass）、PrismLauncher、Steam 登录；非规则流量出口仍是学校网络（`phase1\exit-ip.ps1`）；拦截检测；Cisco 下访问家里内网。到学校先重新做基准 `phase0\snapshot.ps1 -Baseline`。
-- 从 v0.19.0 真正在线更新到 v0.20.0（H 最后一项，发布后测）。
+- Pangolin 出口在学校网络下能不能用（还没确认测过）。
 
 ## 下一步（照顺序）
 
-1. 合并 PR #8、发布 v0.20.0，再从 v0.19.0 真正在线更新一次（H 最后一项）。
-2. **最后：Pangolin**（SPEC“最后：Pangolin”）。做法已定：不用 Exit Node，经 Pangolin 连到家里 VPN-Server 虚拟机上的 SOCKS5 代理。要先由维护者在虚拟机上装好代理，跑第 0 阶段 V8（`phase0/v8-pangolin-socks/`），再写 `exits/pangolin.rs`（实现 `ExitAdapter`）。
-3. 有机会时补测学校网络（B）。
-4. SPEC“待决定的事”里还没回答的：项目正式名称、Cisco VPN 是否自己管理、家里路由器是否转发 UDP 8443、Pangolin 和 WireGuard 都有时回家优先用哪个。
+1. 合并 PR #9（v0.21.0 + v0.22.0），发布 v0.22.0。（v0.20.0 发布后，从 v0.19.0 真正在线更新一次：H 最后一项。）
+2. 学校网络 B 部分维护者 2026-10-27 实测全部通过。有机会再看看 Pangolin 在学校网络下能不能用。
+3. SPEC“待决定的事”只剩项目正式名称。（已答：Cisco VPN 自己管理；家里路由器转发 UDP 8443 给 AnyLink；Pangolin 和 WireGuard 都留、Profile 页自己选。维护者 2026-10-27。）
 
 回滚方法一律是：按“断开” → 托盘“退出” → 管理员 PowerShell 执行 `phase0\cleanup-all.ps1 -Apply`。验收辅助脚本在 `phase1\`（用法见 `docs/test-plan.md`）；结果日志在 `phase1\logs\`（不进 git）。
 

@@ -24,7 +24,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::config::{self, ExitType};
 use crate::singbox::{self, ClashApi, Secrets};
-use crate::{cleanup, credentials, logs, paths, platform, rules, settings, traffic, tray};
+use crate::{cleanup, credentials, exits, logs, paths, platform, rules, settings, traffic, tray};
 
 const TUNNEL_TIMEOUT: Duration = Duration::from_secs(60);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -252,9 +252,6 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     };
     let name = profile.name.clone();
     step(generation, &name, Step::Prepare)?;
-    if profile.kind == ExitType::Pangolin {
-        return Err("Pangolin 出口还不能连接（排在整个项目最后才做）。".into());
-    }
     let merged = singbox::merge_rules(&profile, &rule_sets);
     if merged.is_empty() {
         return Err("这个 Profile 没有勾选任何开着的规则集，连接了也不会有流量走 VPN。请到“Profile”页勾选规则集。".into());
@@ -264,10 +261,7 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
         Some(s) => (s.main, s.preshared_key),
         None => {
             let main_acc = credentials::main_account(&profile).ok_or("缺少凭据")?;
-            let main = credentials::get(&main_acc)?.ok_or(match profile.kind {
-                ExitType::Wireguard => "还没有保存 WireGuard 私钥。请到“Profile”页重新导入 .conf 并保存。",
-                _ => "还没有保存密码。请到“Profile”页填写密码并保存。",
-            })?;
+            let main = credentials::get(&main_acc)?.ok_or(credentials::missing_message(profile.kind))?;
             let psk = match credentials::psk_account(&profile) {
                 Some(a) => credentials::get(&a)?,
                 None => None,
@@ -284,7 +278,11 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     cleanup::run(true)?;
 
     step(generation, &name, Step::Check)?;
-    let warnings = home_overlaps(&profile.home_cidrs, &platform::local_ipv4_networks());
+    let mut warnings = home_overlaps(&profile.home_cidrs, &platform::local_ipv4_networks());
+    // Pangolin: the official client must be connected and the proxy reachable through it.
+    if let Some(g) = profile.pangolin.as_ref().filter(|_| profile.kind == ExitType::Pangolin) {
+        warnings.extend(exits::pangolin::precheck(g)?);
+    }
     for w in &warnings {
         logs::warn(w);
     }
@@ -338,7 +336,11 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     let probe_ms = probe(generation, &api, &rx, &mut last_error).map_err(|f| match f {
         Failure::Message(m) if m.is_empty() => Failure::Message(match profile.kind {
             ExitType::Wireguard => "WireGuard 隧道没有反应（握手没有成功）。可能被当前网络阻挡：学校网络挡 WireGuard UDP，可以换手机热点试试。".into(),
-            _ => format!("隧道建立了，但流量过不去（测试网址 {} 在 30 秒内没有回应）。", singbox::PROBE_URL),
+            ExitType::Pangolin => format!(
+                "经 Pangolin 连不到家里的代理，或代理拒绝了（测试网址 {} 在 30 秒内没有回应）。确认官方 Pangolin 客户端已连接、VPN-Server 虚拟机上的代理在运行、代理密码正确。",
+                singbox::PROBE_URL
+            ),
+            ExitType::Cisco => format!("隧道建立了，但流量过不去（测试网址 {} 在 30 秒内没有回应）。", singbox::PROBE_URL),
         }),
         other => other,
     })?;

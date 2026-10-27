@@ -3,6 +3,8 @@ import { useProfiles } from "../store/profiles";
 import { useRules } from "../store/rules";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
+import Icon from "../components/Icon";
+import Empty from "../components/Empty";
 
 const L = T.profile;
 const DEFAULT_RULESETS = ["xbox", "minecraft", "steam"];
@@ -12,7 +14,7 @@ function blank(type: ipc.ExitType): ipc.Profile {
   if (type === "cisco")
     return { ...base, cisco: { server: "", user: "", auth_group: null, no_udp: true, bind_interface: null, mfa: "none" } };
   if (type === "pangolin")
-    return { ...base, pangolin: { interface: "Pangolin", vpn_dns: ["9.9.9.9"], alias_suffixes: [], alias_dns: "100.96.128.1" } };
+    return { ...base, pangolin: { interface: "Pangolin", proxy_host: "", proxy_port: 1080, proxy_user: "splitgate", vpn_dns: ["9.9.9.9"] } };
   return {
     ...base,
     wireguard: { address: [], peer: { endpoint: "", public_key: "", persistent_keepalive: null }, dns: [], mtu: 1420 },
@@ -138,7 +140,7 @@ export default function ProfilesPage() {
       <div className="card list-card">
         <h2>{L.list}</h2>
         {error && <div className="banner bad">{error}</div>}
-        {view && view.profiles.length === 0 && <p className="muted">{L.empty}</p>}
+        {view && view.profiles.length === 0 && <Empty icon="profiles" text={L.empty} />}
         <ul className="plist">
           {view?.profiles.map(({ profile, has_secret }) => (
             <li key={profile.id}>
@@ -157,6 +159,7 @@ export default function ProfilesPage() {
           <span className="muted">{L.new}：</span>
           {(["cisco", "wireguard", "pangolin"] as ipc.ExitType[]).map((t) => (
             <button key={t} className="btn" onClick={() => select(blank(t), false)}>
+              <Icon name="plus" />
               {L.types[t]}
             </button>
           ))}
@@ -240,6 +243,7 @@ export default function ProfilesPage() {
               <div className="field">
                 <div className="row">
                   <button className="btn" disabled={test.busy} onClick={runTest}>
+                    <Icon name="key" />
                     {test.busy ? L.cisco.testing : L.cisco.test}
                   </button>
                 </div>
@@ -251,15 +255,34 @@ export default function ProfilesPage() {
 
           {draft.type === "pangolin" && draft.pangolin && (
             <>
-              <p className="banner warn">{L.pangolin.note}</p>
-              <Field label={L.pangolin.iface}>
+              <p className="field-hint">{L.pangolin.note}</p>
+              <Field label={L.pangolin.host} hint={L.pangolin.hostHint}>
+                <input value={draft.pangolin.proxy_host} onChange={(e) => patch("pangolin", { proxy_host: e.target.value })} />
+              </Field>
+              <Field label={L.pangolin.port}>
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={draft.pangolin.proxy_port}
+                  onChange={(e) => patch("pangolin", { proxy_port: Number(e.target.value) || 0 })}
+                />
+              </Field>
+              <Field label={L.pangolin.user}>
+                <input value={draft.pangolin.proxy_user} autoComplete="off" onChange={(e) => patch("pangolin", { proxy_user: e.target.value })} />
+              </Field>
+              <Field label={L.pangolin.password} hint={hasSecret ? L.secretSaved : L.pangolin.passwordHint}>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={secrets.secret ?? ""}
+                  onChange={(e) => setSecrets({ ...secrets, secret: e.target.value })}
+                />
+              </Field>
+              <Field label={L.pangolin.iface} hint={L.pangolin.ifaceHint}>
                 <input value={draft.pangolin.interface} onChange={(e) => patch("pangolin", { interface: e.target.value })} />
               </Field>
               <ListField label={L.pangolin.vpnDns} hint={L.pangolin.vpnDnsHint} value={draft.pangolin.vpn_dns} onChange={(v) => patch("pangolin", { vpn_dns: v })} />
-              <ListField label={L.pangolin.aliasSuffixes} value={draft.pangolin.alias_suffixes} onChange={(v) => patch("pangolin", { alias_suffixes: v })} />
-              <Field label={L.pangolin.aliasDns}>
-                <input value={draft.pangolin.alias_dns} onChange={(e) => patch("pangolin", { alias_dns: e.target.value })} />
-              </Field>
             </>
           )}
 
@@ -279,6 +302,7 @@ export default function ProfilesPage() {
           {msg && <div className={msg.ok ? "banner good" : "banner bad"}>{msg.text}</div>}
           <div className="row">
             <button className="btn primary" onClick={save} disabled={test.busy}>
+              <Icon name="check" />
               {draft.type === "cisco" && saveAnyway && test.key === testKey(draft) ? L.cisco.saveAnyway : L.save}
             </button>
             {draft.id && view?.active !== draft.id && (
@@ -289,6 +313,7 @@ export default function ProfilesPage() {
             <div className="spacer" />
             {draft.id && (
               <button className="btn danger" onClick={del}>
+                <Icon name="trash" />
                 {confirmDel ? L.confirmDel : L.del}
               </button>
             )}
@@ -345,6 +370,7 @@ function GroupField(props: {
       <div className="row">
         <input className="grow" value={value} onChange={(e) => props.onChange(e.target.value || null)} />
         <button className="btn" disabled={busy} onClick={props.onFetch} type="button">
+          <Icon name="refresh" />
           {C.groupFetch}
         </button>
       </div>

@@ -5,6 +5,8 @@ import { useProfiles } from "../store/profiles";
 import { T } from "../lib/text";
 import { bytes, duration, fileName, rate } from "../lib/format";
 import * as ipc from "../lib/ipc";
+import Icon from "../components/Icon";
+import Empty from "../components/Empty";
 
 const L = T.connectionsPage;
 const MAX_ROWS = 300;
@@ -54,7 +56,7 @@ export default function ConnectionsPage() {
     return (
       <div className="card">
         <h2>{T.nav.connections}</h2>
-        <p className="muted">{L.notConnected}</p>
+        <Empty icon="connections" text={L.notConnected} />
       </div>
     );
   }
@@ -124,9 +126,11 @@ export default function ConnectionsPage() {
                 <td className="num mono small">{duration(now - startMs(c.start))}</td>
                 <td className="actions">
                   <button className="btn small" onClick={() => setAdding(c)}>
+                    <Icon name="plus" />
                     {L.addRule}
                   </button>
                   <button className="btn small" onClick={() => close(c.id)}>
+                    <Icon name="x" />
                     {L.close}
                   </button>
                 </td>

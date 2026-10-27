@@ -73,14 +73,14 @@
 - [x] 托盘右键菜单：连接、断开、打开主窗口、退出各点一次
 - [x] 设置页打开开机自启 → 注销再登录 → SplitGate 出现在托盘（不弹窗口）→ 回到设置页关掉开机自启
 
-## B. 要在学校有线网络测（Cisco 出口）
+## B. 要在学校有线网络测（Cisco 出口）— 2026-10-27 维护者实测全部通过
 
 到学校先重新记基准：`powershell -ExecutionPolicy Bypass -File phase0\snapshot.ps1 -Baseline`（SplitGate 断开时）。
 
-- [ ] 非规则流量出口：断开时跑 `powershell -ExecutionPolicy Bypass -File phase1\exit-ip.ps1`，连接 Cisco 后再跑一次，结果 `[PASS]`
-- [ ] Xbox App 能登录、浏览商店、打开 Game Pass；PrismLauncher、Steam 能登录
-- [ ] 拦截检测：暂时关掉 Steam 规则集，重新连接，打开 Steam → “拦截提示”出现 `store.steampowered.com` 等，原因“证书被 Fortinet 换掉”；导航显示个数；试“加规则”“忽略”“清空”。**测完把 Steam 规则集开回来**
-- [ ] 家里内网：连 Cisco 后打开 PVE 管理网页
+- [x] 非规则流量出口：断开时跑 `powershell -ExecutionPolicy Bypass -File phase1\exit-ip.ps1`，连接 Cisco 后再跑一次，结果 `[PASS]`
+- [x] Xbox App 能登录、浏览商店、打开 Game Pass；PrismLauncher、Steam 能登录
+- [x] 拦截检测：暂时关掉 Steam 规则集，重新连接，打开 Steam → “拦截提示”出现 `store.steampowered.com` 等，原因“证书被 Fortinet 换掉”；导航显示个数；试“加规则”“忽略”“清空”。**测完把 Steam 规则集开回来**
+- [x] 家里内网：连 Cisco 后打开 PVE 管理网页
 
 ## 测完发给 Claude
 
@@ -184,3 +184,26 @@ $env:SPLITGATE_PRETEND_VERSION='0.18.0'; .\SplitGate.exe
 - [x] 重新打包（`build.bat`）后打开：设置页提示“更新后台服务”，连接时日志说“这次由 SplitGate 自己连接”（不是管理员的话连不上，顶部提示）；按“更新后台服务”后恢复正常
 - [x] 移除后台服务：`C:\Program Files\SplitGate\` 里的两个文件被删掉（文件夹空了也删掉）
 - [ ] v0.20.0 发布后，用 `D:\SG-test\SplitGate` 那份 v0.19.0 测一次**真正的在线更新**（普通 PowerShell，不设 `SPLITGATE_PRETEND_VERSION`）：关于页提供 v0.20.0 → 下载 → 安装并重新启动 → 关于页显示 v0.20.0、检查更新说“已经是最新版本”。后台服务属于平常那份，这份的设置页显示“指向另一个位置”是正常的，**不要**按“改成这一个”
+
+## I. v0.21.0 Pangolin 出口 — 2026-10-27 维护者实测全部通过
+
+准备：
+- 虚拟机上的代理在运行（`systemctl status splitgate-socks` 是 `active (running)`），Pangolin 后台 Exit Node 关着，虚拟机 IP 是 site 资源（V8 时已经确认过）。
+- 测试分支 `build.bat`，普通方式打开根目录的 `SplitGate.exe`。设置页提示“更新后台服务”的话先按一下。
+
+- [x] Profile 页“新建 → Pangolin”：填代理 IP、密码（端口 1080、用户名 splitgate、网卡 Pangolin、DNS 9.9.9.9 是默认值），勾选规则集，保存成功；故意填 `abc` 当 IP 会被拒绝
+- [x] **官方客户端没连**时按“连接”：停在错误“找不到网卡……”或“网卡没有连接……”，不会建虚拟网卡
+- [x] 官方客户端连上后按“连接”：几秒后“已连接”，有“经 VPN 测试 xx ms”
+- [x] 出口 IP：另开 PowerShell 执行 `curl.exe -s https://api.ipify.org`（本地 IP）；把 `ifconfig.me` 临时加进一个勾选的规则集、重新连接后 `curl.exe -s https://ifconfig.me`（家里的公网 IP）。**测完从规则集删掉 ifconfig.me**
+- [x] 连接列表里规则流量的出口是 VPN；Xbox App / Steam 能登录、打开商店
+- [x] 家里内网：PVE 管理网页（`https://<PVE IP>:8006`）能打开
+- [x] 故意把代理密码改错保存、再连接：约 30 秒后错误“经 Pangolin 连不到家里的代理，或代理拒绝了……”。**测完改回正确的密码**
+- [x] 断开后 `phase1\residue-check.ps1` 显示 `[clean]`；Pangolin 客户端仍然连着
+- [x] `phase1\secret-scan.ps1` 输入代理密码：`[PASS]`；诊断包里代理 IP 是 `<pangolin-proxy-1>`
+
+## J. v0.22.0 界面打磨、新图标 — 2026-10-27 维护者实测全部通过
+
+- [x] `SplitGate.exe` 在资源管理器里显示新图标（深色底、门、黄色分叉）；任务栏、窗口左上角、托盘也是新图标，托盘右下角的状态圆点照旧变色
+- [x] 左侧导航每项有图标；连接页是状态卡（圆环颜色：断开灰、连接中黄且会呼吸、已连接绿、错误红），已连接时有时长、延迟、速率三个小格子
+- [x] 关于页：上面有大标志、名称和版本；右上角时钟图标按下去弹出“更新记录”，天平图标弹出“许可证”（SplitGate、sing-box 有全文）；按“×”、点外面、按 Esc 都能关掉；没有“使用提醒”
+- [x] 设置页切换亮 / 暗主题，各页看起来正常、没有文字被挡住

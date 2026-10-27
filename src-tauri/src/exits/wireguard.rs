@@ -46,7 +46,7 @@ impl ExitAdapter for WireguardProfile {
             .cloned()
             .unwrap_or_else(|| FALLBACK_DNS.to_string());
         let dns = json!({ "type": "udp", "tag": "vpn-dns", "server": server, "detour": VPN_TAG });
-        Ok(ExitParts { endpoint: ep, dns, server_host: host })
+        Ok(ExitParts { endpoint: ep, dns, server_host: host, is_outbound: false, local_dns: None })
     }
 }
 

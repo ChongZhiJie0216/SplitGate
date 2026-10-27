@@ -7,6 +7,8 @@ import { T } from "../lib/text";
 import { fileName } from "../lib/format";
 import * as ipc from "../lib/ipc";
 import { AddRuleModal } from "./ConnectionsPage";
+import Icon from "../components/Icon";
+import Empty from "../components/Empty";
 
 const L = T.blockedPage;
 
@@ -55,6 +57,7 @@ export default function BlockedPage() {
         <h2>{T.nav.blocked}</h2>
         {list.length > 0 && (
           <button className="btn small" onClick={() => run(ipc.clearBlocked)}>
+            <Icon name="trash" />
             {L.clear}
           </button>
         )}
@@ -62,7 +65,7 @@ export default function BlockedPage() {
       <p className="muted small">{connected ? L.intro : L.notConnected}</p>
       {error && <div className="banner bad">{error}</div>}
       {list.length === 0 ? (
-        <p className="muted">{L.empty}</p>
+        <Empty icon="shield" text={L.empty} />
       ) : (
         <div className="table-wrap">
           <table className="conn-table blocked-table">
@@ -90,9 +93,11 @@ export default function BlockedPage() {
                   <td className="num mono small">{b.time}</td>
                   <td className="actions">
                     <button className="btn small" onClick={() => setAdding(b)}>
+                      <Icon name="plus" />
                       {T.connectionsPage.addRule}
                     </button>
                     <button className="btn small" onClick={() => run(() => ipc.dismissBlocked(b.host))}>
+                      <Icon name="x" />
                       {L.dismiss}
                     </button>
                   </td>

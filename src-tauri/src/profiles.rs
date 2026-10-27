@@ -104,7 +104,8 @@ pub fn save(file: &mut ProfilesFile, mut profile: Profile, secrets: SecretsInput
             } else if !credentials::exists(acc) {
                 return Err(match profile.kind {
                     config::ExitType::Wireguard => "请导入含 PrivateKey 的 .conf".into(),
-                    _ => "请填写密码".into(),
+                    config::ExitType::Pangolin => "请填写家里代理的密码".into(),
+                    config::ExitType::Cisco => "请填写密码".into(),
                 });
             }
         }

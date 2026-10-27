@@ -4,6 +4,8 @@ import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
 import Markdown from "../components/Markdown";
 import { useStatus } from "../store/status";
+import Icon, { IconName } from "../components/Icon";
+import Logo from "../components/Logo";
 
 const L = T.about;
 
@@ -16,39 +18,68 @@ export default function AboutPage() {
       .then(setChangelog)
       .catch(() => setChangelog([]));
   }, []);
+  const [dialog, setDialog] = useState<"log" | "licenses" | null>(null);
+  const [licenses, setLicenses] = useState<ipc.License[]>([]);
+  useEffect(() => {
+    ipc
+      .getLicenses()
+      .then(setLicenses)
+      .catch(() => setLicenses([]));
+  }, []);
+  useEffect(() => {
+    if (!dialog) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDialog(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dialog]);
+  const close = () => setDialog(null);
   return (
     <div className="stack">
-      <div className="card">
-        <h2>{T.nav.about}</h2>
-        <table className="kv">
-          <tbody>
-            <tr>
-              <th>{L.version}</th>
-              <td className="mono">{info?.version ?? "…"}</td>
-            </tr>
-            <tr>
-              <th>sing-box</th>
-              <td className="mono">{info ? (info.singboxVersion ?? L.notFound) : "…"}</td>
-            </tr>
-            <tr>
-              <th>{L.admin}</th>
-              <td>{info ? (info.isAdmin ? L.yes : L.no) : "…"}</td>
-            </tr>
-            <tr>
-              <th>{L.dataDir}</th>
-              <td className="mono">{info?.dataDir ?? "…"}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p className="muted">{L.licenses}</p>
-        <p className="muted">{L.singboxNote}</p>
-        <p className="banner warn">{L.notice}</p>
+      <div className="card about-hero">
+        <Logo size={64} />
+        <div className="about-title">
+          <h2>
+            {T.appName} <span className="pill mono">v{info?.version ?? "…"}</span>
+          </h2>
+          <p className="muted">{L.tagline}</p>
+        </div>
+        <div className="row tight">
+          {licenses.length > 0 && (
+            <button className="icon-btn" title={L.licenses} aria-label={L.licenses} onClick={() => setDialog("licenses")}>
+              <Icon name="scale" size={20} />
+            </button>
+          )}
+          {changelog.length > 0 && (
+            <button className="icon-btn" title={L.changelog} aria-label={L.changelog} onClick={() => setDialog("log")}>
+              <Icon name="history" size={20} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card">
-        <h2>{L.update}</h2>
+        <div className="tiles">
+          <InfoTile icon="shield" label="sing-box" value={info ? (info.singboxVersion ?? L.notFound) : "…"} mono />
+          <InfoTile icon="key" label={L.admin} value={info ? (info.isAdmin ? L.yes : L.no) : "…"} />
+          <div className="tile wide">
+            <span className="tile-label">
+              <Icon name="folder" size={15} />
+              {L.dataDir}
+            </span>
+            <span className="mono small break">{info?.dataDir ?? "…"}</span>
+          </div>
+        </div>
+        <p className="muted small">{L.licensesShort}</p>
+      </div>
+
+      <div className="card">
+        <h2 className="title-icon">
+          <Icon name="download" size={20} />
+          {L.update}
+        </h2>
         <div className="row">
           <button className="btn" onClick={() => checkUpdate()} disabled={checkingUpdate}>
+            <Icon name="refresh" />
             {checkingUpdate ? L.checking : L.check}
           </button>
           {update?.newer && update.url && (
@@ -82,18 +113,55 @@ export default function AboutPage() {
         )}
       </div>
 
-      {changelog.length > 0 && (
-        <div className="card">
-          <h2>{L.changelog}</h2>
-          <p className="muted small">{L.changelogHint}</p>
-          {changelog.map((n) => (
-            <details key={n.version} className="update-note" open={n.version === info?.version}>
-              <summary className="update-ver">
-                v{n.version} <span className="muted small">{n.title}</span>
-              </summary>
-              <Markdown text={n.body} />
-            </details>
-          ))}
+      {dialog === "licenses" && (
+        <div className="modal-back" onClick={close}>
+          <div className="card modal" role="dialog" aria-label={L.licenses} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>
+                <Icon name="scale" size={20} /> {L.licenses}
+              </h2>
+              <button className="icon-btn" title={L.close} aria-label={L.close} onClick={close}>
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+            <p className="muted small">{L.licensesHint}</p>
+            <div className="modal-body">
+              {licenses.map((l) => (
+                <details key={l.name} className="update-note" open={l.name === "SplitGate"}>
+                  <summary className="update-ver">
+                    {l.name} <span className="tag">{l.license}</span>
+                  </summary>
+                  <p className="muted small mono break">{l.url}</p>
+                  {l.text && <pre className="license-text">{l.text}</pre>}
+                </details>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {dialog === "log" && (
+        <div className="modal-back" onClick={close}>
+          <div className="card modal" role="dialog" aria-label={L.changelog} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>
+                <Icon name="history" size={20} /> {L.changelog}
+              </h2>
+              <button className="icon-btn" title={L.close} aria-label={L.close} onClick={close}>
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+            <p className="muted small">{L.changelogHint}</p>
+            <div className="modal-body">
+              {changelog.map((n) => (
+                <details key={n.version} className="update-note" open={n.version === info?.version}>
+                  <summary className="update-ver">
+                    v{n.version} <span className="muted small">{n.title}</span>
+                  </summary>
+                  <Markdown text={n.body} />
+                </details>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -155,15 +223,29 @@ function UpdateSteps() {
       <div className="row">
         {(job.state === "idle" || job.state === "failed") && (
           <button className="btn primary" onClick={start}>
+            <Icon name="download" />
             {job.state === "failed" ? L.retry : L.download}
           </button>
         )}
         {job.state === "ready" && (
           <button className="btn primary" onClick={install}>
+            <Icon name="check" />
             {connected ? L.installConnected : L.install}
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function InfoTile({ icon, label, value, mono }: { icon: IconName; label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="tile">
+      <span className="tile-label">
+        <Icon name={icon} size={15} />
+        {label}
+      </span>
+      <span className={mono ? "tile-value mono" : "tile-value"}>{value}</span>
     </div>
   );
 }

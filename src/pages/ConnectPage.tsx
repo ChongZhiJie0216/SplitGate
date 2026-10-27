@@ -3,6 +3,7 @@ import { useStatus } from "../store/status";
 import { useProfiles } from "../store/profiles";
 import { useApp } from "../store/app";
 import ConnectButton from "../components/ConnectButton";
+import Icon, { IconName } from "../components/Icon";
 import { TrafficBadges } from "./ConnectionsPage";
 import { T } from "../lib/text";
 import { duration } from "../lib/format";
@@ -23,37 +24,39 @@ export default function ConnectPage() {
     return () => clearInterval(t);
   }, [status.state]);
 
+  // 等待自动重连时显示成黄色（和“连接中”一样），不是红色的“错误”。
+  const look = retrying ? "connecting" : status.state;
+  const exitName =
+    status.state === "connected" ? `${status.profile_name}（${T.profile.types[status.exit]}）` : active ? `${active.name}（${T.profile.types[active.type]}）` : null;
+
   return (
     <div className="card connect-card">
-      {/* 等待自动重连时显示成黄色（和“连接中”一样），不是红色的“错误”。 */}
-      <div className={`state-dot ${retrying ? "connecting" : status.state}`} />
-      <h2>{retrying ? T.status.retrying : T.status[status.state]}</h2>
+      <div className="hero">
+        <div className={`hero-ring ${look}`}>
+          <Icon name="power" size={30} />
+        </div>
+        <div>
+          <h2>{retrying ? T.status.retrying : T.status[status.state]}</h2>
+          {exitName && (
+            <p className="muted hero-sub">
+              {L.exit}：{exitName}
+            </p>
+          )}
+        </div>
+      </div>
 
       {status.state === "connected" && (
-        <table className="kv">
-          <tbody>
-            <tr>
-              <th>{L.exit}</th>
-              <td>
-                {status.profile_name}（{T.profile.types[status.exit]}）
-              </td>
-            </tr>
-            <tr>
-              <th>{L.since}</th>
-              <td className="mono">{duration(now - status.since_ms)}</td>
-            </tr>
-            <tr>
-              <th>{L.probe}</th>
-              <td className="mono">{status.probe_ms} ms</td>
-            </tr>
-            <tr>
-              <th>{L.speed}</th>
-              <td>
-                <TrafficBadges traffic={traffic} />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="tiles">
+          <Tile icon="clock" label={L.since} value={duration(now - status.since_ms)} />
+          <Tile icon="gauge" label={L.probe} value={`${status.probe_ms} ms`} />
+          <div className="tile wide">
+            <span className="tile-label">
+              <Icon name="arrows" size={15} />
+              {L.speed}
+            </span>
+            <TrafficBadges traffic={traffic} />
+          </div>
+        </div>
       )}
       {status.state === "connected" &&
         status.warnings.map((w) => (
@@ -95,14 +98,21 @@ export default function ConnectPage() {
       {actionError && <div className="banner bad">{actionError}</div>}
 
       {status.state === "disconnected" && <p className="muted">{active ? L.idle : L.noProfile}</p>}
-      {active && status.state !== "connected" && status.state !== "connecting" && (
-        <p>
-          {L.exit}：{active.name}（{T.profile.types[active.type]}）
-        </p>
-      )}
       <div className="row">
         <ConnectButton big />
       </div>
+    </div>
+  );
+}
+
+function Tile({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  return (
+    <div className="tile">
+      <span className="tile-label">
+        <Icon name={icon} size={15} />
+        {label}
+      </span>
+      <span className="tile-value mono">{value}</span>
     </div>
   );
 }

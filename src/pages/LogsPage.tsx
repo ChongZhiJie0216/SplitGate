@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useStatus } from "../store/status";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
+import Icon from "../components/Icon";
 
 const L = T.logsPage;
 type Filter = "all" | "app" | "sing-box" | "problems";
@@ -67,9 +68,11 @@ export default function LogsPage() {
           {copied ? L.copied : L.copy}
         </button>
         <button className="btn" onClick={clearLogs}>
+          <Icon name="trash" />
           {L.clear}
         </button>
         <button className="btn" onClick={exportDiag} disabled={diag.busy} title={L.diagHint}>
+          <Icon name="download" />
           {diag.busy ? L.exporting : L.exportDiag}
         </button>
       </div>

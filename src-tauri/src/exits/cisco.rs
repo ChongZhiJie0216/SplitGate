@@ -39,7 +39,7 @@ impl ExitAdapter for CiscoProfile {
             ep["bind_interface"] = json!(i);
         }
         let dns = json!({ "type": "openconnect", "tag": "vpn-dns", "endpoint": VPN_TAG, "accept_default_resolvers": true });
-        Ok(ExitParts { endpoint: ep, dns, server_host: singbox::host_of(&self.server) })
+        Ok(ExitParts { endpoint: ep, dns, server_host: singbox::host_of(&self.server), is_outbound: false, local_dns: None })
     }
 }
 

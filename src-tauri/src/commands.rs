@@ -271,6 +271,12 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// The licenses built into this exe, for the About page.
+#[tauri::command]
+pub fn get_licenses() -> Vec<update::License> {
+    update::licenses()
+}
+
 /// The CHANGELOG built into this exe, for the About page.
 #[tauri::command]
 pub fn get_changelog() -> Vec<update::Section> {

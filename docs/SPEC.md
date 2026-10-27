@@ -12,7 +12,7 @@ SplitGate（暂定名）是一个 Windows 桌面客户端：连接一个 VPN 出
 - 按域名和程序路径分流，内置可编辑的规则预设（首批：Xbox、Minecraft、Steam）。
 - **拦截检测**：发现某个网址被当前网络拦截（证书被换成 Fortinet 等），提示用户一键加进规则。
 - 实时显示哪些连接走了 VPN，方便补规则。
-- Cisco 密码、WireGuard 私钥存在 Windows 凭据管理器，不写进明文配置；Pangolin 的凭据由官方客户端保管，SplitGate 不接触。
+- Cisco 密码、WireGuard 私钥、Pangolin 出口的家里代理密码存在 Windows 凭据管理器，不写进明文配置；Pangolin 本身的登录凭据由官方客户端保管，SplitGate 不接触。
 
 **非目标（MVP 不做）**
 
@@ -31,7 +31,7 @@ SplitGate（暂定名）是一个 Windows 桌面客户端：连接一个 VPN 出
 - **Cisco 出口**：sing-box 自带的 OpenConnect endpoint（`endpoints: [{type: "openconnect"}]`），不打包 openconnect.exe，不另建 VPN 网卡，不改系统路由。
 - **WireGuard 出口**：sing-box 自带的 WireGuard endpoint。
 - **Pangolin 出口**：~~“外部客户端”类型。官方 Pangolin 客户端负责登录、凭据和隧道；SplitGate 删掉它的全隧道路由、加一条最低优先级默认路由，再让 sing-box 的 `direct` 出口用 `bind_interface` 绑定它的网卡。~~
-  **改法（维护者 2026-10-26 同意，待第 0 阶段 V8 实测；整个项目最后才做）**：不用 Exit Node。官方 Pangolin 客户端照常只连 site（负责登录和凭据）；家里 VPN-Server 虚拟机（newt 所在的那台，PVE 上）跑一个 SOCKS5 代理（sing-box 1.14.4，用户名 + 密码）；SplitGate 的 `vpn` 出口 = sing-box `socks` 出口，用 `bind_interface: Pangolin` 经 Pangolin 网卡连到这个代理。不删、不加任何路由，组件 2 的 route_guard 不再需要。代理密码存凭据管理器。限制：经 SOCKS5 + Pangolin 的 UDP 不一定通（Xbox 联机 / 语音），登录、商店、Steam、Minecraft 登录都是 TCP。
+  **改法（维护者 2026-10-26 同意；第 0 阶段 V8 2026-10-27 实测通过，v0.21.0 实现）**：不用 Exit Node。官方 Pangolin 客户端照常只连 site（负责登录和凭据）；家里 VPN-Server 虚拟机（newt 所在的那台，PVE 上）跑一个 SOCKS5 代理（sing-box 1.14.4，用户名 + 密码）；SplitGate 的 `vpn` 出口 = sing-box `socks` 出口，用 `bind_interface: Pangolin` 经 Pangolin 网卡连到这个代理。不删、不加任何路由，组件 2 的 route_guard 不再需要。代理密码存凭据管理器。限制：经 SOCKS5 + Pangolin 的 UDP 不一定通（Xbox 联机 / 语音），登录、商店、Steam、Minecraft 登录都是 TCP。
 - **所有出口都要能访问家里内网的设备**（维护者 2026-10-26 补充；例如 PVE 管理网页）：Cisco、WireGuard 用一个含家里网段的规则集（`ip_cidr`）送进 `vpn`，要服务器那一端允许访问内网；Pangolin 不开 Exit Node 时，官方客户端本来就有到 site 资源的路由。连接时要检查家里网段和本地网络有没有撞号（例如学校也用同一个 192.168.x.0/24）。
 
 &#91;embedded content: 架构总览 · 主程序、sing-box sidecar、三种出口\]
@@ -204,26 +204,22 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
     - 日志：服务写进同一个 `data\logs\splitgate-*.log`，同时推给界面显示；界面不重复写。
     - 服务不能用（没装、没运行、指向别的位置）时，界面自己连接，和以前一样要管理员；界面自己连接期间不会叫服务再连一次。
 
-### 6. Pangolin 出口（exits/pangolin.rs，官方客户端）
+### 6. Pangolin 出口（exits/pangolin.rs，v0.21.0，第 0 阶段 V8）
 
-> 改法见架构总览“Pangolin 出口”：不用 Exit Node，经 Pangolin 连到家里的 SOCKS5 代理。下面的 Exit Node 流程是 V7 的做法，V8 通过后改写。验证脚本：`phase0/v8-pangolin-socks/`。
+不用 Exit Node，经 Pangolin 连到家里的 SOCKS5 代理（V7 的 Exit Node 做法和它的路由处理不再使用，记录在 `docs/phase0-findings.md`）。**不运行 Olm 或 Pangolin CLI**：实测都必须装成 Windows 服务，会把 Secret 写进文件、事件日志或注册表。
 
-**不运行 Olm 或 Pangolin CLI**：实测 Olm 1.10.1 和 Pangolin CLI 0.19.0 在 Windows 上都必须装成 Windows 服务，会把 Secret 写进 `ProgramData\olm\service_args.json`、事件日志或注册表，违反“凭据不落盘”的规则。原规格的“方案 A：sidecar 运行 Olm / fork Olm”和“方案 B：WSL2 + Pangolin CLI”取消。
+前提（维护者做一次）：
+- 官方 Pangolin 客户端已安装、登录；SplitGate 不读、不存它的 Secret。Pangolin 后台**关掉 Exit Node**。
+- 家里 VPN-Server 虚拟机跑代理：`phase0/v8-pangolin-socks/server/install-socks.sh <虚拟机内网 IP> -y`（sing-box 1.14.4，systemd 服务 `splitgate-socks`，用户名 + 随机密码，只开一个端口）。虚拟机的 IP（或网段）是 Pangolin site 的资源，Windows 才会经 Pangolin 网卡去它那里。
 
-前提：
+Profile（`pangolin` 子对象）：`interface`（默认 `Pangolin`）、`proxy_host`（IPv4）、`proxy_port`（默认 1080）、`proxy_user`（默认 `splitgate`）、`vpn_dns`（默认 `9.9.9.9`）；代理密码在凭据管理器 `<profile_id>:pangolin-proxy`。
 
-- Pangolin 服务器 1.24 或以上，已建 Exit Node 资源并关联 site。
-- **Exit Node 要在 Pangolin 后台开启**才生效（只在 App 里选不算）。
-- 后台的“Exit Node Takes Precedence Over Resources”开着时，客户端会拿掉连回家里内网的路由；需要同时访问内网资源时要关掉它。
-- 用户已安装官方 Pangolin 客户端并登录；SplitGate 不读、不存 Secret。
+连接时：
+1. “检查”一步（只读 PowerShell）：网卡存在且已连接，否则停下并提示先在官方客户端连接；去 `proxy_host` 的路由要经过这张网卡，否则提示把它加进 site 资源；网卡上有全隧道路由（Exit Node 还开着）→ 连接页黄色提示。
+2. sing-box 配置：`vpn` = `socks` 出口（不是 endpoint）+ `bind_interface: <网卡>`；`vpn-dns` = TCP `vpn_dns[0]` 经 `vpn`；`local` DNS 用物理网卡（有默认路由、不是 Pangolin / SplitGate 的网卡）的第一个 IPv4 DNS，读不到用 1.1.1.1（Windows 把 Pangolin 的 DNS 排在前面，不能用系统解析）。不加、不删任何路由。
+3. 照常经 `vpn` 做测试，成功才“已连接”；失败时说明可能的原因（客户端没连、代理没跑、密码错）。V8 时没有看到官方客户端因 sing-box 启动而断线（维护者 2026-10-27 定暂时以没有影响为准）。
 
-流程：
-
-1. 用户在官方客户端里连接并选好 Exit Node。
-2. SplitGate 找到网卡（默认名 `Pangolin`，设置里可改），按组件 2 处理路由，读取例外地址。
-3. 启动 sing-box。**sing-box 启动会让官方客户端断线约 10–15 秒**（它跟着系统默认路由改例外路由，短暂指向 TUN），之后自行恢复。SplitGate 要等它恢复（经 `vpn` 出口探测成功）才显示“已连接”。
-4. Exit Node 背后是多个 site 组成的 gateway 组，客户端会自动换出口 site，**出口 IP 会变**；连接页显示“当前出口 IP”时要定时刷新，不要当成错误。
-5. IPv6 不经过 Exit Node（与本项目只用 IPv4 的策略一致）。
+家里内网：site 资源的网段由官方客户端自己的路由送进 Pangolin，不经 SplitGate 也能到。限制：经 SOCKS5 + Pangolin 的 UDP 不一定通（Xbox 联机 / 语音）。
 
 ### 7. WireGuard 出口（exits/wireguard.rs）
 
@@ -279,7 +275,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
       "type": "pangolin",
       "name": "Pangolin 家里出口",
       "ruleset_ids": ["xbox", "minecraft", "steam"],
-      "pangolin": { "interface": "Pangolin", "vpn_dns": ["9.9.9.9"], "alias_suffixes": [], "alias_dns": "100.96.128.1" }
+      "pangolin": { "interface": "Pangolin", "proxy_host": "192.168.1.20", "proxy_port": 1080, "proxy_user": "splitgate", "vpn_dns": ["9.9.9.9"] }
     },
     {
       "id": "home-wg",
@@ -292,7 +288,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 }
 ```
 
-`type` 决定使用哪个 ExitAdapter，并只读取同名的子对象。`home_cidrs`（v0.10.0，可省略）：家里内网网段，一律送进这个出口；只能是内网 IPv4 网段（/8 到 /32，写网段第一个地址）；连接时和本机各网卡的 IPv4 网段比较，重叠就在“已连接”状态里带 `warnings` 提示（那时流量会留在本地网络）。Cisco 的 `mfa` 取值为 `none` / `duo-push` / `saml`（MVP 只有 `none`）；`bind_interface` 为 `null` 表示系统自动。Cisco 密码、WireGuard 私钥存在 keyring；Pangolin 没有要存的凭据。同一时间只有 `active` 指向的出口生效。
+`type` 决定使用哪个 ExitAdapter，并只读取同名的子对象。`home_cidrs`（v0.10.0，可省略）：家里内网网段，一律送进这个出口；只能是内网 IPv4 网段（/8 到 /32，写网段第一个地址）；连接时和本机各网卡的 IPv4 网段比较，重叠就在“已连接”状态里带 `warnings` 提示（那时流量会留在本地网络）。Cisco 的 `mfa` 取值为 `none` / `duo-push` / `saml`（MVP 只有 `none`）；`bind_interface` 为 `null` 表示系统自动。Cisco 密码、WireGuard 私钥、Pangolin 的家里代理密码存在 keyring。同一时间只有 `active` 指向的出口生效。
 
 **rules.json**：规则集（内置预设首次运行时复制进来，用户可改）
 
@@ -398,7 +394,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 | 连接列表 | 实时连接：程序、域名、出口（vpn / direct）、流量；可筛选、可关闭单条连接、一键加规则 | 第 2 阶段 |
 | 拦截提示 | 疑似被拦截的域名，一键加进规则 | 第 2 阶段 |
 | 日志 | 按来源和级别筛选，支持暂停滚动、复制、导出诊断包 | MVP |
-| Profile | 先选出口类型，再显示对应表单。Cisco：服务器、账号、密码、组别、只用 TCP、出口网卡；Pangolin：外部客户端网卡名、vpn-dns、资源别名后缀（附“先在官方客户端连接并在后台开 Exit Node”的说明）；WireGuard：导入 .conf | MVP（Pangolin 表单第 2 阶段） |
+| Profile | 先选出口类型，再显示对应表单。Cisco：服务器、账号、密码、组别、只用 TCP、出口网卡；Pangolin：家里代理的 IP、端口、用户名、密码、官方客户端网卡名、vpn-dns（附“先在官方客户端连接，不用开 Exit Node”的说明）；WireGuard：导入 .conf | MVP（Pangolin v0.21.0） |
 | 设置 | 开机自启、启动后自动连接、主题、sing-box 日志级别、TUN 网段 | MVP |
 | 关于 | 版本、组件版本、许可证与第三方声明 | MVP |
 | 流量画布 | 用 React Flow 显示“应用 → 规则 → 出口”的可视化图：中间一列是规则集名（前端按规则集内容再比一次；家里内网单独一个），每 2 秒刷新，只画流量最大的 15 个程序 | 第 3 阶段（v0.11.0） |
@@ -444,7 +440,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 
 不再打包 Olm（AGPL-3.0），许可证负担变小。
 
-**使用提醒**：通过他人的 VPN 绕过学校网络限制，可能违反学校或 VPN 提供方的使用政策，使用前请自行确认。
+（v0.22.0 起关于页不再显示使用提醒，维护者 2026-10-27 定：这是维护者自己的 VPN，自己用。许可证全文编进程序，关于页“许可证”弹窗显示，`licenses\` 文件夹照旧随附。）
 
 ## 开发阶段与验收标准
 
@@ -475,8 +471,8 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 
 **验收**
 
-- [ ] 点一次按钮完成连接，Xbox App 能登录、浏览商店、打开 Game Pass；PrismLauncher、Steam 能登录
-- [ ] 连接期间，非规则流量的出口 IP 仍是学校网络
+- [x] 点一次按钮完成连接，Xbox App 能登录、浏览商店、打开 Game Pass；PrismLauncher、Steam 能登录（学校网络，维护者 2026-10-27 实测通过）
+- [x] 连接期间，非规则流量的出口 IP 仍是学校网络（维护者 2026-10-27 实测通过）
 - [x] 在任务管理器中结束 SplitGate 进程后，网络能在 5 秒内恢复正常（v0.6.0，手机热点 + WireGuard，1.6 秒，2026-10-26）
 - [x] 断开再连接 20 次，没有残留进程、网卡或路由（v0.6.0，手机热点 + WireGuard，每次断开后 0.7–1.1 秒清干净，2026-10-26）
 - [x] 日志、诊断包和设置文件夹（v0.11 以前 `%APPDATA%\SplitGate\`，v0.12 起 `data\`）中搜索不到密码（v0.6.0 日志、设置、WebView2 数据、便携版文件夹、命令行、任务计划都搜不到 Cisco 密码和 WireGuard 私钥；v0.11.1 诊断包解开后也搜不到，2026-10-26，`phase1\secret-scan.ps1`）
@@ -510,16 +506,16 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 
 维护者 2026-10-26 定：放到整个项目最后做；在那之前 Profile 页的 Pangolin 类型维持“还不能连接”。
 
-- [ ] 第 0 阶段 V8：经 Pangolin 连到家里 SOCKS5 代理，不用 Exit Node（脚本已备好：`phase0/v8-pangolin-socks/`）
-- [ ] Pangolin 出口（`socks` 出口 + `bind_interface: Pangolin`，代理密码存凭据管理器）；Pangolin 下也能访问家里内网
+- [x] 第 0 阶段 V8：经 Pangolin 连到家里 SOCKS5 代理，不用 Exit Node（`phase0/v8-pangolin-socks/`，维护者 2026-10-27 实测通过）
+- [x] Pangolin 出口（`socks` 出口 + `bind_interface: Pangolin`，代理密码存凭据管理器）；Pangolin 下也能访问家里内网（v0.21.0，维护者 2026-10-27 实测通过）
 
 ## 待确认事项
 
 - [ ] 项目正式名称（SplitGate 只是暂定；不能含 sing-box 的名字）
 - [x] Cisco 服务器的认证方式：账号密码 + 组别，不需要 MFA（第 0 阶段实测，2026-10-26）
-- [ ] 这个 Cisco VPN 是你自己管理的，还是别人的？如果是自己的，服务器端的 dynamic split tunneling 可以作为备用方案
-- [ ] 家里路由器有没有转发 UDP 8443（决定 Cisco 能不能用 DTLS）
+- [x] 这个 Cisco VPN 是你自己管理的，还是别人的？**自己管理的**（AnyLink，维护者 2026-10-27）：服务器端的 dynamic split tunneling 可以作为备用方案，目前不需要
+- [x] 家里路由器有没有转发 UDP 8443（决定 Cisco 能不能用 DTLS）：**有，转发给 AnyLink**（维护者 2026-10-27）。学校网络照样挡 DTLS，所以“只用 TCP”在学校仍要勾；第 0 阶段在手机热点上 DTLS 也失败过（第 246 行），热点 / 家外其他网络能不能用 DTLS 以实测为准
 - [x] 是否需要支持多台电脑或便携版（免安装）：**需要**，会在别的电脑上用（维护者 2026-10-26）；便携版 + 检查更新；v0.19.0 起便携版也能在线升级（维护者 2026-10-27 定不做安装包）
 - [x] 代码仓库：GitHub `ChongZhiJie0216/SplitGate`，由维护者自己推送（维护者定，2026-10-26）
 - [x] Pangolin 是自建，版本 1.24 以上，Exit Node 已在后台开启（维护者确认，2026-10-26）
-- [ ] 同时有 Pangolin 和 WireGuard 时，家里出口优先用哪一个
+- [x] 同时有 Pangolin 和 WireGuard 时，家里出口优先用哪一个：**两个都留，在 Profile 页自己选**，不做自动切换（维护者 2026-10-27）
