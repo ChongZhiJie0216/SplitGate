@@ -37,7 +37,9 @@ Windows 专用的代码在 Linux 上也能检查（云端会话用）：`rustup 
 1. 改好 `package.json` 的版本号（唯一来源；`src-tauri/Cargo.toml` 要同值，测试会检查）和 `CHANGELOG.md`（第一个版本段落要是这次的版本），合并进 `main`。
 2. 在 `main` 上双击 `build.bat`。
 3. 先检查：`powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1`（只显示要做什么）。
-4. 再发布：同一个指令加 `-Yes`。需要 [GitHub CLI](https://cli.github.com/)（`gh auth login` 登录过）。Release 的说明取自 CHANGELOG 里这个版本的那一段。
+4. 再发布：同一个指令加 `-Yes`。需要 [GitHub CLI](https://cli.github.com/)（`gh auth login` 登录过）。Release 的说明取自 CHANGELOG 里这个版本的那一段。上传 zip 和 `.sha256`（`build.bat` 一起生成；程序里的“下载并更新”要用它核对，v0.19.0 起）。
+
+**测试在线更新**（不用等下一个版本）：把 `portable\SplitGate\` 复制到别的文件夹，在那里的 PowerShell 执行 `$env:SPLITGATE_PRETEND_VERSION='0.18.0'; .\SplitGate.exe`。检查更新时程序会把自己当成 0.18.0，就会提供 GitHub 上最新的版本。
 
 仓库是公开的，Release 谁都看得到：zip 里只有程序和许可证，不会有 `data\`。不要把服务器地址、账号、IP 写进仓库里的任何文件。
 

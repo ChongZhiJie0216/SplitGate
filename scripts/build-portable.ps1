@@ -70,12 +70,15 @@ New-Item -ItemType Directory -Force (Join-Path $stage 'SplitGate') | Out-Null
 Get-ChildItem $out -Force | Where-Object { $_.Name -ne 'data' } | Copy-Item -Destination (Join-Path $stage 'SplitGate') -Recurse
 Compress-Archive -Path (Join-Path $stage 'SplitGate') -DestinationPath $zip
 Remove-Item -Recurse -Force $stage
+# Checksum for the in-app updater (v0.19.0): "<sha256>  <zip name>", uploaded with the zip.
+$hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLower()
+[IO.File]::WriteAllText("$zip.sha256", "$hash  $(Split-Path $zip -Leaf)`n", (New-Object Text.ASCIIEncoding))
 Copy-Item (Join-Path $out 'SplitGate.exe') (Join-Path $root 'SplitGate.exe') -Force
 Copy-Item (Join-Path $out 'sing-box.exe') (Join-Path $root 'sing-box.exe') -Force
 
 $mb = [Math]::Round((Get-Item (Join-Path $out 'SplitGate.exe')).Length / 1MB, 1)
 Write-Host "[ok] SplitGate v$version"
 Write-Host "     folder: $out (SplitGate.exe $mb MB + sing-box.exe)"
-Write-Host "     zip:    $zip"
-Write-Host "     test:   $(Join-Path $root 'SplitGate.exe') (copy in the repo root, run it as Administrator)"
+Write-Host "     zip:    $zip (+ .sha256)"
+Write-Host "     test:   $(Join-Path $root 'SplitGate.exe') (copy in the repo root; with the background service no Administrator needed)"
 Write-Host "     settings of each copy: the data\ folder next to its SplitGate.exe"

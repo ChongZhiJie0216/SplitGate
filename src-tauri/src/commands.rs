@@ -7,7 +7,7 @@ use crate::exits::{cisco, wireguard};
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, backend, block_detect, credentials, diagnostics, elevate, logs, paths, platform, service, supervisor, traffic, update};
+use crate::{autostart, backend, block_detect, credentials, diagnostics, elevate, logs, paths, platform, service, supervisor, traffic, update, updater};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -235,8 +235,40 @@ pub fn show_diagnostics(path: String) -> Result<(), String> {
 /// Asks GitHub for the latest release; takes a few seconds (PowerShell + two requests).
 #[tauri::command]
 pub async fn check_update(app: tauri::AppHandle) -> Result<update::UpdateInfo, String> {
-    let version = app.package_info().version.to_string();
+    let version = version_for_update(&app);
     tauri::async_runtime::spawn_blocking(move || update::check(&version)).await.map_err(|e| e.to_string())?
+}
+
+/// "下载并更新": start downloading the version `check_update` reported.
+#[tauri::command]
+pub async fn download_update(app: tauri::AppHandle) -> Result<updater::Job, String> {
+    let version = version_for_update(&app);
+    let info = tauri::async_runtime::spawn_blocking(move || update::check(&version)).await.map_err(|e| e.to_string())??;
+    let d = info.download.ok_or("这个版本的发布页没有可以自动更新的文件，请打开下载页手动下载。")?;
+    updater::start_download(d)?;
+    Ok(updater::job())
+}
+
+/// This version, or `SPLITGATE_PRETEND_VERSION` (testing the updater against the current release,
+/// docs/development.md).
+fn version_for_update(app: &tauri::AppHandle) -> String {
+    std::env::var("SPLITGATE_PRETEND_VERSION")
+        .ok()
+        .filter(|v| update::parse(v).is_some())
+        .unwrap_or_else(|| app.package_info().version.to_string())
+}
+
+#[tauri::command]
+pub fn get_update_job() -> updater::Job {
+    updater::job()
+}
+
+/// Install the downloaded version (disconnects first; the page asked when connected), start it, quit.
+#[tauri::command]
+pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(updater::install).await.map_err(|e| e.to_string())??;
+    app.exit(0);
+    Ok(())
 }
 
 /// The CHANGELOG built into this exe, for the About page.

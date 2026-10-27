@@ -252,7 +252,22 @@ export interface UpdateInfo {
   url: string | null;
   /** 比现在新的版本，最新的在前面。 */
   notes: UpdateSection[];
+  /** 能在程序里更新时的下载信息；旧版本的发布页没有校验文件时为 null（只能手动下载）。 */
+  download: { version: string; zip_url: string; size: number; sha_url: string } | null;
 }
+
+/** 在线升级（updater.rs，便携版）。 */
+export type UpdateJob =
+  | { state: "idle" }
+  | { state: "downloading"; version: string; done: number; total: number }
+  | { state: "ready"; version: string }
+  | { state: "installing"; version: string }
+  | { state: "failed"; message: string };
+
+export const downloadUpdate = () => invoke<UpdateJob>("download_update");
+export const getUpdateJob = () => invoke<UpdateJob>("get_update_job");
+/** 先断开（页面已经问过）、换文件、启动新版本，这一个退出。 */
+export const installUpdate = () => invoke<void>("install_update");
 
 export const checkUpdate = () => invoke<UpdateInfo>("check_update");
 /** 这个版本自带的 CHANGELOG（打包时编进程序），最新的在前面。 */

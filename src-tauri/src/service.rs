@@ -135,7 +135,7 @@ fn service_log(text: &str) {
 }
 
 #[cfg(windows)]
-pub use win::{install, open_trusted_pipe, remove, run_service, state, user_sid};
+pub use win::{install, open_trusted_pipe, remove, run_service, start_installed, state, stop_installed, user_sid};
 
 /// From the app: directly when it runs as administrator, otherwise in an elevated copy of
 /// SplitGate (Windows shows its UAC prompt) that installs for this user (v0.18.0).
@@ -178,6 +178,14 @@ pub fn install(_sid: Option<String>) -> Result<ServiceState, String> {
 #[cfg(not(windows))]
 pub fn remove() -> Result<ServiceState, String> {
     Err("后台服务只支持 Windows".into())
+}
+#[cfg(not(windows))]
+pub fn stop_installed() -> Result<bool, String> {
+    Ok(false)
+}
+#[cfg(not(windows))]
+pub fn start_installed() -> Result<(), String> {
+    Ok(())
 }
 #[cfg(not(windows))]
 pub fn open_trusted_pipe() -> Result<std::fs::File, String> {
@@ -702,6 +710,30 @@ mod win {
             thread::sleep(Duration::from_millis(250));
         }
         Ok(state())
+    }
+
+    /// For an update (administrator): stop the service if it is there; true = it was running.
+    pub fn stop_installed() -> Result<bool, String> {
+        let Some(svc) = open(SERVICE_QUERY_STATUS | SERVICE_STOP) else { return Ok(false) };
+        if current_state(&svc) != Some(SERVICE_RUNNING) {
+            return Ok(false);
+        }
+        stop_and_wait(&svc);
+        match current_state(&svc) {
+            Some(SERVICE_STOPPED) => Ok(true),
+            _ => Err("后台服务 10 秒内没有停下来".into()),
+        }
+    }
+
+    /// Start the installed service again (after an update replaced its exe).
+    pub fn start_installed() -> Result<(), String> {
+        let Some(svc) = open(SERVICE_QUERY_STATUS | SERVICE_START) else { return Ok(()) };
+        start(&svc)?;
+        let end = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < end && ping().is_err() {
+            thread::sleep(Duration::from_millis(250));
+        }
+        Ok(())
     }
 
     pub fn remove() -> Result<ServiceState, String> {

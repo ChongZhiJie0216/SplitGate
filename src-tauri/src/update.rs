@@ -1,7 +1,7 @@
-//! "检查更新" (maintainer's choice 2026-10-26): only tells that a newer version exists and shows its
-//! CHANGELOG; nothing is downloaded or installed (a real updater comes after the Windows service,
-//! with a signed NSIS installer). Source: the latest GitHub Release of this repo, and CHANGELOG.md
-//! at that release's tag. Fetched with Windows PowerShell; no extra dependency. Read-only.
+//! "检查更新": tells that a newer version exists and shows its CHANGELOG. Source: the latest
+//! GitHub Release of this repo, and CHANGELOG.md at that release's tag. Fetched with Windows
+//! PowerShell; no extra dependency. Read-only. Also reports the release's portable zip and its
+//! `.sha256` file, which `updater.rs` downloads and installs (v0.19.0, only when asked).
 
 use serde::Serialize;
 use serde_json::Value;
@@ -31,7 +31,14 @@ try {
     $w = Invoke-WebRequest -Uri "https://raw.githubusercontent.com/$env:SG_REPO/$($r.tag_name)/CHANGELOG.md" -Headers @{ 'User-Agent' = 'SplitGate-update-check' } -UseBasicParsing -TimeoutSec 15
     $log = [Text.Encoding]::UTF8.GetString($w.RawContentStream.ToArray())
 } catch { $log = '' }
-@{ tag = [string]$r.tag_name; url = [string]$r.html_url; changelog = $log } | ConvertTo-Json -Compress
+# The portable zip and its checksum file, as scripts\publish-release.ps1 uploads them (v0.19.0+).
+$zipName = "SplitGate-$(([string]$r.tag_name).TrimStart('v'))-portable.zip"
+$zip = @($r.assets | Where-Object { $_.name -eq $zipName }) | Select-Object -First 1
+$sha = @($r.assets | Where-Object { $_.name -eq "$zipName.sha256" }) | Select-Object -First 1
+$out = @{ tag = [string]$r.tag_name; url = [string]$r.html_url; changelog = $log }
+if ($zip) { $out.zip_url = [string]$zip.browser_download_url; $out.zip_size = [long]$zip.size }
+if ($sha) { $out.sha_url = [string]$sha.browser_download_url }
+$out | ConvertTo-Json -Compress
 "#;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -53,6 +60,17 @@ pub struct UpdateInfo {
     pub url: Option<String>,
     /// Versions newer than the current one, newest first.
     pub notes: Vec<Section>,
+    /// What "下载并更新" downloads; None when the release has no portable zip with a checksum
+    /// file (releases before v0.19.0): then only the release page.
+    pub download: Option<Download>,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Download {
+    pub version: String,
+    pub zip_url: String,
+    pub size: u64,
+    pub sha_url: String,
 }
 
 pub fn check(current: &str) -> Result<UpdateInfo, String> {
@@ -70,17 +88,24 @@ pub fn check(current: &str) -> Result<UpdateInfo, String> {
 }
 
 fn interpret(current: &str, v: &Value) -> UpdateInfo {
-    let none = UpdateInfo { current: current.into(), latest: None, newer: false, url: None, notes: Vec::new() };
+    let none = UpdateInfo { current: current.into(), latest: None, newer: false, url: None, notes: Vec::new(), download: None };
     let Some(tag) = v["tag"].as_str() else { return none };
     let latest = tag.trim_start_matches('v').to_string();
     let newer = matches!((parse(&latest), parse(current)), (Some(l), Some(c)) if l > c);
     let release_page = format!("https://github.com/{REPO}/releases/");
     let url = v["url"].as_str().filter(|u| u.starts_with(&release_page)).map(str::to_string);
     let notes = if newer { sections_newer_than(v["changelog"].as_str().unwrap_or(""), current) } else { Vec::new() };
-    UpdateInfo { latest: Some(latest), newer, url, notes, ..none }
+    // Only files of this repo's releases (GitHub then redirects to its download servers).
+    let files = format!("https://github.com/{REPO}/releases/download/");
+    let ours = |k: &str| v[k].as_str().filter(|u| u.starts_with(&files) && !u.contains(['"', ' ', '\n'])).map(str::to_string);
+    let download = match (ours("zip_url"), ours("sha_url")) {
+        (Some(zip_url), Some(sha_url)) if newer => Some(Download { version: latest.clone(), zip_url, size: v["zip_size"].as_u64().unwrap_or(0), sha_url }),
+        _ => None,
+    };
+    UpdateInfo { latest: Some(latest), newer, url, notes, download, ..none }
 }
 
-fn parse(v: &str) -> Option<(u32, u32, u32)> {
+pub(crate) fn parse(v: &str) -> Option<(u32, u32, u32)> {
     let mut p = v.trim().trim_start_matches('v').split('.').map(|x| x.parse::<u32>().ok());
     match (p.next()??, p.next()??, p.next()??, p.next()) {
         (a, b, c, None) => Some((a, b, c)),
@@ -174,6 +199,20 @@ mod tests {
         assert_eq!(none.latest, None);
         let odd = interpret("0.12.0", &serde_json::json!({"tag": "v0.13.0", "url": "https://evil.example/x"}));
         assert_eq!(odd.url, None, "only this repo's release pages");
+        assert_eq!(i.download, None, "no zip / checksum in the release: release page only");
+    }
+
+    #[test]
+    fn download_only_from_this_repo() {
+        let files = format!("https://github.com/{REPO}/releases/download/v0.19.0/");
+        let v = serde_json::json!({"tag": "v0.19.0", "url": format!("https://github.com/{REPO}/releases/tag/v0.19.0"), "changelog": "",
+            "zip_url": format!("{files}SplitGate-0.19.0-portable.zip"), "zip_size": 30_000_000u64, "sha_url": format!("{files}SplitGate-0.19.0-portable.zip.sha256")});
+        let d = interpret("0.18.0", &v).download.unwrap();
+        assert_eq!((d.version.as_str(), d.size), ("0.19.0", 30_000_000));
+        assert_eq!(interpret("0.19.0", &v).download, None, "not newer");
+        let mut bad = v.clone();
+        bad["sha_url"] = "https://evil.example/x.sha256".into();
+        assert_eq!(interpret("0.18.0", &bad).download, None);
     }
 
     #[test]

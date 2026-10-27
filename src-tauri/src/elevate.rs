@@ -21,6 +21,8 @@ pub enum Task {
     /// `least`: the task starts SplitGate without administrator rights (the service connects).
     AutostartOn { user: String, least: bool },
     AutostartOff,
+    /// Install a downloaded version (updater.rs): stop the service, replace the files, start it.
+    ApplyUpdate { src: String },
 }
 
 impl Task {
@@ -30,6 +32,7 @@ impl Task {
             Task::RemoveService => vec!["remove-service".into()],
             Task::AutostartOn { user, least } => vec!["autostart-on".into(), if *least { "least" } else { "highest" }.into(), user.clone()],
             Task::AutostartOff => vec!["autostart-off".into()],
+            Task::ApplyUpdate { src } => vec!["apply-update".into(), src.clone()],
         }
     }
 }
@@ -48,6 +51,7 @@ fn parse(args: &[String]) -> Option<(Task, PathBuf)> {
             Task::AutostartOn { user: user.clone(), least: level == "least" }
         }
         ("autostart-off", _, _) => Task::AutostartOff,
+        ("apply-update", Some(src), _) => Task::ApplyUpdate { src: src.clone() },
         _ => return None,
     };
     Some((task, result))
@@ -104,6 +108,7 @@ pub fn run_task_from_args() {
         Task::RemoveService => crate::service::remove().map(|_| ()),
         Task::AutostartOn { user, least } => crate::autostart::set_as(true, &user, least).map(|_| ()),
         Task::AutostartOff => crate::autostart::set_as(false, "", false).map(|_| ()),
+        Task::ApplyUpdate { src } => crate::updater::apply_with_service(Path::new(&src)),
     };
     let _ = std::fs::write(&result, outcome.as_ref().err().map(String::as_str).unwrap_or("ok"));
     std::process::exit(if outcome.is_ok() { 0 } else { 1 });
@@ -268,6 +273,7 @@ mod tests {
             Task::AutostartOn { user: r"PC\测试 甲".into(), least: true },
             Task::AutostartOn { user: r"DOMAIN\a\".into(), least: false },
             Task::AutostartOff,
+            Task::ApplyUpdate { src: r"D:\Apps\Split Gate\data\update\0.19.0\SplitGate".into() },
         ] {
             let line = command_line(&task, &result);
             assert_eq!(parse(&split(&line)), Some((task, result.clone())), "{line}");
