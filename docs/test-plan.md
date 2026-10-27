@@ -87,3 +87,50 @@
 - 每一项的结果（通过 / 不通过 + 一句话）
 - 不通过的那项：截图，加上日志页对应的几行；或者直接附诊断包（已脱敏）
 - A 部分全部通过就可以合并 PR #2；B 部分可以之后补测
+
+## C. v0.15.0 后台服务（第一步）— 2026-10-26 维护者实测全部通过
+
+照常 `build.bat`，以管理员身份运行根目录的 `SplitGate.exe`。
+
+- [x] 设置页“后台服务（测试中）”显示“还没有安装”
+- [x] 按“安装后台服务”：几秒后显示“已安装，正在运行（v0.15.0）”；`services.msc` 里有“SplitGate 后台服务”，启动类型“自动”，登录身份“本地系统”
+- [x] `data\logs\service-日期.log` 有“后台服务启动……管道允许的用户：S-1-5-21-…”
+- [x] 连接 / 断开照常（服务现在不参与连接）
+- [x] 重新开机后，设置页仍显示“正在运行”
+- [x] 不以管理员身份运行时，安装 / 移除按钮是灰的
+- [x] 打包检查：服务在运行时双击 `build.bat`，一开始就提示先停止服务
+- [x] 按“移除后台服务”（按两次）：显示“还没有安装”，`services.msc` 里也没了
+
+## D. v0.16.0 Cisco：组别下拉、测试登录 — 2026-10-26 维护者实测可用
+
+- [x] 打开现有的 Cisco Profile：“组别”变成下拉框，选项和 AnyLink 登录页上的一样
+- [x] 新建 Cisco：填好服务器、离开输入框后，组别自动变成下拉框
+- [x] 服务器地址故意填错：组别显示“读不到组别：…”，仍可手动填
+- [x] “测试登录”用正确的账号密码组别 → 绿色“登录成功”；故意填错密码 → 红色“登录失败：…”（服务器回的原因）
+- [x] 密码栏留空（用已保存的密码）测试也能成功
+- [x] 改了任何一项后按“保存”：先自动测试，通过才保存；失败时按钮变“仍然保存”，再按一次才保存
+- [x] 测试和保存后照常能连接；日志里没有密码
+
+## E. v0.17.x 后台服务负责连接 — 2026-10-27 维护者实测全部通过（v0.17.2）
+
+PowerShell 里要写 `sc.exe`（只写 `sc` 是 PowerShell 的 Set-Content，会建一个文件，什么都不做）。
+
+先在设置页确认后台服务“已安装，正在运行（v0.17.2）”（装过旧版的话按“改成这一个”或重新安装）。
+换了网络（热点 ↔ 有线）先在 SplitGate 断开时重新记基准：`phase0\snapshot.ps1 -Baseline`。
+
+看日志用这两条（加 `-Encoding UTF8`，中文才不会乱码；第一条去掉 sing-box 的流水）：
+
+```
+Select-String -Path data\logs\splitgate-*.log -Encoding UTF8 -Pattern '\[sing-box\]' -NotMatch | Select-Object -Last 60 | ForEach-Object Line
+Get-Content data\logs\service-*.log -Encoding UTF8 -Tail 30
+```
+
+- [x] 按“连接”：日志出现“经后台服务连接（服务 v0.17.0）”，几秒后“已连接”；连接页、连接列表、流量画布、拦截提示都和以前一样
+- [x] 任务管理器“详细信息”里，`sing-box.exe` 的用户名是 `SYSTEM`
+- [x] 按“断开”：正常断开，`phase1\residue-check.ps1` 显示 `[clean]`
+- [x] 先跑 `phase1\kill-recovery.ps1`，再到任务管理器只结束**用户名是你自己**的那个 `SplitGate.exe`（`SYSTEM` 那个是服务，不要结束）：`[PASS]`（服务自动断开、恢复网络）；服务日志有“SplitGate 关掉了或被结束了，断开连接”“已断开”
+- [x] 再连接一次，任务管理器结束 `SYSTEM` 那个 `SplitGate.exe`（模拟服务当掉）：5 秒左右后 SplitGate 日志出现“清理：…”，网络恢复；之后执行 `sc.exe start SplitGateService` 把服务开回来
+- [x] 已连接时结束 `sing-box.exe`：显示“等待重新连接”，几秒后自动连回去（重连由服务做）
+- [x] 已连接时用管理员 `sc.exe stop SplitGateService` 停掉服务：SplitGate 显示“后台服务断开了”，网络恢复；`sc.exe start SplitGateService` 后再按“连接”可以连
+- [x] 在设置页移除后台服务后，按“连接”：照旧由 SplitGate 自己连接（日志有说明），一切正常
+- [x] `phase1\secret-scan.ps1`：日志、诊断包里仍然搜不到密码

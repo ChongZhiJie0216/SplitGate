@@ -2850,7 +2850,7 @@ dependencies = [
 
 [[package]]
 name = "splitgate"
-version = "0.14.0"
+version = "0.17.2"
 dependencies = [
  "keyring-core",
  "serde",

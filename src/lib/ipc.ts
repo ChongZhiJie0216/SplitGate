@@ -99,6 +99,18 @@ export const saveProfile = (profile: Profile, secrets?: SecretsInput) =>
   invoke<{ id: string; view: ProfilesView }>("save_profile", { profile, secrets: secrets ?? null });
 export const deleteProfile = (id: string) => invoke<ProfilesView>("delete_profile", { id });
 export const setActiveProfile = (id: string) => invoke<ProfilesView>("set_active_profile", { id });
+/** Cisco / AnyLink：测试登录的结果（不建立隧道）。 */
+export type CiscoLoginResult =
+  | { result: "ok" }
+  | { result: "rejected"; message: string }
+  | { result: "needs_more"; message: string }
+  | { result: "failed"; message: string };
+
+/** 服务器登录页上的组别列表；不需要选组别的服务器返回空列表。 */
+export const ciscoGroups = (server: string) => invoke<string[]>("cisco_groups", { server });
+/** password 留空 = 用凭据管理器里已保存的密码。 */
+export const testCiscoLogin = (profile: Profile, password?: string) =>
+  invoke<CiscoLoginResult>("test_cisco_login", { profile, password: password || null });
 export const importWireguardConf = (text: string) => invoke<ImportedConf>("import_wireguard_conf", { text });
 
 export interface RuleSet {
@@ -203,6 +215,21 @@ export interface Blocked {
   /** 最后一次检测到的时间 HH:MM:SS。 */
   time: string;
 }
+
+/** 后台服务（service.rs，第 3 阶段第 1 步）：现在只回答“在不在、版本几号”，连接仍由 SplitGate 自己做。 */
+export interface ServiceState {
+  installed: boolean;
+  running: boolean;
+  command: string | null;
+  /** 服务指向的是不是这一份 SplitGate.exe（便携版搬了位置时为 false）。 */
+  matches_this_exe: boolean;
+  /** 服务经命名管道回报的版本；没回应时为 null。 */
+  version: string | null;
+}
+
+export const getServiceState = () => invoke<ServiceState>("get_service_state");
+export const installService = () => invoke<ServiceState>("install_service");
+export const removeService = () => invoke<ServiceState>("remove_service");
 
 /** 检查更新（update.rs）：只提示，不下载、不安装。 */
 export interface UpdateSection {

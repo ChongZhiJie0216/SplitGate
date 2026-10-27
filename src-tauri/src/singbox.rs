@@ -22,13 +22,14 @@ pub const PROBE_URL: &str = "http://cp.cloudflare.com/generate_204";
 /// Used when a WireGuard .conf has no DNS line (phase 0 V2 did the same).
 const WG_FALLBACK_DNS: &str = "1.1.1.1";
 
+#[derive(Clone, serde::Deserialize)]
 pub struct Secrets {
     /// Cisco password or WireGuard private key.
     pub main: String,
     pub preshared_key: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ClashApi {
     pub port: u16,
     pub secret: String,

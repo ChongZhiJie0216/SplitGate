@@ -154,6 +154,77 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+      <ServiceCard isAdmin={isAdmin} />
+    </div>
+  );
+}
+
+/** 后台服务：安装 / 移除马上生效（和开机自启一样，不经“保存”）。 */
+function ServiceCard({ isAdmin }: { isAdmin: boolean }) {
+  const [state, setState] = useState<ipc.ServiceState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState(false);
+
+  useEffect(() => {
+    ipc
+      .getServiceState()
+      .then(setState)
+      .catch((e) => setError(String(e)));
+  }, []);
+
+  const run = async (op: () => Promise<ipc.ServiceState>) => {
+    setBusy(true);
+    setError(null);
+    setConfirm(false);
+    try {
+      setState(await op());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const s = state;
+  const status = !s
+    ? "…"
+    : !s.installed
+      ? L.serviceNone
+      : !s.running
+        ? L.serviceStopped
+        : s.version
+          ? L.serviceRunning(s.version)
+          : L.serviceNoAnswer;
+
+  return (
+    <div className="card">
+      <h2>{L.service}</h2>
+      <p className="field-hint">{L.serviceHint}</p>
+      <p>{status}</p>
+      {s?.installed && !s.matches_this_exe && (
+        <div className="banner warn">
+          {L.serviceOther}
+          <span className="mono small">{s.command?.split('"')[1] ?? s.command}</span>
+        </div>
+      )}
+      {error && <div className="banner bad">{error}</div>}
+      <div className="row">
+        {(!s?.installed || !s.matches_this_exe || !s.running) && (
+          <button className="btn" disabled={!isAdmin || busy || !s} onClick={() => run(ipc.installService)}>
+            {busy ? L.serviceBusy : !s?.installed ? L.serviceInstall : !s.matches_this_exe ? L.serviceFix : L.serviceStart}
+          </button>
+        )}
+        {s?.installed && (
+          <button
+            className="btn"
+            disabled={!isAdmin || busy}
+            onClick={() => (confirm ? run(ipc.removeService) : setConfirm(true))}
+          >
+            {confirm ? L.serviceConfirmRemove : L.serviceRemove}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

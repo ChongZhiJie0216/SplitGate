@@ -45,15 +45,26 @@ function Get-NetState {
 }
 
 # Same shape as Get-NetState, from phase0\logs\baseline.json (taken while disconnected); $null if missing.
+# A baseline from another network (e.g. hotspot Wi-Fi, now wired) is not compared: every
+# difference would look like residue. Then $null and a hint to take a new one.
 function Get-BaselineState {
     if (-not (Test-Path $BaselinePath)) { return $null }
     $b = Get-Content $BaselinePath -Raw | ConvertFrom-Json
-    [pscustomobject]@{
+    $base = [pscustomobject]@{
         DefaultRoutes = @($b.DefaultRoutes | Where-Object { $_.InterfaceAlias -notlike $OurAdapterPattern } |
                 ForEach-Object { "$($_.DestinationPrefix)|$($_.NextHop)|$($_.InterfaceAlias)" } | Sort-Object)
         StaticDns     = @($b.StaticDns | Where-Object { $_.Alias -notlike $OurAdapterPattern } |
                 ForEach-Object { "$($_.Alias)=$($_.NameServer)" } | Sort-Object)
     }
+    $now = Get-NetState
+    $v4 = @($base.DefaultRoutes | Where-Object { $_ -like '0.0.0.0/0|*' })
+    $shared = @($v4 | Where-Object { @($now.DefaultRoutes) -contains $_ })
+    if ($v4.Count -gt 0 -and $shared.Count -eq 0) {
+        Write-Host "[warn] the baseline was taken on another network ($($v4 -join '; ')); default routes / DNS are NOT compared."
+        Write-Host '       Take a new one while SplitGate is disconnected: phase0\snapshot.ps1 -Baseline'
+        return $null
+    }
+    return $base
 }
 
 # Everything SplitGate may leave behind. Empty list = clean.

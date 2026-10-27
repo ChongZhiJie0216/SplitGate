@@ -33,6 +33,20 @@ export default function ProfilesPage() {
   const [secrets, setSecrets] = useState<ipc.SecretsInput>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  // Cisco：从服务器读到的组别（null = 还没读），以及最近一次测试登录。
+  const [groups, setGroups] = useState<{ server: string; list: string[] | null; busy: boolean; error: string | null }>({
+    server: "",
+    list: null,
+    busy: false,
+    error: null,
+  });
+  const [test, setTest] = useState<{ busy: boolean; key: string; result: ipc.CiscoLoginResult | null }>({
+    busy: false,
+    key: "",
+    result: null,
+  });
+  /** 测试没通过时，再按一次“仍然保存”才保存。 */
+  const [saveAnyway, setSaveAnyway] = useState(false);
 
   useEffect(() => {
     load();
@@ -45,10 +59,57 @@ export default function ProfilesPage() {
     setSecrets({});
     setMsg(null);
     setConfirmDel(false);
+    setTest({ busy: false, key: "", result: null });
+    setSaveAnyway(false);
+    setGroups({ server: "", list: null, busy: false, error: null });
+    if (p.type === "cisco" && p.cisco?.server.trim()) fetchGroups(p.cisco.server);
+  };
+
+  const fetchGroups = async (server: string) => {
+    const s = server.trim();
+    if (!s) return;
+    setGroups({ server: s, list: null, busy: true, error: null });
+    try {
+      const list = await ipc.ciscoGroups(s);
+      setGroups((g) => (g.server === s ? { ...g, list, busy: false } : g));
+    } catch (e) {
+      setGroups((g) => (g.server === s ? { ...g, busy: false, error: String(e) } : g));
+    }
+  };
+
+  /** 账号、密码、组别、服务器任何一项改了，之前的测试结果就不算数。 */
+  const testKey = (p: ipc.Profile) =>
+    JSON.stringify([p.cisco?.server.trim(), p.cisco?.user.trim(), p.cisco?.auth_group ?? "", secrets.secret ?? ""]);
+
+  const runTest = async (): Promise<ipc.CiscoLoginResult | null> => {
+    if (!draft?.cisco) return null;
+    const key = testKey(draft);
+    setTest({ busy: true, key, result: null });
+    let result: ipc.CiscoLoginResult;
+    try {
+      result = await ipc.testCiscoLogin(draft, secrets.secret);
+    } catch (e) {
+      result = { result: "failed", message: String(e) };
+    }
+    setTest({ busy: false, key, result });
+    return result;
   };
 
   const save = async () => {
     if (!draft) return;
+    // Cisco：先测试登录，通过了才保存；没通过时要再按一次“仍然保存”。
+    // “仍然保存”只对按下那一刻的内容有效：之后又改了就重新测试。
+    if (draft.type === "cisco" && !(saveAnyway && test.key === testKey(draft))) {
+      const tested = test.key === testKey(draft) && test.result?.result === "ok";
+      if (!tested) {
+        const r = await runTest();
+        if (r?.result !== "ok") {
+          setSaveAnyway(true);
+          return;
+        }
+      }
+    }
+    setSaveAnyway(false);
     let id = draft.id;
     const err = await run(async () => {
       const r = await ipc.saveProfile(draft, secrets);
@@ -143,7 +204,11 @@ export default function ProfilesPage() {
           {draft.type === "cisco" && draft.cisco && (
             <>
               <Field label={L.cisco.server} hint={L.cisco.serverHint}>
-                <input value={draft.cisco.server} onChange={(e) => patch("cisco", { server: e.target.value })} />
+                <input
+                  value={draft.cisco.server}
+                  onChange={(e) => patch("cisco", { server: e.target.value })}
+                  onBlur={(e) => e.target.value.trim() !== groups.server && fetchGroups(e.target.value)}
+                />
               </Field>
               <Field label={L.cisco.user}>
                 <input value={draft.cisco.user} autoComplete="off" onChange={(e) => patch("cisco", { user: e.target.value })} />
@@ -156,12 +221,12 @@ export default function ProfilesPage() {
                   onChange={(e) => setSecrets({ ...secrets, secret: e.target.value })}
                 />
               </Field>
-              <Field label={L.cisco.group} hint={L.cisco.groupHint}>
-                <input
-                  value={draft.cisco.auth_group ?? ""}
-                  onChange={(e) => patch("cisco", { auth_group: e.target.value || null })}
-                />
-              </Field>
+              <GroupField
+                value={draft.cisco.auth_group}
+                state={groups}
+                onChange={(v) => patch("cisco", { auth_group: v })}
+                onFetch={() => fetchGroups(draft.cisco!.server)}
+              />
               <label className="check">
                 <input type="checkbox" checked={draft.cisco.no_udp} onChange={(e) => patch("cisco", { no_udp: e.target.checked })} />
                 {L.cisco.noUdp}
@@ -172,6 +237,15 @@ export default function ProfilesPage() {
                   onChange={(e) => patch("cisco", { bind_interface: e.target.value || null })}
                 />
               </Field>
+              <div className="field">
+                <div className="row">
+                  <button className="btn" disabled={test.busy} onClick={runTest}>
+                    {test.busy ? L.cisco.testing : L.cisco.test}
+                  </button>
+                </div>
+                <span className="field-hint">{L.cisco.testHint}</span>
+              </div>
+              {test.result && test.key === testKey(draft) && <TestBanner r={test.result} />}
             </>
           )}
 
@@ -204,8 +278,8 @@ export default function ProfilesPage() {
 
           {msg && <div className={msg.ok ? "banner good" : "banner bad"}>{msg.text}</div>}
           <div className="row">
-            <button className="btn primary" onClick={save}>
-              {L.save}
+            <button className="btn primary" onClick={save} disabled={test.busy}>
+              {draft.type === "cisco" && saveAnyway && test.key === testKey(draft) ? L.cisco.saveAnyway : L.save}
             </button>
             {draft.id && view?.active !== draft.id && (
               <button className="btn" onClick={() => run(() => ipc.setActiveProfile(draft.id)).then((e) => e && setMsg({ ok: false, text: e }))}>
@@ -233,6 +307,57 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       {hint && <span className="field-hint">{hint}</span>}
     </label>
   );
+}
+
+/** Cisco 组别：读到服务器的组别后改成下拉选择，免得打错字连不上；读不到时可以手动填。 */
+function GroupField(props: {
+  value: string | null;
+  state: { list: string[] | null; busy: boolean; error: string | null };
+  onChange: (v: string | null) => void;
+  onFetch: () => void;
+}) {
+  const C = L.cisco;
+  const { list, busy, error } = props.state;
+  const value = props.value ?? "";
+  if (list && list.length > 0) {
+    const missing = value && !list.includes(value);
+    return (
+      <Field label={C.group} hint={C.groupPickHint}>
+        <select value={value} onChange={(e) => props.onChange(e.target.value || null)}>
+          <option value="">{C.groupChoose}</option>
+          {list.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+          {missing && (
+            <option value={value}>
+              {value} {C.groupNotOnServer}
+            </option>
+          )}
+        </select>
+      </Field>
+    );
+  }
+  const hint = busy ? C.groupLoading : error ? C.groupFailed(error) : list ? C.groupNone : C.groupHint;
+  return (
+    <Field label={C.group} hint={hint}>
+      <div className="row">
+        <input className="grow" value={value} onChange={(e) => props.onChange(e.target.value || null)} />
+        <button className="btn" disabled={busy} onClick={props.onFetch} type="button">
+          {C.groupFetch}
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+function TestBanner({ r }: { r: ipc.CiscoLoginResult }) {
+  const C = L.cisco;
+  if (r.result === "ok") return <div className="banner good">{C.testOk}</div>;
+  if (r.result === "rejected") return <div className="banner bad">{C.testRejected(r.message)}</div>;
+  if (r.result === "needs_more") return <div className="banner warn">{C.testNeedsMore(r.message)}</div>;
+  return <div className="banner bad">{C.testFailed(r.message)}</div>;
 }
 
 /** 逗号分隔的列表：输入时保留原文，离开输入框时才整理。 */
