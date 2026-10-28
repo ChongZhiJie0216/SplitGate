@@ -1291,3 +1291,7 @@ summary.update-ver {
   max-height: 220px;
   overflow: auto;
 }
+
+.sub-field p {
+  margin: 0;
+}

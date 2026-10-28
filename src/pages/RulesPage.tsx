@@ -306,7 +306,7 @@ function SubscriptionField(props: {
           type="checkbox"
           checked={!!sub}
           onChange={(e) =>
-            props.onChange(e.target.checked ? { url: "", skip_ads: true, updated_ms: 0, count: 0, skipped: 0, error: null } : null)
+            props.onChange(e.target.checked ? { url: "", skip_ads: true, interval_hours: 168, updated_ms: 0, count: 0, skipped: 0, error: null } : null)
           }
         />
         {S.enable}
@@ -322,12 +322,28 @@ function SubscriptionField(props: {
             <input type="checkbox" checked={sub.skip_ads} onChange={(e) => props.onChange({ ...sub, skip_ads: e.target.checked })} />
             {S.skipAds}
           </label>
+          <label className="field">
+            <span className="field-label">{S.interval}</span>
+            <select value={sub.interval_hours} onChange={(e) => props.onChange({ ...sub, interval_hours: Number(e.target.value) })}>
+              {(S.intervals.some(([h]) => h === sub.interval_hours) ? S.intervals : [...S.intervals, [sub.interval_hours, `${sub.interval_hours} 小时`] as [number, string]]).map(
+                ([h, label]) => (
+                  <option key={h} value={h}>
+                    {label}
+                  </option>
+                ),
+              )}
+            </select>
+            <span className="field-hint">{S.intervalHint}</span>
+          </label>
           {changed && <p className="muted small">{S.changedUrl}</p>}
           {!changed && saved && (
             <p className="small">
               {saved.updated_ms ? S.status(new Date(saved.updated_ms).toLocaleString("zh-CN", { hour12: false }), saved.count, saved.skipped) : S.never}
             </p>
           )}
+          {!changed && saved?.updated_ms && saved.interval_hours > 0 ? (
+            <p className="muted small">{S.next(new Date(saved.updated_ms + saved.interval_hours * 3600_000).toLocaleString("zh-CN", { hour12: false }))}</p>
+          ) : null}
           {!changed && saved?.error && <div className="banner warn small">{S.failed(saved.error)}</div>}
           {props.draft.id && saved && !changed && (
             <span>

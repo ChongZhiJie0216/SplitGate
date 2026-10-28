@@ -134,6 +134,8 @@ export interface Subscription {
   /** https 网址，或 v2fly 列表的名字（例：spotify）。 */
   url: string;
   skip_ads: boolean;
+  /** 自动更新间隔（小时）；0 = 只手动更新。 */
+  interval_hours: number;
   /** 上次成功更新的时间（毫秒）；0 = 还没更新过。 */
   updated_ms: number;
   count: number;

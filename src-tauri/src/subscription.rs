@@ -1,5 +1,5 @@
 //! Rule set subscriptions (v0.26.0, maintainer's choice 2026-10-28: SplitGate downloads text lists
-//! itself, any https address, automatic update every 7 days). A subscribed rule set keeps the
+//! itself, any https address, automatic update; how often is set per subscription, default 7 days). A subscribed rule set keeps the
 //! downloaded domains apart from the ones typed by hand (`sub_domain_suffix` / `sub_domain_keyword`),
 //! so an update never touches the user's own entries. Only domain rules: a list can never add
 //! programs or IP ranges. A failed download keeps the previous list.
@@ -30,16 +30,21 @@ const V2FLY_BASE: &str = "https://raw.githubusercontent.com/v2fly/domain-list-co
 pub const MAX_ENTRIES: usize = 20_000;
 /// Most files one subscription may read through `include:`.
 const MAX_FILES: usize = 30;
-const UPDATE_EVERY_MS: u64 = 7 * 24 * 3600 * 1000;
-const CHECK_EVERY: Duration = Duration::from_secs(6 * 3600);
+/// Default update interval: 7 days.
+const DEFAULT_INTERVAL_HOURS: u32 = 7 * 24;
+/// How often the app looks for due subscriptions (the shortest interval is 1 hour).
+const CHECK_EVERY: Duration = Duration::from_secs(10 * 60);
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Subscription {
     /// https address, or a bare v2fly list name (`spotify`).
     pub url: String,
     /// Leave out entries marked `@ads` (v2fly).
     #[serde(default = "yes")]
     pub skip_ads: bool,
+    /// Update automatically after this many hours; 0 = only by hand (v0.26.0).
+    #[serde(default = "default_interval")]
+    pub interval_hours: u32,
     /// Last successful update (ms since 1970); 0 = never.
     #[serde(default)]
     pub updated_ms: u64,
@@ -56,6 +61,16 @@ pub struct Subscription {
 
 fn yes() -> bool {
     true
+}
+
+fn default_interval() -> u32 {
+    DEFAULT_INTERVAL_HOURS
+}
+
+impl Default for Subscription {
+    fn default() -> Self {
+        Subscription { url: String::new(), skip_ads: true, interval_hours: DEFAULT_INTERVAL_HOURS, updated_ms: 0, count: 0, skipped: 0, error: None }
+    }
 }
 
 /// The address to download: a bare name means v2fly's list of that name.
@@ -241,18 +256,22 @@ pub fn update(id: &str) -> Result<Vec<RuleSetView>, String> {
     result.map(|_| rules::view(&file))
 }
 
-/// Ids of subscriptions older than 7 days (or never updated).
+/// Ids of subscriptions whose interval has passed (or never updated); not the hand-only ones.
 fn due(now: u64) -> Vec<String> {
     let Ok(_guard) = config::FILE_LOCK.lock() else { return Vec::new() };
     let Ok((file, _)) = rules::load() else { return Vec::new() };
     file.rulesets
         .iter()
-        .filter(|r| r.subscription.as_ref().is_some_and(|s| now.saturating_sub(s.updated_ms) >= UPDATE_EVERY_MS))
+        .filter(|r| r.subscription.as_ref().is_some_and(|s| is_due(s, now)))
         .map(|r| r.id.clone())
         .collect()
 }
 
-/// While the app runs: a minute after start, then every 6 hours, update what is due. Tells the
+fn is_due(s: &Subscription, now: u64) -> bool {
+    s.interval_hours > 0 && now.saturating_sub(s.updated_ms) >= u64::from(s.interval_hours) * 3600 * 1000
+}
+
+/// While the app runs: a minute after start, then every 10 minutes, update what is due. Tells the
 /// window which rule sets changed (`rules_updated`), so it reloads them and can ask to reconnect.
 pub fn start_auto_update(app: AppHandle) {
     thread::spawn(move || {
@@ -275,16 +294,18 @@ pub fn keep_or_clear(new: &mut RuleSet, old: Option<&RuleSet>) {
     };
     match (same, old) {
         (true, Some(o)) => {
-            // The window may send an older copy of the downloaded list: keep the stored one.
+            // The window may send an older copy of the downloaded list: keep the stored one, and
+            // the stored update results; only the interval comes from the window.
             new.sub_domain_suffix = o.sub_domain_suffix.clone();
             new.sub_domain_keyword = o.sub_domain_keyword.clone();
-            new.subscription = o.subscription.clone();
+            let interval = new.subscription.as_ref().map_or(DEFAULT_INTERVAL_HOURS, |s| s.interval_hours);
+            new.subscription = o.subscription.clone().map(|s| Subscription { interval_hours: interval, ..s });
         }
         _ => {
             new.sub_domain_suffix.clear();
             new.sub_domain_keyword.clear();
             if let Some(s) = new.subscription.as_mut() {
-                *s = Subscription { url: s.url.clone(), skip_ads: s.skip_ads, ..Default::default() };
+                *s = Subscription { url: s.url.clone(), skip_ads: s.skip_ads, interval_hours: s.interval_hours, ..Default::default() };
             }
         }
     }
@@ -293,6 +314,18 @@ pub fn keep_or_clear(new: &mut RuleSet, old: Option<&RuleSet>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn due_by_interval() {
+        let h = 3600 * 1000;
+        let s = |interval_hours, updated_ms| Subscription { interval_hours, updated_ms, ..Default::default() };
+        assert!(is_due(&s(1, 0), 2 * h), "never updated");
+        assert!(!is_due(&s(24, 10 * h), 20 * h));
+        assert!(is_due(&s(24, 10 * h), 34 * h));
+        assert!(!is_due(&s(0, 0), 1000 * h), "0 = only by hand");
+        let old: Subscription = serde_json::from_str(r#"{"url":"spotify"}"#).unwrap();
+        assert_eq!(old.interval_hours, 7 * 24, "files without the field: 7 days");
+    }
 
     #[test]
     fn script_is_ascii() {
@@ -356,6 +389,11 @@ mod tests {
         keep_or_clear(&mut same, Some(&old));
         assert_eq!(same.sub_domain_suffix, vec!["spotify.com"], "the stored list wins over the window's copy");
         assert_eq!(same.subscription.as_ref().unwrap().updated_ms, 5);
+        let mut faster = old.clone();
+        faster.subscription.as_mut().unwrap().interval_hours = 1;
+        keep_or_clear(&mut faster, Some(&old));
+        assert_eq!(faster.subscription.as_ref().unwrap().interval_hours, 1, "a new interval is kept");
+        assert_eq!(faster.sub_domain_suffix, vec!["spotify.com"], "and does not drop the list");
         let mut moved = old.clone();
         moved.subscription.as_mut().unwrap().url = "github".into();
         keep_or_clear(&mut moved, Some(&old));
