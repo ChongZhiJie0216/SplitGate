@@ -172,7 +172,7 @@ export function AddRuleModal({ conn, onClose }: { conn: ipc.Connection; onClose:
   const A = T.addRule;
   const { rulesets, load, run } = useRules();
   const view = useProfiles((s) => s.view);
-  const { status, reconnect } = useStatus();
+  const { status, reconnect, markStale } = useStatus();
   const kinds: Kind[] = [
     ...(conn.host ? (["domain_suffix"] as const) : []),
     ...(conn.process_path ? (["process_path"] as const) : []),
@@ -204,6 +204,7 @@ export function AddRuleModal({ conn, onClose }: { conn: ipc.Connection; onClose:
     const list = rs[kind];
     if (list.some((x) => x.toLowerCase() === value.trim().toLowerCase())) return setMsg({ ok: false, text: A.already });
     const err = await run(async () => (await ipc.saveRuleset({ ...rs, [kind]: [...list, value.trim()] })).rulesets);
+    if (!err && used.includes(target)) markStale(); // 关掉这个窗口后顶部也会提示重新连接
     setMsg(err ? { ok: false, text: err } : { ok: true, text: A.saved });
   };
 

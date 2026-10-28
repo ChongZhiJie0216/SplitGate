@@ -119,16 +119,12 @@ pub fn build_config(
     };
     route_rules.push(server_rule);
 
-    let has_process = !rules.process_path.is_empty() || !rules.process_name.is_empty();
-    if has_process {
-        let mut r = json!({ "action": "route", "outbound": VPN_TAG });
-        if !rules.process_path.is_empty() {
-            r["process_path"] = json!(rules.process_path);
+    // One rule each: sing-box ANDs process_path and process_name inside one rule, so together a
+    // connection had to match both lists and practically nothing matched (fixed v0.24.1).
+    for (key, list) in [("process_path", &rules.process_path), ("process_name", &rules.process_name)] {
+        if !list.is_empty() {
+            route_rules.push(json!({ key: list, "action": "route", "outbound": VPN_TAG }));
         }
-        if !rules.process_name.is_empty() {
-            r["process_name"] = json!(rules.process_name);
-        }
-        route_rules.push(r);
     }
     // domain_suffix / domain_keyword / ip_cidr are OR-ed inside one sing-box rule.
     let mut addr = json!({ "action": "route", "outbound": VPN_TAG });
@@ -371,6 +367,19 @@ mod tests {
         let c = build_config(&p, &m, &secrets(), &ClashApi { port: 9090, secret: "s".into() }, &Settings::default()).unwrap();
         let rule = c["route"]["rules"].as_array().unwrap().iter().find(|r| r["ip_cidr"] == json!(["192.168.1.0/24"])).expect("home LAN rule");
         assert_eq!(rule["outbound"], VPN_TAG);
+    }
+
+    /// Regression (v0.24.1): a program path rule set (FireFox) plus a program name rule set
+    /// (PrismLauncher) in one Profile matched neither, because one sing-box rule ANDs the two.
+    #[test]
+    fn program_paths_and_names_are_separate_rules() {
+        let m = MergedRules { process_path: vec![r"C:\Program Files\Mozilla Firefox\firefox.exe".into()], process_name: vec!["prismlauncher.exe".into()], ..Default::default() };
+        let c = build_config(&cisco("c"), &m, &secrets(), &api(), &Settings::default()).unwrap();
+        let rules = c["route"]["rules"].as_array().unwrap();
+        let path = rules.iter().find(|r| r.get("process_path").is_some()).unwrap();
+        let name = rules.iter().find(|r| r.get("process_name").is_some()).unwrap();
+        assert!(path.get("process_name").is_none() && name.get("process_path").is_none(), "never in one rule");
+        assert_eq!((path["outbound"].as_str(), name["outbound"].as_str()), (Some(VPN_TAG), Some(VPN_TAG)));
     }
 
     #[test]

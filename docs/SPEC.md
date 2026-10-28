@@ -162,7 +162,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 
 - `inbounds`：一个 `tun`，网卡名 `SplitGate-TUN`，`auto_route`、`strict_route`，地址 `172.19.0.1/30` + `fdfe:dcba:9876::1/126`（保留 IPv6 地址，防止 IPv6 流量绕过 TUN）；外部客户端出口时加 `route_exclude_address`。
 - `outbounds`：`direct` 走本地；Pangolin 时另有 `vpn` = `direct` + `bind_interface: <外部网卡>`。Cisco、WireGuard 的 `vpn` 是 endpoint。
-- `route.rules`：依次 `sniff` → `hijack-dns` → `ip_version: 6` 拒绝 → rules.json 生成的 `process_path`、`process_name`、`domain_suffix`、`domain_keyword`、`ip_cidr` 规则指向 `vpn`；`final` 是 `direct`；开启 `auto_detect_interface`，有程序规则时开启 `find_process`。
+- `route.rules`：依次 `sniff` → `hijack-dns` → `ip_version: 6` 拒绝 → rules.json 生成的规则指向 `vpn`：`process_path` 一条、`process_name` 一条（**分开写**：sing-box 对同一条规则里的这两项是“且”，v0.24.1 修正），`domain_suffix` / `domain_keyword` / `ip_cidr` 合成一条（这三项在同一条里是“或”）；`final` 是 `direct`；开启 `auto_detect_interface`，有程序规则时开启 `find_process`。
 - `dns`：`strategy: ipv4_only`。
   - `local`：**不用 sing-box 的 `local` 类型**（它读系统 DNS 列表，外部客户端的 DNS 会排在最前面而导致超时），改用物理网卡自己的 DNS 服务器（`udp`，连接时从默认网卡读取）。
   - `vpn-dns`：Cisco 用服务器下发的 DNS（sing-box `openconnect` DNS 类型 + `accept_default_resolvers`）；WireGuard 用 `.conf` 的 `DNS`；Pangolin 用设置的公共 DNS（默认 9.9.9.9），并**避开外部客户端的例外地址**。detour 到 `vpn`。

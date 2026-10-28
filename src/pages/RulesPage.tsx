@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRules } from "../store/rules";
+import { useProfiles } from "../store/profiles";
+import { useStatus } from "../store/status";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
 import Icon from "../components/Icon";
@@ -25,6 +27,10 @@ export default function RulesPage() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirm, setConfirm] = useState<"reset" | "del" | null>(null);
   const [picking, setPicking] = useState(false);
+  const { view, run: runProfiles } = useProfiles();
+  const markStale = useStatus((s) => s.markStale);
+  const active = view?.profiles.find((p) => p.profile.id === view.active)?.profile;
+  const used = (id: string) => !active || active.ruleset_ids.includes(id);
 
   useEffect(() => {
     load();
@@ -59,7 +65,17 @@ export default function RulesPage() {
       return res.rulesets;
     });
     if (err) return setMsg({ ok: false, text: err });
+    if (used(id)) markStale();
     reselect(id, L.saved);
+  };
+
+  /** 把这个规则集加进使用中的 Profile（其他设置不变）。 */
+  const addToProfile = async () => {
+    if (!draft?.id || !active) return;
+    const err = await runProfiles(async () => (await ipc.saveProfile({ ...active, ruleset_ids: [...active.ruleset_ids, draft.id] })).view);
+    if (err) return setMsg({ ok: false, text: err });
+    markStale();
+    setMsg({ ok: true, text: L.addedToProfile(active.name) });
   };
 
   const reset = async () => {
@@ -67,6 +83,7 @@ export default function RulesPage() {
     if (confirm !== "reset") return setConfirm("reset");
     const err = await run(() => ipc.resetRulesetToPreset(draft.id));
     if (err) return setMsg({ ok: false, text: err });
+    if (used(draft.id)) markStale();
     reselect(draft.id, L.saved);
   };
 
@@ -75,6 +92,7 @@ export default function RulesPage() {
     if (confirm !== "del") return setConfirm("del");
     const err = await run(() => ipc.deleteRuleset(draft.id));
     if (err) return setMsg({ ok: false, text: err });
+    if (used(draft.id)) markStale();
     setDraft(null);
     setTexts(null);
   };
@@ -100,6 +118,11 @@ export default function RulesPage() {
                 <span>{v.ruleset.name}</span>
                 {v.preset && <span className="tag">{L.preset}</span>}
                 {!v.ruleset.enabled && <span className="tag warn">{L.off}</span>}
+                {v.ruleset.enabled && active && !used(v.ruleset.id) && (
+                  <span className="tag" title={L.unusedTitle(active.name)}>
+                    {L.unused}
+                  </span>
+                )}
               </button>
             </li>
           ))}
@@ -118,6 +141,15 @@ export default function RulesPage() {
             {draft.id ? draft.name : L.new}
             {isPreset && <span className="tag">{L.preset}</span>}
           </h2>
+          {draft.id && active && !used(draft.id) && (
+            <div className="banner warn">
+              {L.notInProfile(active.name)}{" "}
+              <button className="btn small" onClick={addToProfile}>
+                <Icon name="check" />
+                {L.addToProfile(active.name)}
+              </button>
+            </div>
+          )}
           <label className="field">
             <span className="field-label">{L.name}</span>
             <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
