@@ -124,6 +124,22 @@ export interface RuleSet {
   process_path: string[];
   process_name: string[];
   ip_cidr: string[];
+  /** 订阅（v0.26.0）：下载的域名放在 sub_*，和手动填的分开。 */
+  subscription: Subscription | null;
+  sub_domain_suffix: string[];
+  sub_domain_keyword: string[];
+}
+
+export interface Subscription {
+  /** https 网址，或 v2fly 列表的名字（例：spotify）。 */
+  url: string;
+  skip_ads: boolean;
+  /** 上次成功更新的时间（毫秒）；0 = 还没更新过。 */
+  updated_ms: number;
+  count: number;
+  skipped: number;
+  /** 上次更新失败的原因。 */
+  error: string | null;
 }
 
 export interface RuleSetView {
@@ -141,6 +157,9 @@ export const listRulesets = () => invoke<RuleSetView[]>("list_rulesets");
 export const saveRuleset = (ruleset: RuleSet) => invoke<{ id: string; rulesets: RuleSetView[] }>("save_ruleset", { ruleset });
 export const deleteRuleset = (id: string) => invoke<RuleSetView[]>("delete_ruleset", { id });
 export const resetRulesetToPreset = (id: string) => invoke<RuleSetView[]>("reset_ruleset_to_preset", { id });
+export const updateSubscription = (id: string) => invoke<RuleSetView[]>("update_subscription", { id });
+/** 自动更新订阅后，后端告诉窗口哪些规则集变了。 */
+export const onRulesUpdated = (f: (ids: string[]) => void): Promise<UnlistenFn> => listen<string[]>("rules_updated", (e) => f(e.payload));
 export const listRunningProcesses = () => invoke<RunningProcess[]>("list_running_processes");
 
 /** settings.json（字段名和文件一致）。主题不在这里：存在浏览器的 localStorage（lib/theme.ts）。 */

@@ -179,6 +179,7 @@ function NodeDetail(props: { node: FlowNode; conns: ipc.Connection[]; set: ipc.R
         [D.processName, set.process_name],
         [D.processPath, set.process_path],
         [D.ipCidr, set.ip_cidr],
+        [D.subscribed, [...set.sub_domain_suffix, ...set.sub_domain_keyword]],
       ]
     : node.id === "r:home"
       ? [[D.ipCidr, homeCidrs]]

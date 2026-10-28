@@ -27,6 +27,7 @@ export default function RulesPage() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirm, setConfirm] = useState<"reset" | "del" | null>(null);
   const [picking, setPicking] = useState(false);
+  const [subBusy, setSubBusy] = useState(false);
   const { view, run: runProfiles } = useProfiles();
   const markStale = useStatus((s) => s.markStale);
   const active = view?.profiles.find((p) => p.profile.id === view.active)?.profile;
@@ -67,6 +68,20 @@ export default function RulesPage() {
     if (err) return setMsg({ ok: false, text: err });
     if (used(id)) markStale();
     reselect(id, L.saved);
+    // 新的订阅（或地址改了）：马上下载。
+    const stored = useRules.getState().rulesets?.find((x) => x.ruleset.id === id)?.ruleset;
+    if (stored?.subscription && !stored.subscription.updated_ms) await updateSub(id);
+  };
+
+  const updateSub = async (id: string) => {
+    setSubBusy(true);
+    const err = await run(() => ipc.updateSubscription(id));
+    setSubBusy(false);
+    // 更新失败时后端已记下原因（显示在订阅那一栏），列表照旧。
+    if (err) await useRules.getState().load();
+    if (!err && used(id)) markStale();
+    reselect(id, err ? err : L.saved);
+    if (err) setMsg({ ok: false, text: err });
   };
 
   /** 把这个规则集加进使用中的 Profile（其他设置不变）。 */
@@ -98,7 +113,19 @@ export default function RulesPage() {
   };
 
   const newSet = () => {
-    const r: ipc.RuleSet = { id: "", name: L.newName, enabled: true, domain_suffix: [], domain_keyword: [], process_path: [], process_name: [], ip_cidr: [] };
+    const r: ipc.RuleSet = {
+      id: "",
+      name: L.newName,
+      enabled: true,
+      domain_suffix: [],
+      domain_keyword: [],
+      process_path: [],
+      process_name: [],
+      ip_cidr: [],
+      subscription: null,
+      sub_domain_suffix: [],
+      sub_domain_keyword: [],
+    };
     select({ ruleset: r, preset: false });
   };
 
@@ -174,9 +201,16 @@ export default function RulesPage() {
               )}
             </label>
           ))}
+          <SubscriptionField
+            draft={draft}
+            stored={rulesets?.find((x) => x.ruleset.id === draft.id)?.ruleset ?? null}
+            busy={subBusy}
+            onChange={(sub) => setDraft({ ...draft, subscription: sub })}
+            onUpdate={() => draft.id && updateSub(draft.id)}
+          />
           {msg && <div className={msg.ok ? "banner good" : "banner bad"}>{msg.text}</div>}
           <div className="row">
-            <button className="btn primary" onClick={save}>
+            <button className="btn primary" onClick={save} disabled={subBusy}>
               <Icon name="check" />
               {L.save}
             </button>
@@ -246,6 +280,78 @@ function ProcessPicker({ chosen, onAdd, onClose }: { chosen: string[]; onAdd: (p
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 订阅：地址、广告开关、上次更新的结果，和下载到的域名（只看，不在这里改）。 */
+function SubscriptionField(props: {
+  draft: ipc.RuleSet;
+  stored: ipc.RuleSet | null;
+  busy: boolean;
+  onChange: (s: ipc.Subscription | null) => void;
+  onUpdate: () => void;
+}) {
+  const S = L.sub;
+  const sub = props.draft.subscription;
+  const saved = props.stored?.subscription ?? null;
+  const changed = !!sub && !!saved && (sub.url.trim() !== saved.url || sub.skip_ads !== saved.skip_ads);
+  const list = [...(props.stored?.sub_domain_suffix ?? []), ...(props.stored?.sub_domain_keyword ?? [])];
+  const SHOW = 300;
+  return (
+    <div className="field sub-field">
+      <span className="field-label">{S.title}</span>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={!!sub}
+          onChange={(e) =>
+            props.onChange(e.target.checked ? { url: "", skip_ads: true, updated_ms: 0, count: 0, skipped: 0, error: null } : null)
+          }
+        />
+        {S.enable}
+      </label>
+      {sub && (
+        <>
+          <label className="field">
+            <span className="field-label">{S.url}</span>
+            <input className="mono" value={sub.url} placeholder="https://…  /  spotify" onChange={(e) => props.onChange({ ...sub, url: e.target.value })} />
+            <span className="field-hint">{S.urlHint}</span>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={sub.skip_ads} onChange={(e) => props.onChange({ ...sub, skip_ads: e.target.checked })} />
+            {S.skipAds}
+          </label>
+          {changed && <p className="muted small">{S.changedUrl}</p>}
+          {!changed && saved && (
+            <p className="small">
+              {saved.updated_ms ? S.status(new Date(saved.updated_ms).toLocaleString("zh-CN", { hour12: false }), saved.count, saved.skipped) : S.never}
+            </p>
+          )}
+          {!changed && saved?.error && <div className="banner warn small">{S.failed(saved.error)}</div>}
+          {props.draft.id && saved && !changed && (
+            <span>
+              <button type="button" className="btn small" disabled={props.busy} onClick={props.onUpdate}>
+                <Icon name="refresh" />
+                {props.busy ? S.updating : S.update}
+              </button>
+            </span>
+          )}
+          {!changed && list.length > 0 && (
+            <details className="sub-list">
+              <summary>{S.list(list.length)}</summary>
+              <div className="chips">
+                {list.slice(0, SHOW).map((d) => (
+                  <span key={d} className="chip mono">
+                    {d}
+                  </span>
+                ))}
+              </div>
+              {list.length > SHOW && <p className="muted small">{S.more(list.length - SHOW)}</p>}
+            </details>
+          )}
+        </>
+      )}
     </div>
   );
 }
