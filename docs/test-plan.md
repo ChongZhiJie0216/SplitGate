@@ -226,3 +226,12 @@ $env:SPLITGATE_PRETEND_VERSION='0.18.0'; .\SplitGate.exe
 - [x] 断开后数字还在，页面写“现在没有连接，下面是之前统计到的”；再连接后继续累加
 - [x] 从托盘“退出”SplitGate 再打开：数字还在，“从 … 开始统计”的时间没变；`data\usage.json` 存在
 - [x] 按“清零”：数字归零，“从 … 开始统计”变成现在的时间
+
+## M. v0.24.1 修正：按程序的规则
+
+用现在的 Profile（Jiecoud-AnyLink：勾了 FireFox（程序路径）和 PrismLauncher）：
+
+- [ ] 更新到 v0.24.1 后**重新连接一次**，用 Firefox 开几个网页：连接列表里 firefox.exe 的出口是 VPN，命中规则写的是 process_path
+- [ ] 打开 PrismLauncher：它的连接也是 VPN（命中 process_name）
+- [ ] 不在规则里的程序（例如 Discord.exe）照样是直连
+- [ ] 流量画布：firefox.exe → FireFox → VPN
