@@ -4,7 +4,8 @@ import { useProfiles } from "./store/profiles";
 import { useStatus } from "./store/status";
 import { useBlocked } from "./store/blocked";
 import { T } from "./lib/text";
-import { getSettings, restartAsAdmin, serviceUsable, setActiveProfile } from "./lib/ipc";
+import { getSettings, onRulesUpdated, restartAsAdmin, serviceUsable, setActiveProfile } from "./lib/ipc";
+import { useRules } from "./store/rules";
 import ConnectButton from "./components/ConnectButton";
 import Icon, { IconName } from "./components/Icon";
 import Logo from "./components/Logo";
@@ -41,6 +42,17 @@ export default function App() {
   const { status, start, stale, reconnect } = useStatus();
   const { unseen, start: startBlocked } = useBlocked();
   const busy = status.state !== "disconnected" && status.state !== "error";
+
+  // 订阅自动更新后：重新读规则；改到的是使用中的规则集就提示重新连接。
+  useEffect(() => {
+    const off = onRulesUpdated((ids) => {
+      useRules.getState().load();
+      const p = useProfiles.getState().view;
+      const active = p?.profiles.find((x) => x.profile.id === p.active)?.profile;
+      if (active && ids.some((id) => active.ruleset_ids.includes(id))) useStatus.getState().markStale();
+    });
+    return () => void off.then((f) => f());
+  }, []);
 
   useEffect(() => {
     loadInfo();

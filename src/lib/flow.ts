@@ -75,8 +75,8 @@ export function matchRuleSet(c: Connection, sets: RuleSet[]): RuleSet | null {
       (r) =>
         (path && r.process_path.some((p) => p.toLowerCase() === path)) ||
         (name && r.process_name.some((p) => p.toLowerCase() === name)) ||
-        (host && r.domain_suffix.some((s) => suffixMatch(host, s.toLowerCase()))) ||
-        (host && r.domain_keyword.some((k) => host.includes(k.toLowerCase()))) ||
+        (host && [...r.domain_suffix, ...(r.sub_domain_suffix ?? [])].some((s) => suffixMatch(host, s.toLowerCase()))) ||
+        (host && [...r.domain_keyword, ...(r.sub_domain_keyword ?? [])].some((k) => host.includes(k.toLowerCase()))) ||
         (c.ip && r.ip_cidr.some((x) => inCidr(c.ip, x))),
     ) ?? null
   );

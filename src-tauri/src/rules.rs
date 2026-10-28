@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{self, ProfilesFile};
 use crate::paths;
+use crate::subscription::{self, Subscription};
 
 pub const RULES_VERSION: u32 = 1;
 
@@ -33,6 +34,30 @@ pub struct RuleSet {
     pub process_name: Vec<String>,
     #[serde(default)]
     pub ip_cidr: Vec<String>,
+    /// Downloaded list (v0.26.0); its domains live in the two fields below, apart from the typed ones.
+    #[serde(default)]
+    pub subscription: Option<Subscription>,
+    #[serde(default)]
+    pub sub_domain_suffix: Vec<String>,
+    #[serde(default)]
+    pub sub_domain_keyword: Vec<String>,
+}
+
+#[cfg(test)]
+pub(crate) fn empty_for_tests(id: &str) -> RuleSet {
+    RuleSet {
+        id: id.into(),
+        name: "测试".into(),
+        enabled: true,
+        domain_suffix: vec![],
+        domain_keyword: vec![],
+        process_path: vec![],
+        process_name: vec![],
+        ip_cidr: vec![],
+        subscription: None,
+        sub_domain_suffix: vec![],
+        sub_domain_keyword: vec![],
+    }
 }
 
 fn yes() -> bool {
@@ -138,6 +163,10 @@ pub fn normalize(r: &mut RuleSet) -> Result<(), String> {
         };
         config::check_cidr(&c).map(|_| c)
     })?;
+    if let Some(s) = r.subscription.as_mut() {
+        s.url = s.url.trim().to_string();
+        subscription::resolve_url(&s.url)?;
+    }
     Ok(())
 }
 
@@ -170,6 +199,8 @@ pub fn upsert(file: &mut RulesFile, mut r: RuleSet) -> Result<String, String> {
         r.id = new_id(file);
     }
     normalize(&mut r)?;
+    let old = file.rulesets.iter().find(|x| x.id == r.id).cloned();
+    subscription::keep_or_clear(&mut r, old.as_ref());
     let id = r.id.clone();
     match file.rulesets.iter_mut().find(|x| x.id == r.id) {
         Some(slot) => *slot = r,
@@ -205,16 +236,7 @@ mod tests {
     use super::*;
 
     fn empty(id: &str) -> RuleSet {
-        RuleSet {
-            id: id.into(),
-            name: "测试".into(),
-            enabled: true,
-            domain_suffix: vec![],
-            domain_keyword: vec![],
-            process_path: vec![],
-            process_name: vec![],
-            ip_cidr: vec![],
-        }
+        empty_for_tests(id)
     }
 
     /// Domains confirmed in phase 0 V5 (2026-10-26): these unblocked PrismLauncher and Steam logins.

@@ -17,6 +17,7 @@ mod rules;
 mod service;
 mod settings;
 mod singbox;
+mod subscription;
 mod supervisor;
 mod traffic;
 mod tray;
@@ -66,6 +67,8 @@ pub fn run() {
             }
             let h = handle.clone();
             platform::on_show_request(move || tray::show_window(&h));
+            // Rule set subscriptions: due ones are updated a minute after start, then every 6 hours.
+            subscription::start_auto_update(handle.clone());
             // Files the last update replaced (SplitGate.exe.old …) and its download.
             updater::clean_leftovers();
             // Leftovers from a crash or a forced exit (SPEC "错误处理与清理"), then the optional auto-connect.
@@ -110,6 +113,7 @@ pub fn run() {
             commands::save_ruleset,
             commands::delete_ruleset,
             commands::reset_ruleset_to_preset,
+            commands::update_subscription,
             commands::list_running_processes,
             commands::connect,
             commands::disconnect,

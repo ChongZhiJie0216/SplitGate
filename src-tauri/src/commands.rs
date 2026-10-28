@@ -7,7 +7,7 @@ use crate::exits::{cisco, wireguard};
 use crate::profiles::{self, ProfilesView, SecretsInput};
 use crate::rules::{self, RuleSet, RuleSetView};
 use crate::settings::{self, Settings};
-use crate::{autostart, backend, block_detect, credentials, diagnostics, elevate, logs, paths, platform, service, supervisor, traffic, update, updater};
+use crate::{autostart, backend, block_detect, credentials, diagnostics, elevate, logs, subscription, paths, platform, service, supervisor, traffic, update, updater};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,6 +99,12 @@ pub fn list_rulesets() -> Result<Vec<RuleSetView>, String> {
 pub struct SaveRuleSetResult {
     id: String,
     rulesets: Vec<RuleSetView>,
+}
+
+/// Download a subscribed rule set's list now (async: the download can take a while).
+#[tauri::command]
+pub async fn update_subscription(id: String) -> Result<Vec<RuleSetView>, String> {
+    tauri::async_runtime::spawn_blocking(move || subscription::update(&id)).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

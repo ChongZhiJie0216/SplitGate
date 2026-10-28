@@ -60,7 +60,9 @@ pub fn merge_rules(profile: &Profile, rulesets: &[RuleSet]) -> MergedRules {
     add_unique(&mut m.ip_cidr, &profile.home_cidrs);
     for r in rulesets.iter().filter(|r| r.enabled && profile.ruleset_ids.contains(&r.id)) {
         add_unique(&mut m.domain_suffix, &r.domain_suffix);
+        add_unique(&mut m.domain_suffix, &r.sub_domain_suffix);
         add_unique(&mut m.domain_keyword, &r.domain_keyword);
+        add_unique(&mut m.domain_keyword, &r.sub_domain_keyword);
         add_unique(&mut m.process_path, &r.process_path);
         add_unique(&mut m.process_name, &r.process_name);
         add_unique(&mut m.ip_cidr, &r.ip_cidr);
@@ -68,9 +70,11 @@ pub fn merge_rules(profile: &Profile, rulesets: &[RuleSet]) -> MergedRules {
     m
 }
 
+/// Case-insensitive; a set, since a subscription can bring thousands of domains.
 fn add_unique(into: &mut Vec<String>, items: &[String]) {
+    let mut seen: std::collections::HashSet<String> = into.iter().map(|x| x.to_ascii_lowercase()).collect();
     for i in items {
-        if !into.iter().any(|x| x.eq_ignore_ascii_case(i)) {
+        if seen.insert(i.to_ascii_lowercase()) {
             into.push(i.clone());
         }
     }
