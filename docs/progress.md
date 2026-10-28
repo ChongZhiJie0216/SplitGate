@@ -19,7 +19,7 @@
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
 | 0.25.0 | — | 规则没生效时提示（维护者要求）：规则页“没勾选”标签 + 黄色提示和“在「Profile」里勾选”按钮（改使用中 Profile 的 `ruleset_ids` 后保存）；`status` store 加 `stale` / `markStale`，连接期间保存使用中的规则集 / Profile、加规则、切换 Profile 后顶部提示“现在重新连接”，状态离开“已连接”就清掉。云端用假数据看过。**还没在 Windows 上看过**，测试见 `docs/test-plan.md` N |
-| 0.24.1 | — | 修正（维护者 2026-10-28 发现：Firefox 按程序路径的规则不生效）：`build_config` 把 `process_path` 和 `process_name` 放在同一条 sing-box 规则里，sing-box 对它们是“且”，两种规则集同时勾选时都匹配不到；拆成两条规则，加回归测试，生成的配置用 sing-box 1.14.4 `check` 过。**还没在 Windows 上测**，见 `docs/test-plan.md` M |
+| 0.24.1 | — | 修正（维护者 2026-10-28 发现：Firefox 按程序路径的规则不生效）：`build_config` 把 `process_path` 和 `process_name` 放在同一条 sing-box 规则里，sing-box 对它们是“且”，两种规则集同时勾选时都匹配不到；拆成两条规则，加回归测试，生成的配置用 sing-box 1.14.4 `check` 过；维护者 2026-10-28 实测 M 部分通过（Firefox 走 VPN） |
 | 0.24.0 | — | “流量统计”页（维护者要求）：`traffic.rs` 的 `Rates` 按程序记下每秒新增的 VPN 字节（`vpn_by_app`），加进全局 `USAGE`（“清零”起累加，存 `data\usage.json`：连接期间每 30 秒、断开、清零、退出时存；坏文件改名 `.broken`）；`get_vpn_usage` / `reset_vpn_usage`；`UsagePage.tsx` 三个总数 + 各程序表格和占比条。云端用假数据看过；维护者 2026-10-27 实测 L 部分全部通过 |
 | 0.23.0 | — | 流量画布点方块看详情（维护者要求）：`buildFlow` 多回传每个方块经过的连接（`members`），`CanvasPage` 的 `NodeDetail` 面板显示规则集的规则 / 家里内网网段 / 说明，以及按目标合并的连接；选中方块加一圈主题色。云端用假数据看过；维护者 2026-10-27 实测 K 部分全部通过 |
 | 0.22.0 | — | 界面打磨（维护者 2026-10-27 定：自己画 SVG、不加依赖、布局不变）：`components/Icon.tsx`（28 个线条图标）、`Logo.tsx`、`Empty.tsx`；导航图标、连接页状态卡（圆环 + 小格子）、按钮图标、空白页、输入框焦点样式；关于页重排，更新记录改成右上角图标弹窗（维护者要求）。新程序图标（维护者选方案 B），原稿 `src-tauri/icons/source.svg`，`npx tauri icon` 生成各尺寸。云端用假数据看过亮 / 暗主题；维护者 2026-10-27 实测 J 部分全部通过 |
