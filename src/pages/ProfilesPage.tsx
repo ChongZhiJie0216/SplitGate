@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useProfiles } from "../store/profiles";
 import { useRules } from "../store/rules";
+import { useStatus } from "../store/status";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
 import Icon from "../components/Icon";
@@ -30,6 +31,7 @@ const splitList = (s: string) =>
 export default function ProfilesPage() {
   const { view, error, load, run } = useProfiles();
   const { rulesets, load: loadRules } = useRules();
+  const markStale = useStatus((s) => s.markStale);
   const [draft, setDraft] = useState<ipc.Profile | null>(null);
   const [hasSecret, setHasSecret] = useState(false);
   const [secrets, setSecrets] = useState<ipc.SecretsInput>({});
@@ -119,8 +121,10 @@ export default function ProfilesPage() {
       return r.view;
     });
     if (err) return setMsg({ ok: false, text: err });
-    const saved = useProfiles.getState().view?.profiles.find((x) => x.profile.id === id);
+    const after = useProfiles.getState().view;
+    const saved = after?.profiles.find((x) => x.profile.id === id);
     if (saved) select(saved.profile, saved.has_secret);
+    if (after?.active === id) markStale();
     setMsg({ ok: true, text: L.saved });
   };
 
@@ -306,7 +310,10 @@ export default function ProfilesPage() {
               {draft.type === "cisco" && saveAnyway && test.key === testKey(draft) ? L.cisco.saveAnyway : L.save}
             </button>
             {draft.id && view?.active !== draft.id && (
-              <button className="btn" onClick={() => run(() => ipc.setActiveProfile(draft.id)).then((e) => e && setMsg({ ok: false, text: e }))}>
+              <button
+                className="btn"
+                onClick={() => run(() => ipc.setActiveProfile(draft.id)).then((e) => (e ? setMsg({ ok: false, text: e }) : markStale()))}
+              >
                 {L.setActive}
               </button>
             )}

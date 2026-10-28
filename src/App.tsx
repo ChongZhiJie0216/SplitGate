@@ -38,7 +38,7 @@ const NAV_ICONS: Record<Page, IconName> = {
 export default function App() {
   const { page, setPage, info, infoError, loadInfo, update, checkUpdate, service, loadService } = useApp();
   const { view, load: loadProfiles, run } = useProfiles();
-  const { status, start } = useStatus();
+  const { status, start, stale, reconnect } = useStatus();
   const { unseen, start: startBlocked } = useBlocked();
   const busy = status.state !== "disconnected" && status.state !== "error";
 
@@ -95,6 +95,15 @@ export default function App() {
         </header>
         {info && !info.isAdmin && service && !serviceUsable(service) && <NotAdminBanner />}
         {infoError && <div className="banner bad">{infoError}</div>}
+        {stale && status.state === "connected" && (
+          <div className="banner warn">
+            {T.stale}{" "}
+            <button className="btn small" onClick={reconnect}>
+              <Icon name="refresh" />
+              {T.staleAction}
+            </button>
+          </div>
+        )}
         <section className="content">
           {page === "connect" ? (
             <ConnectPage />

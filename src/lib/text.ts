@@ -161,6 +161,8 @@ export const T = {
     diagHint:
       "诊断包是一个 zip：最近 7 天的日志、设置、sing-box 配置、网络状态。密码、私钥换成 ***，服务器地址、账号、Windows 用户名也换成代号，可以放心发给别人。",
   },
+  stale: "规则或 Profile 改过了，要重新连接才生效。",
+  staleAction: "现在重新连接",
   notAdmin: "现在不能连接：后台服务不能用（没装、没在运行，或者版本和 SplitGate 不同），SplitGate 也不是以管理员身份运行。装好后台服务就不用管理员身份（推荐，只在安装时确认一次）。",
   notAdminInstall: "到设置页处理后台服务",
   notAdminRestart: "以管理员身份重新启动",
@@ -250,6 +252,11 @@ export const T = {
   rules: {
     list: "规则集",
     hint: "开着的规则集，在所选 Profile 里勾选后才生效。命中任一条规则的流量走 VPN 出口，其他直连。",
+    unused: "没勾选",
+    unusedTitle: (p: string) => `使用中的 Profile「${p}」没有勾选这个规则集`,
+    notInProfile: (p: string) => `使用中的 Profile「${p}」没有勾选这个规则集，所以它现在不生效。`,
+    addToProfile: (p: string) => `在「${p}」里勾选`,
+    addedToProfile: (p: string) => `已在「${p}」里勾选。`,
     preset: "内置",
     off: "已关",
     new: "新建规则集",

@@ -9,6 +9,10 @@ interface StatusState {
   logs: ipc.LogLine[];
   traffic: ipc.Traffic;
   actionError: string | null;
+  /** 连接期间改过使用中的规则或 Profile：要重新连接才生效（顶部提示）。 */
+  stale: boolean;
+  /** 规则 / Profile 保存后调用；只有已连接时才会提示。 */
+  markStale: () => void;
   start: () => Promise<void>;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
@@ -26,10 +30,13 @@ export const useStatus = create<StatusState>((set, get) => ({
   logs: [],
   traffic: NO_TRAFFIC,
   actionError: null,
+  stale: false,
+  markStale: () => set({ stale: get().status.state === "connected" }),
   start: async () => {
     if (started) return;
     started = true;
-    await ipc.onStatus((status) => set(status.state === "connected" ? { status } : { status, traffic: NO_TRAFFIC }));
+    // 不在“已连接”时（重新连接、断开）提示就没意义了：下次连接会用新的规则。
+    await ipc.onStatus((status) => set(status.state === "connected" ? { status } : { status, traffic: NO_TRAFFIC, stale: false }));
     await ipc.onTraffic((traffic) => set({ traffic }));
     await ipc.onLog((l) => set({ logs: [...get().logs.slice(-(MAX_LINES - 1)), l] }));
     const [status, logs] = await Promise.all([ipc.getStatus(), ipc.getLogs()]);
