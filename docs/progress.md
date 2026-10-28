@@ -5,7 +5,7 @@
 
 ## 现在在哪一步
 
-**项目功能全部完成。** v0.22.0（含 v0.21.0 的 Pangolin 出口和 v0.22.0 的界面打磨、新图标）已合并进 `main`（PR #9）并发布到 GitHub Release（2026-10-27）。之后的改动按维护者的新要求来。
+**项目功能全部完成。** 之后按维护者的新要求做了 v0.23.0（流量画布看详情）、v0.24.0（流量统计页，存 `data\usage.json`），都已合并并发布（最新 v0.24.0，2026-10-28）。
 
 ## 已完成
 
@@ -83,7 +83,7 @@
 
 ## 分支
 
-- `main`：已合并到 v0.22.0（PR #1–#9），v0.22.0 已发布（发布页附 zip 和 `.sha256`）。
+- `main`：已合并到 v0.24.0（PR #1–#11），v0.24.0 已发布（发布页附 zip 和 `.sha256`）。
 - `claude/modest-bell-xe9osa`（云端会话的分支）：每个 PR 合并后从最新的 `main` 重新开始。维护者测试时：`git fetch origin claude/modest-bell-xe9osa` → `git checkout -B test/<版本> origin/claude/modest-bell-xe9osa`，之后 `git merge --ff-only origin/claude/modest-bell-xe9osa` 拉新的修改；合并后回 `main` `git pull`。
 
 ## 接着做时要记得
