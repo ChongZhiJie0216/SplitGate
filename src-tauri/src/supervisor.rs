@@ -245,10 +245,12 @@ fn attempt(generation: u64, profile_id: Option<String>) -> Result<(), Failure> {
 fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failure> {
     let (profile, rule_sets) = {
         let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
+        // Normally done at app start; here too for a service that connects before the app has run.
+        rules::migrate_files()?;
         let file = config::load_profiles()?;
         let id = profile_id.or(file.active.clone()).ok_or("还没有 Profile。先到“Profile”页新建一个。")?;
         let p = file.profiles.into_iter().find(|p| p.id == id).ok_or("找不到这个 Profile")?;
-        (p, rules::load()?.0.rulesets)
+        (p, rules::load()?.rulesets)
     };
     let name = profile.name.clone();
     step(generation, &name, Step::Prepare)?;
@@ -278,7 +280,7 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     cleanup::run(true)?;
 
     step(generation, &name, Step::Check)?;
-    let mut warnings = home_overlaps(&profile.home_cidrs, &platform::local_ipv4_networks());
+    let mut warnings = lan_overlaps(&merged.ip_cidr, &platform::local_ipv4_networks());
     // Pangolin: the official client must be connected and the proxy reachable through it.
     if let Some(g) = profile.pangolin.as_ref().filter(|_| profile.kind == ExitType::Pangolin) {
         warnings.extend(exits::pangolin::precheck(g)?);
@@ -362,16 +364,16 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
     Ok(())
 }
 
-/// A home network that overlaps this PC's own network never reaches home: Windows keeps that
-/// traffic on the local link (it is more specific than the TUN routes).
-fn home_overlaps(home: &[String], local: &[(String, String)]) -> Vec<String> {
+/// A rule network (typically the home LAN) that overlaps this PC's own network never reaches the
+/// VPN: Windows keeps that traffic on the local link (it is more specific than the TUN routes).
+fn lan_overlaps(home: &[String], local: &[(String, String)]) -> Vec<String> {
     let mut out = Vec::new();
     for h in home {
         let Some(hn) = config::parse_v4_cidr(h) else { continue };
         for (addr, adapter) in local {
             if config::parse_v4_cidr(addr).is_some_and(|ln| config::v4_overlap(hn, ln)) {
                 out.push(format!(
-                    "家里内网 {h} 和这台电脑现在的网络（{adapter}：{addr}）重叠：去这个网段的流量会留在本地网络，连不到家里的设备。换一个网络，或把家里的网段改成少见的（例如 192.168.77.0/24）。"
+                    "规则里的网段 {h} 和这台电脑现在的网络（{adapter}：{addr}）重叠：去这个网段的流量会留在本地网络，不走 VPN（例如连不到家里的设备）。换一个网络，或把家里的网段改成少见的（例如 192.168.77.0/24）。"
                 ));
             }
         }
@@ -672,9 +674,9 @@ mod tests {
     #[test]
     fn home_lan_overlap_is_reported() {
         let local = vec![("192.168.1.23/24".to_string(), "Wi-Fi".to_string()), ("172.20.10.2/28".to_string(), "Ethernet".to_string())];
-        let w = home_overlaps(&["192.168.1.0/24".into(), "192.168.2.0/24".into()], &local);
+        let w = lan_overlaps(&["192.168.1.0/24".into(), "192.168.2.0/24".into()], &local);
         assert_eq!(w.len(), 1);
         assert!(w[0].contains("192.168.1.0/24") && w[0].contains("Wi-Fi"));
-        assert!(home_overlaps(&[], &local).is_empty());
+        assert!(lan_overlaps(&[], &local).is_empty());
     }
 }

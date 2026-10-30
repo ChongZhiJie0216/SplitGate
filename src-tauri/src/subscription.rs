@@ -228,13 +228,13 @@ fn now_ms() -> u64 {
 pub fn update(id: &str) -> Result<Vec<RuleSetView>, String> {
     let sub = {
         let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
-        let (file, _) = rules::load()?;
+        let file = rules::load()?;
         file.rulesets.iter().find(|r| r.id == id).and_then(|r| r.subscription.clone()).ok_or("这个规则集没有订阅")?
     };
     let url = resolve_url(&sub.url)?;
     let got = collect(&url, sub.skip_ads, fetch);
     let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
-    let (mut file, _) = rules::load()?;
+    let mut file = rules::load()?;
     let r = file.rulesets.iter_mut().find(|r| r.id == id).ok_or("找不到这个规则集")?;
     let Some(s) = r.subscription.as_mut().filter(|s| s.url == sub.url) else { return Ok(rules::view(&file)) };
     let result = match got {
@@ -259,7 +259,7 @@ pub fn update(id: &str) -> Result<Vec<RuleSetView>, String> {
 /// Ids of subscriptions whose interval has passed (or never updated); not the hand-only ones.
 fn due(now: u64) -> Vec<String> {
     let Ok(_guard) = config::FILE_LOCK.lock() else { return Vec::new() };
-    let Ok((file, _)) = rules::load() else { return Vec::new() };
+    let Ok(file) = rules::load() else { return Vec::new() };
     file.rulesets
         .iter()
         .filter(|r| r.subscription.as_ref().is_some_and(|s| is_due(s, now)))

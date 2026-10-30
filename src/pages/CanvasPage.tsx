@@ -91,7 +91,7 @@ export default function CanvasPage() {
     const used = profile?.ruleset_ids ?? [];
     const sets = (rulesets ?? []).map((r) => r.ruleset).filter((r) => r.enabled && used.includes(r.id));
     const list = onlyVpn ? connections.filter((c) => c.outbound === "vpn") : connections;
-    const g = buildFlow(list, sets, profile?.home_cidrs ?? [], status.state === "connected" ? status.profile_name : "", L.labels);
+    const g = buildFlow(list, sets, status.state === "connected" ? status.profile_name : "", L.labels);
     const flowEdges: Edge[] = g.edges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -158,7 +158,6 @@ export default function CanvasPage() {
             node={picked}
             conns={members.get(picked.id) ?? []}
             set={picked.id.startsWith("r:set:") ? (sets.find((r) => `r:set:${r.id}` === picked.id) ?? null) : null}
-            homeCidrs={profile?.home_cidrs ?? []}
             onClose={() => setSelected(null)}
           />
         )}
@@ -167,9 +166,9 @@ export default function CanvasPage() {
   );
 }
 
-/** 点方块后的详情：规则集的规则、家里内网网段，以及经过这个方块的连接。 */
-function NodeDetail(props: { node: FlowNode; conns: ipc.Connection[]; set: ipc.RuleSet | null; homeCidrs: string[]; onClose: () => void }) {
-  const { node, conns, set, homeCidrs } = props;
+/** 点方块后的详情：规则集的规则，以及经过这个方块的连接。 */
+function NodeDetail(props: { node: FlowNode; conns: ipc.Connection[]; set: ipc.RuleSet | null; onClose: () => void }) {
+  const { node, conns, set } = props;
   const D = L.detail;
   const setPage = useApp((s) => s.setPage);
   const groups: [string, string[]][] = set
@@ -181,9 +180,7 @@ function NodeDetail(props: { node: FlowNode; conns: ipc.Connection[]; set: ipc.R
         [D.ipCidr, set.ip_cidr],
         [D.subscribed, [...set.sub_domain_suffix, ...set.sub_domain_keyword]],
       ]
-    : node.id === "r:home"
-      ? [[D.ipCidr, homeCidrs]]
-      : [];
+    : [];
   const note = D.notes[node.id as keyof typeof D.notes];
   // 同一个目标的多条连接合成一行，流量大的在前。
   const rows = [...conns.reduce((m, c) => {
@@ -224,10 +221,10 @@ function NodeDetail(props: { node: FlowNode; conns: ipc.Connection[]; set: ipc.R
             </div>
           ),
       )}
-      {(set || node.id === "r:home") && (
-        <button className="btn small" onClick={() => setPage(set ? "rules" : "profiles")}>
+      {set && (
+        <button className="btn small" onClick={() => setPage("rules")}>
           <Icon name="rules" />
-          {set ? D.editRules : D.editHome}
+          {D.editRules}
         </button>
       )}
       <div className="detail-label">{D.connections}</div>

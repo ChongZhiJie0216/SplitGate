@@ -73,7 +73,6 @@ export interface Profile {
   name: string;
   ruleset_ids: string[];
   /** 家里内网网段（IPv4 CIDR），一律走这个出口。 */
-  home_cidrs: string[];
   cisco?: CiscoProfile;
   pangolin?: PangolinProfile;
   wireguard?: WireguardProfile;
@@ -146,8 +145,6 @@ export interface Subscription {
 
 export interface RuleSetView {
   ruleset: RuleSet;
-  /** 内置预设：不能删除，可以恢复预设。 */
-  preset: boolean;
 }
 
 export interface RunningProcess {
@@ -158,7 +155,6 @@ export interface RunningProcess {
 export const listRulesets = () => invoke<RuleSetView[]>("list_rulesets");
 export const saveRuleset = (ruleset: RuleSet) => invoke<{ id: string; rulesets: RuleSetView[] }>("save_ruleset", { ruleset });
 export const deleteRuleset = (id: string) => invoke<RuleSetView[]>("delete_ruleset", { id });
-export const resetRulesetToPreset = (id: string) => invoke<RuleSetView[]>("reset_ruleset_to_preset", { id });
 export const updateSubscription = (id: string) => invoke<RuleSetView[]>("update_subscription", { id });
 /** 自动更新订阅后，后端告诉窗口哪些规则集变了。 */
 export const onRulesUpdated = (f: (ids: string[]) => void): Promise<UnlistenFn> => listen<string[]>("rules_updated", (e) => f(e.payload));

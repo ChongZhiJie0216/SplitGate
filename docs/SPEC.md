@@ -9,7 +9,7 @@ SplitGate（暂定名）是一个 Windows 桌面客户端：连接一个 VPN 出
 **目标**
 
 - 一键连接或断开，不需要 Docker、命令行或手动改路由；支持 Cisco、Pangolin、WireGuard 三种出口，同一时间启用一个。
-- 按域名和程序路径分流，内置可编辑的规则预设（首批：Xbox、Minecraft、Steam）。
+- 按域名和程序路径分流，规则集由用户自己建（v0.26 以前内置 Xbox、Minecraft、Steam 预设，v0.27.0 拿掉，维护者 2026-10-30 定）。
 - **拦截检测**：发现某个网址被当前网络拦截（证书被换成 Fortinet 等），提示用户一键加进规则。
 - 实时显示哪些连接走了 VPN，方便补规则。
 - Cisco 密码、WireGuard 私钥、Pangolin 出口的家里代理密码存在 Windows 凭据管理器，不写进明文配置；Pangolin 本身的登录凭据由官方客户端保管，SplitGate 不接触。
@@ -32,7 +32,7 @@ SplitGate（暂定名）是一个 Windows 桌面客户端：连接一个 VPN 出
 - **WireGuard 出口**：sing-box 自带的 WireGuard endpoint。
 - **Pangolin 出口**：~~“外部客户端”类型。官方 Pangolin 客户端负责登录、凭据和隧道；SplitGate 删掉它的全隧道路由、加一条最低优先级默认路由，再让 sing-box 的 `direct` 出口用 `bind_interface` 绑定它的网卡。~~
   **改法（维护者 2026-10-26 同意；第 0 阶段 V8 2026-10-27 实测通过，v0.21.0 实现）**：不用 Exit Node。官方 Pangolin 客户端照常只连 site（负责登录和凭据）；家里 VPN-Server 虚拟机（newt 所在的那台，PVE 上）跑一个 SOCKS5 代理（sing-box 1.14.4，用户名 + 密码）；SplitGate 的 `vpn` 出口 = sing-box `socks` 出口，用 `bind_interface: Pangolin` 经 Pangolin 网卡连到这个代理。不删、不加任何路由，组件 2 的 route_guard 不再需要。代理密码存凭据管理器。限制：经 SOCKS5 + Pangolin 的 UDP 不一定通（Xbox 联机 / 语音），登录、商店、Steam、Minecraft 登录都是 TCP。
-- **所有出口都要能访问家里内网的设备**（维护者 2026-10-26 补充；例如 PVE 管理网页）：Cisco、WireGuard 用一个含家里网段的规则集（`ip_cidr`）送进 `vpn`，要服务器那一端允许访问内网；Pangolin 不开 Exit Node 时，官方客户端本来就有到 site 资源的路由。连接时要检查家里网段和本地网络有没有撞号（例如学校也用同一个 192.168.x.0/24）。
+- **所有出口都要能访问家里内网的设备**（维护者 2026-10-26 补充；例如 PVE 管理网页）：Cisco、WireGuard 用一个含家里网段的规则集（`ip_cidr`）送进 `vpn`，要服务器那一端允许访问内网；Pangolin 不开 Exit Node 时，官方客户端本来就有到 site 资源的路由。连接时要检查家里网段和本地网络有没有撞号（例如学校也用同一个 192.168.x.0/24）。v0.10.0–v0.26 用 Profile 的 `home_cidrs` 栏位，v0.27.0 起拿掉栏位，改用规则集（维护者 2026-10-30 定）。
 
 &#91;embedded content: 架构总览 · 主程序、sing-box sidecar、三种出口\]
 
@@ -78,8 +78,6 @@ splitgate/
 │  │  ├─ config.rs           # profiles.json / rules.json 读写与校验
 │  │  └─ cleanup.rs          # 启动时和断开后清理残留网卡、路由、进程
 │  ├─ binaries/              # sidecar：sing-box
-│  ├─ resources/
-│  │  └─ presets/            # 内置规则预设：xbox.json、minecraft.json、steam.json
 │  └─ tauri.conf.json
 ├─ third_party/              # 各组件版本、SHA256、许可证文本与来源说明
 ├─ docs/SPEC.md              # 本文档
@@ -266,8 +264,7 @@ Profile（`pangolin` 子对象）：`interface`（默认 `Pangolin`）、`proxy_
       "id": "school-vpn",
       "type": "cisco",
       "name": "Cisco 出口",
-      "ruleset_ids": ["xbox", "minecraft", "steam"],
-      "home_cidrs": ["192.168.1.0/24"],
+      "ruleset_ids": ["xbox", "home-lan"],
       "cisco": { "server": "vpn.example.com", "user": "user01", "auth_group": "Master Network", "no_udp": true, "bind_interface": null, "mfa": "none" }
     },
     {
@@ -288,9 +285,9 @@ Profile（`pangolin` 子对象）：`interface`（默认 `Pangolin`）、`proxy_
 }
 ```
 
-`type` 决定使用哪个 ExitAdapter，并只读取同名的子对象。`home_cidrs`（v0.10.0，可省略）：家里内网网段，一律送进这个出口；只能是内网 IPv4 网段（/8 到 /32，写网段第一个地址）；连接时和本机各网卡的 IPv4 网段比较，重叠就在“已连接”状态里带 `warnings` 提示（那时流量会留在本地网络）。Cisco 的 `mfa` 取值为 `none` / `duo-push` / `saml`（MVP 只有 `none`）；`bind_interface` 为 `null` 表示系统自动。Cisco 密码、WireGuard 私钥、Pangolin 的家里代理密码存在 keyring。同一时间只有 `active` 指向的出口生效。
+`type` 决定使用哪个 ExitAdapter，并只读取同名的子对象。`home_cidrs`（v0.10.0–v0.26，家里内网网段）已拿掉：v0.27.0 起读到它时，每一组不同的网段变成一个规则集（`id` 为 `home-lan`、`home-lan-2`……，名称“家里内网”，只有 `ip_cidr`），在原来的 Profile 里勾选，再清掉这个栏位（`rules::migrate_home_cidrs`；界面启动时和每次连接前各跑一次，后台服务先连接也不会漏）。连接时把勾选的规则集里所有 `ip_cidr` 和本机各网卡的 IPv4 网段比较，重叠就在“已连接”状态里带 `warnings` 提示（那时流量会留在本地网络）。Cisco 的 `mfa` 取值为 `none` / `duo-push` / `saml`（MVP 只有 `none`）；`bind_interface` 为 `null` 表示系统自动。Cisco 密码、WireGuard 私钥、Pangolin 的家里代理密码存在 keyring。同一时间只有 `active` 指向的出口生效。
 
-**rules.json**：规则集（内置预设首次运行时复制进来，用户可改）
+**rules.json**：规则集（v0.27.0 起没有内置预设，新的 rules.json 是空的；旧版本复制进来的 Xbox / Minecraft / Steam 留着，当普通规则集，可以删）
 
 ```json
 {
@@ -331,7 +328,7 @@ Profile（`pangolin` 子对象）：`interface`（默认 `Pangolin`）、`proxy_
 ```
 
 - 第 0 阶段 V5 实测：`xboxlive.com`、`xbox.com`、`minecraft.net`、Steam 这几项都被学校拦截，加进规则后 PrismLauncher 和 Steam 都能登录。`steamcdn-a.akamaihd.net` 只放这一个主机名，**不要放整个 `akamaihd.net`**。
-- 程序规则优先用 **`process_path`（完整路径）**：`javaw.exe` 这类名字很多程序共用，按名字会误伤（V6 实测只用路径就能让 PrismLauncher 登录）。预设里不放路径（每台电脑不同），由用户在界面上从正在运行的程序里挑。
+- 程序规则优先用 **`process_path`（完整路径）**：`javaw.exe` 这类名字很多程序共用，按名字会误伤（V6 实测只用路径就能让 PrismLauncher 登录）。预设里不放路径（每台电脑不同），由用户在界面上从正在运行的程序里挑。（以下三条是 v0.26 以前内置预设的依据，留作参考。）
 - Xbox App 的进程名（2026-10-26 实测）：`XboxPcApp.exe`（主程序）、`XboxPcAppFT.exe`，已补进预设。都在 `C:\Program Files\WindowsApps\Microsoft.GamingApp_<版本>\` 下，路径带版本号，所以用程序名不用路径。`gamingservices.exe`（下载和安装游戏）、`GameBar.exe` 没有放进预设。
 
 - **订阅**（v0.26.0，`subscription.rs`，维护者 2026-10-28 定）：规则集可以带 `"subscription": { "url", "skip_ads", "interval_hours", "updated_ms", "count", "skipped", "error" }`。`interval_hours`：自动更新间隔，界面可选 1 / 6 / 12 / 24 / 72 / 168（默认）/ 720 小时，0 = 只手动（维护者 2026-10-28 要求可自行设定）。`url` 是 https 网址，或 v2fly domain-list-community 的列表名（展开成 `raw.githubusercontent.com/v2fly/domain-list-community/master/data/<名字>`）。下载的域名存在 `sub_domain_suffix` / `sub_domain_keyword`，和手填的分开；改了地址或广告开关就清空、重新下载。经 PowerShell 下载（每个文件 ≤5 MB），逐行认 v2fly（`full:`、`domain:`、`keyword:`、`include:`，`regexp:` 跳过，`@ads` 可跳过）、一行一个域名（`*.`、`.`、`+.` 前缀）、Clash（`DOMAIN-SUFFIX` / `DOMAIN` / `DOMAIN-KEYWORD`，其他类型跳过），`full:` / `DOMAIN` 当后缀用。`include:` 从同一个文件夹读，最多 30 个文件；合计最多 2 万条，超过就不用。只加域名规则。下载失败保留旧列表、记下原因。界面开着时启动 1 分钟后检查一次，之后每 10 分钟，超过各自间隔的就更新；更新后发 `rules_updated` 事件，窗口重新读规则，改到使用中的规则集时提示重新连接。
@@ -360,7 +357,6 @@ Profile（`pangolin` 子对象）：`interface`（默认 `Pangolin`）、`proxy_
 | `delete_profile` | id | 无 |
 | `list_rulesets` | 无 | RuleSet\[\] |
 | `save_ruleset` | RuleSet | 无 |
-| `reset_ruleset_to_preset` | id | RuleSet |
 | `list_running_processes` | 无 | {name, path}\[\]（给“加程序”用） |
 | `list_interfaces` | 无 | 网卡列表（给“出口网卡”“外部客户端网卡”用） |
 | `connect` | profile\_id | 无（进度通过事件推送） |
@@ -392,7 +388,7 @@ Profile（`pangolin` 子对象）：`interface`（默认 `Pangolin`）、`proxy_
 | 页面 | 内容 | 阶段 |
 | --- | --- | --- |
 | 连接 | 大号连接按钮、状态、当前出口 IP（定时刷新）、VPN 内网 IP、上下行速率、已连接时长 | MVP |
-| 规则 | 规则集列表与开关；编辑域名后缀、关键字、程序路径（从运行中的程序里挑）、程序名、IP 段；“恢复预设” | MVP |
+| 规则 | 规则集列表与开关；编辑域名后缀、关键字、程序路径（从运行中的程序里挑）、程序名、IP 段；订阅 | MVP |
 | 连接列表 | 实时连接：程序、域名、出口（vpn / direct）、流量；可筛选、可关闭单条连接、一键加规则 | 第 2 阶段 |
 | 拦截提示 | 疑似被拦截的域名，一键加进规则 | 第 2 阶段 |
 | 日志 | 按来源和级别筛选，支持暂停滚动、复制、导出诊断包 | MVP |
@@ -487,7 +483,7 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
 - [x] 连接列表页（Clash API）、流量统计、从连接列表一键加规则（v0.6.0；维护者 2026-10-26 同意在第 1 阶段验收前先做；`find_process` 改成一直开，才能显示每条连接的程序）
 - [x] 拦截检测与拦截提示页（v0.7.0；主动 TLS 握手，见组件 8；热点下没有误报 2026-10-26 实测；**学校网络下还没实测**）
 - [x] 睡眠唤醒检测与自动重连（v0.8.0 + v0.11.1 断网检测；2026-10-26 实测通过，含睡眠唤醒）
-- [x] 所有出口都能访问家里内网设备（v0.10.0：Profile 的 `home_cidrs` + 连接时撞号检查；维护者 2026-10-26 实测手动 IP 段规则可以访问）
+- [x] 所有出口都能访问家里内网设备（v0.10.0：Profile 的 `home_cidrs` + 连接时撞号检查，v0.27.0 改成规则集；维护者 2026-10-26 实测手动 IP 段规则可以访问）
 
 ### 第 3 阶段：增强
 

@@ -1,5 +1,5 @@
-//! rules.json: rule sets (SPEC "数据模型"). Built-in presets are compiled in; they are copied into
-//! rules.json the first time they are missing, can be edited and disabled, but not deleted.
+//! rules.json: rule sets (SPEC "数据模型"). Since v0.27.0 there are no built-in presets: a new
+//! rules.json starts empty, and the Xbox / Minecraft / Steam sets older versions added are ordinary ones.
 
 use std::fs;
 
@@ -10,12 +10,6 @@ use crate::paths;
 use crate::subscription::{self, Subscription};
 
 pub const RULES_VERSION: u32 = 1;
-
-const PRESETS: [&str; 3] = [
-    include_str!("../resources/presets/xbox.json"),
-    include_str!("../resources/presets/minecraft.json"),
-    include_str!("../resources/presets/steam.json"),
-];
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RuleSet {
@@ -80,47 +74,21 @@ impl Default for RulesFile {
 #[derive(Serialize, Debug)]
 pub struct RuleSetView {
     pub ruleset: RuleSet,
-    pub preset: bool,
-}
-
-pub fn presets() -> Vec<RuleSet> {
-    PRESETS.iter().map(|t| serde_json::from_str(t).expect("built-in preset is valid JSON")).collect()
-}
-
-pub fn preset(id: &str) -> Option<RuleSet> {
-    presets().into_iter().find(|p| p.id == id)
 }
 
 pub fn view(file: &RulesFile) -> Vec<RuleSetView> {
-    file.rulesets
-        .iter()
-        .map(|r| RuleSetView { ruleset: r.clone(), preset: preset(&r.id).is_some() })
-        .collect()
+    file.rulesets.iter().map(|r| RuleSetView { ruleset: r.clone() }).collect()
 }
 
-/// Missing file = presets only. Missing presets are added back (they cannot be deleted).
-/// Returns whether something was added, so the caller can save.
-pub fn load() -> Result<(RulesFile, bool), String> {
+/// Missing file = no rule sets.
+pub fn load() -> Result<RulesFile, String> {
     let path = paths::rules_json();
-    let mut file = match fs::read_to_string(&path) {
+    match fs::read_to_string(&path) {
         Ok(t) => serde_json::from_str::<RulesFile>(t.trim_start_matches('\u{feff}'))
-            .map_err(|e| format!("{} 格式错误（第 {} 行）：{e}。请修正或删除这个文件。", path.display(), e.line()))?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => RulesFile::default(),
-        Err(e) => return Err(format!("读取 {} 失败：{e}", path.display())),
-    };
-    let added = add_missing_presets(&mut file);
-    Ok((file, added))
-}
-
-pub fn add_missing_presets(file: &mut RulesFile) -> bool {
-    let mut added = false;
-    for p in presets() {
-        if !file.rulesets.iter().any(|r| r.id == p.id) {
-            file.rulesets.push(p);
-            added = true;
-        }
+            .map_err(|e| format!("{} 格式错误（第 {} 行）：{e}。请修正或删除这个文件。", path.display(), e.line())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(RulesFile::default()),
+        Err(e) => Err(format!("读取 {} 失败：{e}", path.display())),
     }
-    added
 }
 
 pub fn save(file: &RulesFile) -> Result<(), String> {
@@ -209,11 +177,8 @@ pub fn upsert(file: &mut RulesFile, mut r: RuleSet) -> Result<String, String> {
     Ok(id)
 }
 
-/// Built-in presets can only be disabled or reset. Also drops the id from every profile.
+/// Also drops the id from every profile.
 pub fn delete(file: &mut RulesFile, profiles: &mut ProfilesFile, id: &str) -> Result<(), String> {
-    if preset(id).is_some() {
-        return Err("内置预设不能删除，可以关掉或恢复预设".into());
-    }
     let pos = file.rulesets.iter().position(|r| r.id == id).ok_or("找不到这个规则集")?;
     file.rulesets.remove(pos);
     for p in &mut profiles.profiles {
@@ -222,13 +187,60 @@ pub fn delete(file: &mut RulesFile, profiles: &mut ProfilesFile, id: &str) -> Re
     Ok(())
 }
 
-pub fn reset_to_preset(file: &mut RulesFile, id: &str) -> Result<(), String> {
-    let p = preset(id).ok_or("这个规则集不是内置预设")?;
-    match file.rulesets.iter_mut().find(|r| r.id == id) {
-        Some(slot) => *slot = p,
-        None => file.rulesets.push(p),
+/// Up to v0.26 a profile had its own "home LAN networks" field. Each different list becomes a
+/// rule set named 家里内网 (ip_cidr only), ticked in the profiles that had it; the field is cleared.
+/// Returns whether anything changed.
+pub fn migrate_home_cidrs(file: &mut RulesFile, profiles: &mut ProfilesFile) -> bool {
+    let mut changed = false;
+    for p in profiles.profiles.iter_mut().filter(|p| !p.home_cidrs.is_empty()) {
+        let cidrs = std::mem::take(&mut p.home_cidrs);
+        let same = |r: &&RuleSet| r.id.starts_with(HOME_ID) && r.ip_cidr.len() == cidrs.len() && cidrs.iter().all(|c| r.ip_cidr.contains(c));
+        let id = match file.rulesets.iter().find(same) {
+            Some(r) => r.id.clone(),
+            None => {
+                let n = file.rulesets.iter().filter(|r| r.id.starts_with(HOME_ID)).count();
+                let id = (1..).map(|k| if k == 1 { HOME_ID.to_string() } else { format!("{HOME_ID}-{k}") }).find(|id| !file.rulesets.iter().any(|r| &r.id == id)).unwrap();
+                let mut r = RuleSet {
+                    id: id.clone(),
+                    name: if n == 0 { "家里内网".into() } else { format!("家里内网（{}）", p.name) },
+                    enabled: true,
+                    domain_suffix: vec![],
+                    domain_keyword: vec![],
+                    process_path: vec![],
+                    process_name: vec![],
+                    ip_cidr: cidrs.clone(),
+                    subscription: None,
+                    sub_domain_suffix: vec![],
+                    sub_domain_keyword: vec![],
+                };
+                // The old field only took valid networks; keep them as they were if one is not.
+                let _ = normalize(&mut r);
+                file.rulesets.push(r);
+                id
+            }
+        };
+        if !p.ruleset_ids.contains(&id) {
+            p.ruleset_ids.push(id);
+        }
+        changed = true;
     }
-    Ok(())
+    changed
+}
+
+const HOME_ID: &str = "home-lan";
+
+/// Runs [`migrate_home_cidrs`] on the saved files. The caller holds `config::FILE_LOCK`.
+pub fn migrate_files() -> Result<bool, String> {
+    let mut profiles = config::load_profiles()?;
+    if profiles.profiles.iter().all(|p| p.home_cidrs.is_empty()) {
+        return Ok(false);
+    }
+    let mut file = load()?;
+    migrate_home_cidrs(&mut file, &mut profiles);
+    // Rule set first: if the second write fails, the old field is still there and the next start retries.
+    save(&file)?;
+    config::save_profiles(&profiles)?;
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -237,19 +249,6 @@ mod tests {
 
     fn empty(id: &str) -> RuleSet {
         empty_for_tests(id)
-    }
-
-    /// Domains confirmed in phase 0 V5 (2026-10-26): these unblocked PrismLauncher and Steam logins.
-    #[test]
-    fn presets_match_phase0_findings() {
-        let all: Vec<String> = presets().into_iter().flat_map(|p| p.domain_suffix).collect();
-        for d in ["xboxlive.com", "xbox.com", "minecraft.net", "steampowered.com", "steamcommunity.com", "steamserver.net", "steamstatic.com", "steamcdn-a.akamaihd.net"] {
-            assert!(all.iter().any(|x| x == d), "preset missing {d}");
-        }
-        assert!(!all.iter().any(|x| x == "akamaihd.net"), "never route the whole akamaihd.net");
-        for mut p in presets() {
-            normalize(&mut p).unwrap();
-        }
     }
 
     #[test]
@@ -273,23 +272,39 @@ mod tests {
     }
 
     #[test]
-    fn presets_come_back_and_cannot_be_deleted() {
+    fn delete_drops_the_id_from_profiles() {
         let mut f = RulesFile::default();
-        assert!(add_missing_presets(&mut f));
-        assert!(!add_missing_presets(&mut f));
         let mut profiles = ProfilesFile::default();
-        assert!(delete(&mut f, &mut profiles, "xbox").is_err());
-
-        let id = upsert(&mut f, empty("")).unwrap();
-        assert_eq!(id, "custom-1");
+        let a = upsert(&mut f, empty("")).unwrap();
+        let b = upsert(&mut f, empty("")).unwrap();
+        assert_eq!((a.as_str(), b.as_str()), ("custom-1", "custom-2"));
         let mut p = crate::config::tests::cisco("school");
-        p.ruleset_ids = vec!["xbox".into(), id.clone()];
+        p.ruleset_ids = vec![a.clone(), b.clone()];
         profiles.profiles.push(p);
-        delete(&mut f, &mut profiles, &id).unwrap();
-        assert_eq!(profiles.profiles[0].ruleset_ids, vec!["xbox"]);
+        delete(&mut f, &mut profiles, &a).unwrap();
+        assert_eq!(profiles.profiles[0].ruleset_ids, vec![b]);
+        assert!(delete(&mut f, &mut profiles, "nope").is_err());
+    }
 
-        f.rulesets[0].domain_suffix.clear();
-        reset_to_preset(&mut f, "xbox").unwrap();
-        assert_eq!(f.rulesets[0], preset("xbox").unwrap());
+    #[test]
+    fn home_cidrs_become_a_rule_set() {
+        let mut f = RulesFile::default();
+        let mut profiles = ProfilesFile::default();
+        for (id, home) in [("a", vec!["192.168.1.0/24", "10.8.0.0/16"]), ("b", vec!["10.8.0.0/16", "192.168.1.0/24"]), ("c", vec!["192.168.77.0/24"]), ("d", vec![])] {
+            let mut p = crate::config::tests::cisco(id);
+            p.name = id.to_uppercase();
+            p.ruleset_ids = vec!["steam".into()];
+            p.home_cidrs = home.into_iter().map(String::from).collect();
+            profiles.profiles.push(p);
+        }
+        assert!(migrate_home_cidrs(&mut f, &mut profiles));
+        assert_eq!(f.rulesets.len(), 2, "same networks share one rule set");
+        assert_eq!((f.rulesets[0].id.as_str(), f.rulesets[0].name.as_str()), ("home-lan", "家里内网"));
+        assert_eq!(f.rulesets[0].ip_cidr, vec!["192.168.1.0/24", "10.8.0.0/16"]);
+        assert_eq!((f.rulesets[1].id.as_str(), f.rulesets[1].name.as_str()), ("home-lan-2", "家里内网（C）"));
+        let ids: Vec<_> = profiles.profiles.iter().map(|p| p.ruleset_ids.join(",")).collect();
+        assert_eq!(ids, vec!["steam,home-lan", "steam,home-lan", "steam,home-lan-2", "steam"]);
+        assert!(profiles.profiles.iter().all(|p| p.home_cidrs.is_empty()));
+        assert!(!migrate_home_cidrs(&mut f, &mut profiles), "runs once");
     }
 }
