@@ -145,7 +145,6 @@ export interface Subscription {
 
 export interface RuleSetView {
   ruleset: RuleSet;
-  /** 内置预设：不能删除，可以恢复预设。 */
 }
 
 export interface RunningProcess {
