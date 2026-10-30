@@ -80,11 +80,11 @@ pub fn set_active_profile(id: String) -> Result<ProfilesView, String> {
     edit_profiles(|f| profiles::set_active(f, &id))
 }
 
-/// Load rules.json (adding missing presets), apply `change`, save when needed, return the view.
+/// Load rules.json, apply `change`, save when needed, return the view.
 fn edit_rules(change: impl FnOnce(&mut rules::RulesFile) -> Result<bool, String>) -> Result<Vec<RuleSetView>, String> {
     let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
-    let (mut file, added) = rules::load()?;
-    if change(&mut file)? || added {
+    let mut file = rules::load()?;
+    if change(&mut file)? {
         rules::save(&file)?;
     }
     Ok(rules::view(&file))
@@ -117,16 +117,11 @@ pub fn save_ruleset(ruleset: RuleSet) -> Result<SaveRuleSetResult, String> {
     Ok(SaveRuleSetResult { id, rulesets })
 }
 
-#[tauri::command]
-pub fn reset_ruleset_to_preset(id: String) -> Result<Vec<RuleSetView>, String> {
-    edit_rules(|f| rules::reset_to_preset(f, &id).map(|_| true))
-}
-
 /// Also removes the rule set from every profile, so both files change together.
 #[tauri::command]
 pub fn delete_ruleset(id: String) -> Result<Vec<RuleSetView>, String> {
     let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
-    let (mut file, _) = rules::load()?;
+    let mut file = rules::load()?;
     let mut profiles = config::load_profiles()?;
     rules::delete(&mut file, &mut profiles, &id)?;
     rules::save(&file)?;

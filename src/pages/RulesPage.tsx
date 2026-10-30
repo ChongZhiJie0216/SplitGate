@@ -5,6 +5,7 @@ import { useStatus } from "../store/status";
 import { T } from "../lib/text";
 import * as ipc from "../lib/ipc";
 import Icon from "../components/Icon";
+import Empty from "../components/Empty";
 
 const L = T.rules;
 const FIELDS = ["domain_suffix", "domain_keyword", "process_path", "process_name", "ip_cidr"] as const;
@@ -22,10 +23,9 @@ const lines = (s: string) =>
 export default function RulesPage() {
   const { rulesets, error, load, run } = useRules();
   const [draft, setDraft] = useState<ipc.RuleSet | null>(null);
-  const [isPreset, setIsPreset] = useState(false);
   const [texts, setTexts] = useState<Texts | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [confirm, setConfirm] = useState<"reset" | "del" | null>(null);
+  const [confirm, setConfirm] = useState<"del" | null>(null);
   const [picking, setPicking] = useState(false);
   const [subBusy, setSubBusy] = useState(false);
   const { view, run: runProfiles } = useProfiles();
@@ -44,7 +44,6 @@ export default function RulesPage() {
 
   const select = (v: ipc.RuleSetView) => {
     setDraft(structuredClone(v.ruleset));
-    setIsPreset(v.preset);
     setTexts(toTexts(v.ruleset));
     setMsg(null);
     setConfirm(null);
@@ -93,15 +92,6 @@ export default function RulesPage() {
     setMsg({ ok: true, text: L.addedToProfile(active.name) });
   };
 
-  const reset = async () => {
-    if (!draft) return;
-    if (confirm !== "reset") return setConfirm("reset");
-    const err = await run(() => ipc.resetRulesetToPreset(draft.id));
-    if (err) return setMsg({ ok: false, text: err });
-    if (used(draft.id)) markStale();
-    reselect(draft.id, L.saved);
-  };
-
   const del = async () => {
     if (!draft) return;
     if (confirm !== "del") return setConfirm("del");
@@ -126,7 +116,7 @@ export default function RulesPage() {
       sub_domain_suffix: [],
       sub_domain_keyword: [],
     };
-    select({ ruleset: r, preset: false });
+    select({ ruleset: r });
   };
 
   const addPath = (p: string) =>
@@ -138,12 +128,12 @@ export default function RulesPage() {
         <h2>{L.list}</h2>
         <p className="muted small">{L.hint}</p>
         {error && <div className="banner bad">{error}</div>}
+        {rulesets && rulesets.length === 0 && <Empty icon="rules" text={L.empty} />}
         <ul className="plist">
           {rulesets?.map((v) => (
             <li key={v.ruleset.id}>
               <button className={draft?.id === v.ruleset.id ? "pitem active" : "pitem"} onClick={() => select(v)}>
                 <span>{v.ruleset.name}</span>
-                {v.preset && <span className="tag">{L.preset}</span>}
                 {!v.ruleset.enabled && <span className="tag warn">{L.off}</span>}
                 {v.ruleset.enabled && active && !used(v.ruleset.id) && (
                   <span className="tag" title={L.unusedTitle(active.name)}>
@@ -166,7 +156,6 @@ export default function RulesPage() {
         <div className="card form-card">
           <h2>
             {draft.id ? draft.name : L.new}
-            {isPreset && <span className="tag">{L.preset}</span>}
           </h2>
           {draft.id && active && !used(draft.id) && (
             <div className="banner warn">
@@ -215,13 +204,7 @@ export default function RulesPage() {
               {L.save}
             </button>
             <div className="spacer" />
-            {isPreset && (
-              <button className="btn" onClick={reset}>
-                <Icon name="refresh" />
-                {confirm === "reset" ? L.confirmReset : L.reset}
-              </button>
-            )}
-            {draft.id && !isPreset && (
+            {draft.id && (
               <button className="btn danger" onClick={del}>
                 <Icon name="trash" />
                 {confirm === "del" ? L.confirmDel : L.del}

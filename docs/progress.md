@@ -1,11 +1,11 @@
 # 开发进度记录
 
 > 每次暂停前更新这里；接着做时先读这份，再读 `CLAUDE.md`、`docs/SPEC.md`“开发阶段与验收标准”。
-> 最后更新：2026-10-28，版本 v0.26.0（已发布）。
+> 最后更新：2026-10-30，版本 v0.27.0（等维护者实测 P 部分）。
 
 ## 现在在哪一步
 
-**项目功能全部完成。** 之后按维护者的新要求做了 v0.23.0（流量画布看详情）、v0.24.0（流量统计页）、v0.24.1（修正按程序的规则）、v0.25.0（规则没生效时提示）、v0.26.0（规则集订阅），都已合并并发布（最新 v0.26.0，2026-10-28）。
+**项目功能全部完成。** 之后按维护者的新要求做了 v0.23.0（流量画布看详情）、v0.24.0（流量统计页）、v0.24.1（修正按程序的规则）、v0.25.0（规则没生效时提示）、v0.26.0（规则集订阅），都已合并并发布（最新 v0.26.0，2026-10-28）。v0.27.0（拿掉内置规则集、家里内网改用规则集）已做完，等维护者实测 `docs/test-plan.md` P 部分。
 
 ## 已完成
 
@@ -18,6 +18,7 @@
 | 0.3.0 | `d10daf7` | 规则页、`rules.json`、内置 Xbox / Minecraft / Steam 预设、从运行中的程序挑选 |
 | 0.4.0 | `5e830a5` | 生成 sing-box 配置（经 stdin，不落盘）、连接状态机、断开 / 失败 / 崩溃后的清理、Job Object、启动时清残留、连接页、日志页（日志文件保留 30 天，凭据替换成 `***`） |
 | 0.4.0 | `7ae99ab` | 便携版打包脚本 `scripts\build-portable.ps1` |
+| 0.27.0 | — | 维护者 2026-10-30 定：拿掉内置规则集（删 `resources/presets/`、`add_missing_presets`、`reset_ruleset_to_preset`、`RuleSetView.preset`；旧的三个留在 rules.json 当普通规则集；新 Profile 不默认勾选）；拿掉 Profile 的“家里内网网段”栏位：`rules::migrate_home_cidrs` 把每组不同的 `home_cidrs` 变成 `home-lan` 规则集并勾选、清掉栏位（界面启动时和每次连接前各跑一次）；撞号提示改成检查合并后的 `ip_cidr`（`lan_overlaps`）；流量画布去掉 `r:home` 方块；规则页 / Profile 页空白提示。云端用假数据看过 |
 | 0.26.0 | — | 规则集订阅（维护者 2026-10-28 定：SplitGate 自己下载文字列表、任何 https 网址、自动更新间隔每个订阅自己选（1 小时到 30 天，默认 7 天，0 = 只手动））：`subscription.rs`（PowerShell 下载 ≤5 MB、v2fly / 一行一个 / Clash 逐行解析、跟 `include:` 最多 30 个文件、最多 2 万条、只加域名、失败保留旧的），`RuleSet` 加 `subscription`、`sub_domain_suffix`、`sub_domain_keyword`（和手填的分开；地址改了清空重下），`update_subscription` 命令、启动 1 分钟后和每 10 分钟检查到期的、`rules_updated` 事件；规则页订阅栏；合并规则去重改成用 set。云端用真实 v2fly 列表测过（spotify 25 条、microsoft 含 include 743 条）。维护者 2026-10-28 实测 O 部分全部通过 |
 | 0.25.0 | — | 规则没生效时提示（维护者要求）：规则页“没勾选”标签 + 黄色提示和“在「Profile」里勾选”按钮（改使用中 Profile 的 `ruleset_ids` 后保存）；`status` store 加 `stale` / `markStale`，连接期间保存使用中的规则集 / Profile、加规则、切换 Profile 后顶部提示“现在重新连接”，状态离开“已连接”就清掉。云端用假数据看过；维护者 2026-10-28 实测 N 部分全部通过 |
 | 0.24.1 | — | 修正（维护者 2026-10-28 发现：Firefox 按程序路径的规则不生效）：`build_config` 把 `process_path` 和 `process_name` 放在同一条 sing-box 规则里，sing-box 对它们是“且”，两种规则集同时勾选时都匹配不到；拆成两条规则，加回归测试，生成的配置用 sing-box 1.14.4 `check` 过；维护者 2026-10-28 实测 M 部分通过（Firefox 走 VPN） |

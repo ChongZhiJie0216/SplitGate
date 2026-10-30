@@ -47,10 +47,17 @@ pub fn run() {
             let handle = app.handle().clone();
             // Before logs::init creates the new folder and before any settings file is read.
             let migrated = paths::migrate_old_data();
+            // Up to v0.26 the home LAN networks were a Profile field; now they are a rule set.
+            let home_moved = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁".to_string()).and_then(|_g| rules::migrate_files());
             logs::init(handle.clone());
             supervisor::init(handle.clone());
             remote::init(handle.clone());
             logs::info(format!("SplitGate v{} 启动，设置文件夹：{}", app.package_info().version, paths::data_dir().display()));
+            match home_moved {
+                Ok(true) => logs::info("已把 Profile 里的家里内网网段移到规则集“家里内网”，并在原来的 Profile 里勾选"),
+                Ok(false) => {}
+                Err(e) => logs::error(format!("移动家里内网网段失败：{e}")),
+            }
             for m in migrated {
                 logs::info(format!("已从旧的设置文件夹复制：{m}（旧文件夹没有改动，确认无误后可以自己删掉）"));
             }
@@ -112,7 +119,6 @@ pub fn run() {
             commands::list_rulesets,
             commands::save_ruleset,
             commands::delete_ruleset,
-            commands::reset_ruleset_to_preset,
             commands::update_subscription,
             commands::list_running_processes,
             commands::connect,

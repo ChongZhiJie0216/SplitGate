@@ -54,10 +54,9 @@ impl MergedRules {
     }
 }
 
-/// Rule sets plus the profile's own home LAN networks (those always go through the exit).
+/// The enabled rule sets this profile ticks, in one list per kind.
 pub fn merge_rules(profile: &Profile, rulesets: &[RuleSet]) -> MergedRules {
     let mut m = MergedRules::default();
-    add_unique(&mut m.ip_cidr, &profile.home_cidrs);
     for r in rulesets.iter().filter(|r| r.enabled && profile.ruleset_ids.contains(&r.id)) {
         add_unique(&mut m.domain_suffix, &r.domain_suffix);
         add_unique(&mut m.domain_suffix, &r.sub_domain_suffix);
@@ -320,7 +319,15 @@ mod tests {
     use super::*;
     use crate::config::tests::cisco;
     use crate::config::{ExitType, PangolinProfile, WireguardPeer, WireguardProfile};
-    use crate::rules::presets;
+    use crate::rules::{empty_for_tests, RuleSet};
+
+    /// Three rule sets like the Xbox / Minecraft / Steam ones older versions shipped.
+    fn sample_sets() -> Vec<RuleSet> {
+        [("xbox", "xboxlive.com"), ("minecraft", "minecraft.net"), ("steam", "steampowered.com")]
+            .into_iter()
+            .map(|(id, d)| RuleSet { domain_suffix: vec![d.into()], ..empty_for_tests(id) })
+            .collect()
+    }
 
     fn api() -> ClashApi {
         ClashApi { port: 9090, secret: "s".into() }
@@ -353,7 +360,7 @@ mod tests {
     fn merge_only_enabled_and_selected() {
         let mut p = cisco("a");
         p.ruleset_ids = vec!["xbox".into(), "steam".into()];
-        let mut sets = presets();
+        let mut sets = sample_sets();
         sets.iter_mut().find(|r| r.id == "steam").unwrap().enabled = false;
         let m = merge_rules(&p, &sets);
         assert!(m.domain_suffix.contains(&"xboxlive.com".to_string()));
@@ -362,11 +369,11 @@ mod tests {
     }
 
     #[test]
-    fn home_lan_goes_to_vpn_even_without_rule_sets() {
+    fn home_lan_rule_set_goes_to_vpn() {
         let mut p = cisco("a");
-        p.ruleset_ids = vec![];
-        p.home_cidrs = vec!["192.168.1.0/24".into()];
-        let m = merge_rules(&p, &presets());
+        p.ruleset_ids = vec!["home-lan".into()];
+        let home = RuleSet { ip_cidr: vec!["192.168.1.0/24".into()], ..empty_for_tests("home-lan") };
+        let m = merge_rules(&p, &[home]);
         assert_eq!(m.ip_cidr, vec!["192.168.1.0/24"]);
         let c = build_config(&p, &m, &secrets(), &ClashApi { port: 9090, secret: "s".into() }, &Settings::default()).unwrap();
         let rule = c["route"]["rules"].as_array().unwrap().iter().find(|r| r["ip_cidr"] == json!(["192.168.1.0/24"])).expect("home LAN rule");
@@ -470,7 +477,7 @@ mod tests {
     #[test]
     fn pangolin_uses_a_socks_outbound() {
         let p = pangolin_profile();
-        let c = build_config(&p, &merge_rules(&p, &presets()), &secrets(), &api(), &Settings::default()).unwrap();
+        let c = build_config(&p, &merge_rules(&p, &sample_sets()), &secrets(), &api(), &Settings::default()).unwrap();
         assert!(c.get("endpoints").is_none(), "no endpoint: the socks proxy is an outbound");
         let vpn = c["outbounds"].as_array().unwrap().iter().find(|o| o["tag"] == VPN_TAG).unwrap();
         assert_eq!(vpn["type"], "socks");
@@ -494,7 +501,7 @@ mod tests {
         }
         let mut p = cisco("school");
         p.ruleset_ids = vec!["xbox".into(), "minecraft".into(), "steam".into()];
-        let mut sets = presets();
+        let mut sets = sample_sets();
         sets[0].process_path = vec![r"C:\Games\Prism\javaw.exe".into()];
         sets[0].process_name = vec!["XboxPcApp.exe".into()];
         sets[0].ip_cidr = vec!["20.0.0.0/8".into()];
@@ -507,6 +514,6 @@ mod tests {
         check(&exe, &build_config(&w, &MergedRules::default(), &s, &api(), &debug_settings()).unwrap()).unwrap();
 
         let g = pangolin_profile();
-        check(&exe, &build_config(&g, &merge_rules(&g, &presets()), &secrets(), &api(), &Settings::default()).unwrap()).unwrap();
+        check(&exe, &build_config(&g, &merge_rules(&g, &sample_sets()), &secrets(), &api(), &Settings::default()).unwrap()).unwrap();
     }
 }

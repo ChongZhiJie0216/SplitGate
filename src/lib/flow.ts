@@ -29,7 +29,6 @@ export interface FlowEdge {
 export interface FlowLabels {
   system: string;
   otherPrograms: (n: number) => string;
-  home: string;
   otherVpnRule: string;
   noRule: string;
   otherDirect: string;
@@ -85,7 +84,6 @@ export function matchRuleSet(c: Connection, sets: RuleSet[]): RuleSet | null {
 export function buildFlow(
   connections: Connection[],
   sets: RuleSet[],
-  homeCidrs: string[],
   profileName: string,
   L: FlowLabels,
 ): { nodes: FlowNode[]; edges: FlowEdge[]; members: Map<string, Connection[]> } {
@@ -128,8 +126,6 @@ export function buildFlow(
     let ruleLabel: string;
     if (!vpn) {
       [rule, ruleLabel] = c.rule === "final" ? ["r:final", L.noRule] : ["r:direct", L.otherDirect];
-    } else if (c.ip && homeCidrs.some((h) => inCidr(c.ip, h))) {
-      [rule, ruleLabel] = ["r:home", L.home];
     } else {
       const set = matchRuleSet(c, sets);
       [rule, ruleLabel] = set ? [`r:set:${set.id}`, set.name] : ["r:other", L.otherVpnRule];

@@ -8,10 +8,8 @@ import Icon from "../components/Icon";
 import Empty from "../components/Empty";
 
 const L = T.profile;
-const DEFAULT_RULESETS = ["xbox", "minecraft", "steam"];
-
 function blank(type: ipc.ExitType): ipc.Profile {
-  const base = { id: "", type, name: "", ruleset_ids: [...DEFAULT_RULESETS], home_cidrs: [] as string[] };
+  const base = { id: "", type, name: "", ruleset_ids: [] as string[] };
   if (type === "cisco")
     return { ...base, cisco: { server: "", user: "", auth_group: null, no_udp: true, bind_interface: null, mfa: "none" } };
   if (type === "pangolin")
@@ -198,15 +196,10 @@ export default function ProfilesPage() {
                   {!r.enabled && <span className="tag warn">{T.rules.off}</span>}
                 </label>
               ))}
+              {rulesets?.length === 0 && <span className="muted">{L.noRulesets}</span>}
             </div>
             <span className="field-hint">{L.rulesetsHint}</span>
           </div>
-          <ListField
-            label={L.homeCidrs}
-            hint={L.homeCidrsHint}
-            value={draft.home_cidrs}
-            onChange={(v) => setDraft({ ...draft, home_cidrs: v })}
-          />
 
           {draft.type === "cisco" && draft.cisco && (
             <>

@@ -150,7 +150,7 @@ fn collect(work: &Path, app_version: &str, singbox_version: Option<String>) -> R
     // Settings files: re-serialized (so the key masking applies), not copied byte for byte.
     write("profiles.json", scrub.json(serde_json::to_value(&profiles).unwrap_or_default()))?;
     match rules::load() {
-        Ok((r, _)) => write("rules.json", scrub.json(serde_json::to_value(&r).unwrap_or_default()))?,
+        Ok(r) => write("rules.json", scrub.json(serde_json::to_value(&r).unwrap_or_default()))?,
         Err(e) => write("rules.json.error.txt", scrub.text(&e))?,
     }
     match settings::load() {
@@ -191,7 +191,7 @@ fn singbox_config(profiles: &ProfilesFile, scrub: &Scrubber) -> String {
     let Some(p) = profiles.active.as_ref().and_then(|id| profiles.profiles.iter().find(|p| &p.id == id)) else {
         return "（没有使用中的 Profile）".into();
     };
-    let rule_sets = rules::load().map(|(r, _)| r.rulesets).unwrap_or_default();
+    let rule_sets = rules::load().map(|r| r.rulesets).unwrap_or_default();
     let merged = singbox::merge_rules(p, &rule_sets);
     let secrets = Secrets { main: "***".into(), preshared_key: credentials::psk_account(p).map(|_| "***".into()) };
     let api = ClashApi { port: 0, secret: "***".into() };
