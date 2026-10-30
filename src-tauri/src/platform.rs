@@ -166,7 +166,8 @@ pub fn hidden_command(exe: &Path) -> Command {
 }
 
 /// IPv4 addresses of this PC as ("192.168.1.23/24", adapter name), without loopback, link-local
-/// and our own SplitGate* adapters. Empty when it cannot be read.
+/// and our own SplitGate* adapters. Only connected adapters and usable addresses: Windows keeps a
+/// disconnected Wi-Fi's last address, which gave a false overlap warning (v0.27.1). Empty when it cannot be read.
 pub fn local_ipv4_networks() -> Vec<(String, String)> {
     let Ok(out) = powershell(LOCAL_NETS_SCRIPT).output() else { return Vec::new() };
     String::from_utf8_lossy(&out.stdout)
@@ -196,8 +197,9 @@ Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
 "#;
 
 const LOCAL_NETS_SCRIPT: &str = r#"
-Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.InterfaceAlias -notlike 'SplitGate*' -and $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
+$up = @(Get-NetIPInterface -AddressFamily IPv4 -ConnectionState Connected -ErrorAction SilentlyContinue | ForEach-Object { $_.ifIndex })
+Get-NetIPAddress -AddressFamily IPv4 -AddressState Preferred -ErrorAction SilentlyContinue |
+    Where-Object { $up -contains $_.InterfaceIndex -and $_.InterfaceAlias -notlike 'SplitGate*' -and $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
     ForEach-Object { "$($_.IPAddress)/$($_.PrefixLength)|$($_.InterfaceAlias)" }
 "#;
 
