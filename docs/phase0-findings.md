@@ -454,7 +454,7 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 ---
 
-## V9 同时连两个出口 — ✅ Cisco + WireGuard 通过（2026-11-01）；其他组合待测
+## V9 同时连两个出口 — ✅ Cisco + WireGuard 通过（2026-11-01，v0.28.0 已实现并实测通过）；其他组合待测
 
 维护者要求（2026-11-01）：在 C 点同时连 A、B 两个 VPN 服务器。维护者定：
 - 会用到的组合是 WireGuard + WireGuard、Cisco + WireGuard / Pangolin、Cisco + Cisco；Pangolin + 其他不大用。

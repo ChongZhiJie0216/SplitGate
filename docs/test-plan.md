@@ -274,17 +274,17 @@ $env:SPLITGATE_PRETEND_VERSION='0.18.0'; .\SplitGate.exe
 - [x] Wi-Fi 断开、只用网线（网段和家里内网不同）时连接：不再出现“规则里的网段……重叠”的黄色提示
 - [x] （可选）连上一个和家里同网段的 Wi-Fi（例如家里自己的 192.168.1.x）再连接：照样出现提示
 
-## R. v0.28.0 同时连两个出口
+## R. v0.28.0 同时连两个出口 — 2026-11-01 维护者实测全部通过
 
 准备：电脑插着学校网线，同时连手机热点（WireGuard 要走热点）。
 
-- [ ] Profile 页打开家里 WireGuard，“出口网卡”填热点那张网卡的名称（例：`Wi-Fi`，可以用 `Get-NetAdapter` 查），保存
-- [ ] 两个 Profile 各勾自己的规则集：学校 Cisco 勾 Xbox 和“学校那边内网”（IP 段填那边的网段），家里 WireGuard 勾“家里内网”
-- [ ] 顶部“出口”选学校 Cisco，“同时连”选家里 WireGuard；Profile 列表里家里 WireGuard 标“同时连”
-- [ ] 按“连接”：连接页显示“学校 Cisco（Cisco）+ 家里 WireGuard（WireGuard）”，最后“已连接”
-- [ ] 两边家里的设备网页都打得开（例如 `http://192.168.2.9:23333`、`http://192.168.200.2:51821`）
-- [ ] 连接列表：去 B 网段的连接写“VPN 2”，鼠标停上去显示“家里 WireGuard”；去 A 网段、Xbox 的写“VPN”
-- [ ] 流量画布：右边有两个 VPN 方块，各写自己的 Profile 名；“家里内网”连到家里 WireGuard 那个
-- [ ] 断开热点（WireGuard 断了）：1–2 分钟内变成“等待重新连接”，日志写是哪个出口没有回应；重新连上热点后会自动连回来
-- [ ] “同时连”选“（不用）”再连接：只连学校 Cisco，和以前一样
-- [ ] 让家里 WireGuard 不勾任何规则集再连接：提示“「家里 WireGuard」没有勾选任何开着的规则集……”，不会连接
+- [x] Profile 页打开家里 WireGuard，“出口网卡”填热点那张网卡的名称（例：`Wi-Fi`，可以用 `Get-NetAdapter` 查），保存
+- [x] 两个 Profile 各勾自己的规则集：学校 Cisco 勾 Xbox 和“学校那边内网”（IP 段填那边的网段），家里 WireGuard 勾“家里内网”
+- [x] 顶部“出口”选学校 Cisco，“同时连”选家里 WireGuard；Profile 列表里家里 WireGuard 标“同时连”
+- [x] 按“连接”：连接页显示“学校 Cisco（Cisco）+ 家里 WireGuard（WireGuard）”，最后“已连接”
+- [x] 两边家里的设备网页都打得开（例如 `http://192.168.2.9:23333`、`http://192.168.200.2:51821`）
+- [x] 连接列表：去 B 网段的连接写“VPN 2”，鼠标停上去显示“家里 WireGuard”；去 A 网段、Xbox 的写“VPN”
+- [x] 流量画布：右边有两个 VPN 方块，各写自己的 Profile 名；“家里内网”连到家里 WireGuard 那个
+- [x] 断开热点（WireGuard 断了）：1–2 分钟内变成“等待重新连接”，日志写是哪个出口没有回应；重新连上热点后会自动连回来
+- [x] “同时连”选“（不用）”再连接：只连学校 Cisco，和以前一样
+- [x] 让家里 WireGuard 不勾任何规则集再连接：提示“「家里 WireGuard」没有勾选任何开着的规则集……”，不会连接
