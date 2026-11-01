@@ -2,7 +2,8 @@
 # Prints the public IP seen through exit A, exit B and the direct path; they should be three
 # different IPs (A's server, B's server, your own network).
 #   -ADomain / -BDomain : the test domains given to run.ps1 (defaults match)
-#   -Probe 192.168.1.10:8006,192.168.10.5:443 : also try a TCP connection to devices on each home LAN
+#   -Probe http://192.168.1.10,https://192.168.10.5:8006 : also open web pages of devices on each home LAN.
+#     (A bare TCP connect is no proof: sing-box's TUN accepts the connection before it reaches the VPN.)
 param([string]$ADomain = 'ifconfig.me', [string]$BDomain = 'api.ipify.org', [string]$DirectUrl = 'https://ipinfo.io/ip', [string[]]$Probe = @())
 $Probe = @($Probe | ForEach-Object { "$_" -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 function Get-Ip([string]$url) {
@@ -19,11 +20,8 @@ Write-Host "direct   ($DirectUrl): $ipD"
 $ok = ($ipA -notlike '(failed*') -and ($ipB -notlike '(failed*') -and ($ipD -notlike '(failed*') -and ($ipA -ne $ipB) -and ($ipA -ne $ipD) -and ($ipB -ne $ipD)
 Write-Host $(if ($ok) { 'PASS: three different IPs' } else { 'CHECK: the three IPs should all differ (see above)' })
 foreach ($p in $Probe) {
-    $i = $p.LastIndexOf(':'); $h = $p.Substring(0, $i); $port = [int]$p.Substring($i + 1)
-    $c = New-Object Net.Sockets.TcpClient
-    try {
-        $t = $c.BeginConnect($h, $port, $null, $null)
-        $r = $t.AsyncWaitHandle.WaitOne(5000) -and $c.Connected
-        Write-Host ("probe {0}: {1}" -f $p, $(if ($r) { 'reachable' } else { 'NOT reachable (5 s)' }))
-    } catch { Write-Host "probe ${p}: NOT reachable ($($_.Exception.Message))" } finally { $c.Close() }
+    # -k: home devices use self-signed certificates. Any HTTP status (even 401/404) means the device answered.
+    $code = & curl.exe -k -s -o NUL --max-time 10 -w '%{http_code}' $p 2>$null
+    if ($LASTEXITCODE -eq 0 -and $code -ne '000') { Write-Host "probe ${p}: answered (HTTP $code)" }
+    else { Write-Host "probe ${p}: NO answer (curl exit $LASTEXITCODE)" }
 }
