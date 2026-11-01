@@ -43,7 +43,7 @@ export default function BlockedPage() {
 
   // 已经被使用中 Profile 的规则集覆盖的域名：加过规则，重新连接后就走 VPN。
   const covered = useMemo(() => {
-    const used = view?.profiles.find((p) => p.profile.id === view.active)?.profile.ruleset_ids ?? [];
+    const used = ipc.connectionProfiles(view).flatMap((p) => p.ruleset_ids);
     const sets = (rulesets ?? []).map((r) => r.ruleset).filter((r) => r.enabled && used.includes(r.id));
     return (host: string) =>
       sets.some(

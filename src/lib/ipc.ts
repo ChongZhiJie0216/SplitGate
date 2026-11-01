@@ -9,11 +9,22 @@ export type Step = "prepare" | "cleanup" | "check" | "start" | "tunnel" | "probe
 export type Status =
   | { state: "disconnected" }
   | { state: "connecting"; profile_name: string; step: Step }
-  /** warnings：连上了，但有地方不会照预期工作（例如家里内网和本地网络撞号）。 */
-  | { state: "connected"; profile_name: string; exit: ExitType; since_ms: number; probe_ms: number; warnings: string[] }
+  /** warnings：连上了，但有地方不会照预期工作（例如家里内网和本地网络撞号）。
+   *  profile_name / exit / probe_ms 是第一个出口；exits 是全部出口（v0.28.0，旧的后台服务不给）。 */
+  | { state: "connected"; profile_name: string; exit: ExitType; since_ms: number; probe_ms: number; warnings: string[]; exits?: ExitInfo[] }
   | { state: "disconnecting" }
   /** retrying：连接中断后正在等待自动重新连接。 */
   | { state: "error"; message: string; retrying: boolean };
+
+/** 连接中的一个出口：tag 是 sing-box 的出口名（"vpn"、"vpn-2"）。 */
+export interface ExitInfo {
+  name: string;
+  exit: ExitType;
+  tag: string;
+}
+
+/** 这条连接走的是某个 VPN 出口（"vpn"、"vpn-2"……），不是直连。 */
+export const isVpn = (outbound: string) => outbound === "vpn" || /^vpn-\d+$/.test(outbound);
 
 export interface LogLine {
   time: string;
@@ -65,6 +76,8 @@ export interface WireguardProfile {
   peer: { endpoint: string; public_key: string; persistent_keepalive: number | null };
   dns: string[];
   mtu: number;
+  /** WireGuard 封包固定走这张网卡（例如手机热点）；null = 系统自动。 */
+  bind_interface?: string | null;
 }
 
 export interface Profile {
@@ -72,7 +85,6 @@ export interface Profile {
   type: ExitType;
   name: string;
   ruleset_ids: string[];
-  /** 家里内网网段（IPv4 CIDR），一律走这个出口。 */
   cisco?: CiscoProfile;
   pangolin?: PangolinProfile;
   wireguard?: WireguardProfile;
@@ -80,6 +92,8 @@ export interface Profile {
 
 export interface ProfilesView {
   active: string | null;
+  /** 和 active 同时连的第二个出口（v0.28.0）。 */
+  second: string | null;
   profiles: { profile: Profile; has_secret: boolean }[];
 }
 
@@ -100,6 +114,13 @@ export const saveProfile = (profile: Profile, secrets?: SecretsInput) =>
   invoke<{ id: string; view: ProfilesView }>("save_profile", { profile, secrets: secrets ?? null });
 export const deleteProfile = (id: string) => invoke<ProfilesView>("delete_profile", { id });
 export const setActiveProfile = (id: string) => invoke<ProfilesView>("set_active_profile", { id });
+export const setSecondProfile = (id: string | null) => invoke<ProfilesView>("set_second_profile", { id });
+
+/** 连接时会用到的 Profile：使用中的那个，加上“同时连”的第二个。 */
+export const connectionProfiles = (view: ProfilesView | null): Profile[] =>
+  [view?.active, view?.second]
+    .map((id) => view?.profiles.find((p) => p.profile.id === id)?.profile)
+    .filter((p): p is Profile => !!p);
 /** Cisco / AnyLink：测试登录的结果（不建立隧道）。 */
 export type CiscoLoginResult =
   | { result: "ok" }
@@ -205,7 +226,7 @@ export interface Connection {
   port: string;
   /** Windows 不告诉的（系统服务）为空。 */
   process_path: string;
-  /** "vpn" 或 "direct" */
+  /** "vpn"、"vpn-2"（第二个出口）或 "direct" */
   outbound: string;
   rule: string;
   upload: number;

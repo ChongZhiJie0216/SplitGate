@@ -43,7 +43,14 @@ export const T = {
     stopRetry: "停止自动重连",
     seeLogs: "详细情况看“日志”页。",
   },
-  traffic: { vpn: "VPN", direct: "直连", up: "上传", down: "下载" },
+  traffic: {
+    vpn: "VPN",
+    /** 第二个出口（"vpn-2"）写成“VPN 2”，第一个照旧写“VPN”。 */
+    vpnN: (outbound: string) => (outbound === "vpn" ? "VPN" : `VPN ${outbound.slice(4)}`),
+    direct: "直连",
+    up: "上传",
+    down: "下载",
+  },
   connectionsPage: {
     notConnected: "连接之后，这里会实时列出每条连接：哪个程序、去哪里、走 VPN 还是直连。",
     filter: "搜索程序、域名或 IP",
@@ -316,6 +323,10 @@ export const T = {
     noRulesets: "还没有规则集，先到“规则”页新建。",
     pick: "出口",
     none: "（没有 Profile）",
+    second: "同时连",
+    secondNone: "（不用）",
+    secondHint: "再加一个出口一起连：两个 Profile 各自用自己勾选的规则集。同一个域名或网段两边都有时，走第一个出口。",
+    secondTag: "同时连",
     list: "全部 Profile",
     empty: "还没有 Profile。先新建一个。",
     new: "新建",
@@ -369,6 +380,8 @@ export const T = {
       vpnDnsHint: "经代理用 TCP 查询，默认 9.9.9.9",
     },
     wireguard: {
+      bind: "出口网卡",
+      bindHint: "WireGuard 封包固定走这张网卡，例：手机热点的 Wi-Fi（学校网络挡 WireGuard 时用）；留空 = 系统自动",
       importFile: "导入 .conf 文件",
       pasteLabel: "或粘贴 .conf 内容",
       parse: "读取",

@@ -113,6 +113,7 @@ pub fn run() {
             commands::save_profile,
             commands::delete_profile,
             commands::set_active_profile,
+            commands::set_second_profile,
             commands::import_wireguard_conf,
             commands::cisco_groups,
             commands::test_cisco_login,

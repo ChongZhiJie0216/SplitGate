@@ -17,9 +17,10 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter};
 
-use crate::service::{self, Event, Reply, Request};
+use crate::service::{self, Event, ExitSecrets, Reply, Request};
+use crate::singbox::Secrets;
 use crate::supervisor::{self, Status};
-use crate::{cleanup, config, credentials, logs, traffic, tray};
+use crate::{cleanup, config, logs, profiles, traffic, tray};
 
 struct Session {
     /// The command connection.
@@ -72,8 +73,10 @@ pub fn try_connect(profile_id: Option<String>) -> Result<bool, String> {
         }
         open()?;
     }
-    let (id, main, psk) = secrets_for(profile_id)?;
-    let reply = request(&Request::Connect { profile_id: id, main, preshared_key: psk })?;
+    let mut exits = secrets_for(profile_id)?.into_iter();
+    let (id, first) = exits.next().ok_or("没有出口")?;
+    let extra = exits.map(|(profile_id, s)| ExitSecrets { profile_id, main: s.main, preshared_key: s.preshared_key }).collect();
+    let reply = request(&Request::Connect { profile_id: id, main: first.main, preshared_key: first.preshared_key, extra })?;
     if reply.ok {
         Ok(true)
     } else {
@@ -101,22 +104,14 @@ pub fn shutdown() {
     }
 }
 
-/// Same rules as a local connect: the active profile when none is given; the secrets come from
-/// this user's Credential Manager (the service runs as SYSTEM and cannot read it).
-fn secrets_for(profile_id: Option<String>) -> Result<(String, String, Option<String>), String> {
-    let profile = {
+/// Same rules as a local connect: the active profile when none is given, plus the second exit;
+/// the secrets come from this user's Credential Manager (the service runs as SYSTEM and cannot read it).
+fn secrets_for(profile_id: Option<String>) -> Result<Vec<(String, Secrets)>, String> {
+    let profiles = {
         let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
-        let file = config::load_profiles()?;
-        let id = profile_id.or(file.active.clone()).ok_or("还没有 Profile。先到“Profile”页新建一个。")?;
-        file.profiles.into_iter().find(|p| p.id == id).ok_or("找不到这个 Profile")?
+        profiles::connection_profiles(&config::load_profiles()?, profile_id.as_deref())?
     };
-    let acc = credentials::main_account(&profile).ok_or("这个出口还不能连接")?;
-    let main = credentials::get(&acc)?.ok_or(credentials::missing_message(profile.kind))?;
-    let psk = match credentials::psk_account(&profile) {
-        Some(a) => credentials::get(&a)?,
-        None => None,
-    };
-    Ok((profile.id, main, psk))
+    profiles.into_iter().map(|p| supervisor::secrets_of(&p).map(|s| (p.id, s))).collect()
 }
 
 fn open() -> Result<(), String> {

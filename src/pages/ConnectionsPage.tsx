@@ -19,6 +19,7 @@ const startMs = (s: string) => Date.parse(s.replace(/(\.\d{3})\d+/, "$1"));
 export default function ConnectionsPage() {
   const { status, traffic } = useStatus();
   const connected = status.state === "connected";
+  const exitName = (outbound: string) => (connected ? (status.exits?.find((e) => e.tag === outbound)?.name ?? "") : "");
   const [snap, setSnap] = useState<ipc.ConnectionsSnapshot | null>(null);
   const [paused, setPaused] = useState(false);
   const [query, setQuery] = useState("");
@@ -47,7 +48,7 @@ export default function ConnectionsPage() {
     const q = query.trim().toLowerCase();
     return all.filter(
       (c) =>
-        (scope === "all" || c.outbound === scope) &&
+        (scope === "all" || (scope === "vpn" ? ipc.isVpn(c.outbound) : c.outbound === scope)) &&
         (!q || c.host.toLowerCase().includes(q) || c.ip.includes(q) || c.process_path.toLowerCase().includes(q)),
     );
   }, [all, query, scope]);
@@ -115,7 +116,9 @@ export default function ConnectionsPage() {
                   {c.network === "udp" && <span className="tag">UDP</span>}
                 </td>
                 <td>
-                  <span className={c.outbound === "vpn" ? "tag good" : "tag"}>{c.outbound === "vpn" ? T.traffic.vpn : T.traffic.direct}</span>
+                  <span className={ipc.isVpn(c.outbound) ? "tag good" : "tag"} title={exitName(c.outbound)}>
+                    {ipc.isVpn(c.outbound) ? T.traffic.vpnN(c.outbound) : T.traffic.direct}
+                  </span>
                 </td>
                 <td className="muted small rule-cell" title={c.rule}>
                   {c.rule === "final" ? L.finalRule : c.rule.replace(/\s*=>.*$/, "")}
@@ -181,7 +184,7 @@ export function AddRuleModal({ conn, onClose }: { conn: ipc.Connection; onClose:
   const initial = (k: Kind) => (k === "domain_suffix" ? conn.host : k === "process_path" ? conn.process_path : conn.ip);
   const [kind, setKind] = useState<Kind>(kinds[0] ?? "domain_suffix");
   const [value, setValue] = useState(initial(kinds[0] ?? "domain_suffix"));
-  const used = view?.profiles.find((p) => p.profile.id === view.active)?.profile.ruleset_ids ?? [];
+  const used = ipc.connectionProfiles(view).flatMap((p) => p.ruleset_ids);
   const [target, setTarget] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 

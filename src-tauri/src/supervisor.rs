@@ -22,9 +22,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use crate::config::{self, ExitType};
+use crate::config::{self, ExitType, Profile};
 use crate::singbox::{self, ClashApi, Secrets};
-use crate::{cleanup, credentials, exits, logs, paths, platform, rules, settings, traffic, tray};
+use crate::{cleanup, credentials, exits, logs, paths, platform, profiles, rules, settings, traffic, tray};
 
 const TUNNEL_TIMEOUT: Duration = Duration::from_secs(60);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -59,10 +59,27 @@ pub enum Status {
     Disconnected,
     Connecting { profile_name: String, step: Step },
     /// `warnings`: connected, but something will not work as expected (e.g. home LAN overlaps).
-    Connected { profile_name: String, exit: ExitType, since_ms: u64, probe_ms: u32, warnings: Vec<String> },
+    /// `profile_name` / `exit` / `probe_ms`: the first exit; `exits`: all of them (v0.28.0).
+    Connected {
+        profile_name: String,
+        exit: ExitType,
+        since_ms: u64,
+        probe_ms: u32,
+        warnings: Vec<String>,
+        #[serde(default)]
+        exits: Vec<ExitInfo>,
+    },
     Disconnecting,
     /// `retrying`: the connection broke and an automatic reconnect is waiting.
     Error { message: String, retrying: bool },
+}
+
+/// One exit of the running connection: profile name, type and sing-box outbound tag.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ExitInfo {
+    pub name: String,
+    pub exit: ExitType,
+    pub tag: String,
 }
 
 struct Inner {
@@ -78,9 +95,9 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 /// In the background service: every status change goes to the connected app through the pipe.
 type Sink = Box<dyn Fn(&Status) + Send + Sync>;
 static SINK: OnceLock<Sink> = OnceLock::new();
-/// Secrets the app handed over for this profile (the service cannot read the user's Credential
+/// Secrets the app handed over, per profile id (the service cannot read the user's Credential
 /// Manager). Kept in memory for automatic reconnects; dropped on disconnect.
-static GIVEN: Mutex<Option<(String, Secrets)>> = Mutex::new(None);
+static GIVEN: Mutex<Vec<(String, Secrets)>> = Mutex::new(Vec::new());
 /// Set when sing-box reports a new default interface (it follows the physical network for its
 /// direct traffic), so the health check does not wait for its next minute.
 static NETWORK_CHANGED: AtomicBool = AtomicBool::new(false);
@@ -143,16 +160,17 @@ pub fn clash_api() -> Option<ClashApi> {
 /// The handed-over secrets are only needed while connected or reconnecting.
 fn forget_given() {
     if let Ok(mut g) = GIVEN.lock() {
-        *g = None;
+        g.clear();
     }
 }
 
 /// Connect with secrets supplied by the caller instead of the Credential Manager (the service).
 // Only the Windows background service calls this.
 #[cfg_attr(not(windows), allow(dead_code))]
-pub fn connect_with_secrets(profile_id: String, secrets: Secrets) -> Result<(), String> {
+/// `extra`: the second exit's secrets (v0.28.0).
+pub fn connect_with_secrets(profile_id: String, secrets: Secrets, extra: Vec<(String, Secrets)>) -> Result<(), String> {
     if let Ok(mut g) = GIVEN.lock() {
-        *g = Some((profile_id.clone(), secrets));
+        *g = std::iter::once((profile_id.clone(), secrets)).chain(extra).collect();
     }
     connect(Some(profile_id))
 }
@@ -242,55 +260,82 @@ fn attempt(generation: u64, profile_id: Option<String>) -> Result<(), Failure> {
     r
 }
 
+/// The Credential Manager's (or the handed-over) secrets of one profile.
+pub(crate) fn secrets_of(profile: &Profile) -> Result<Secrets, String> {
+    let given = GIVEN.lock().ok().and_then(|g| g.iter().find(|(id, _)| *id == profile.id).map(|(_, s)| s.clone()));
+    if let Some(s) = given {
+        return Ok(s);
+    }
+    let main_acc = credentials::main_account(profile).ok_or("缺少凭据")?;
+    let main = credentials::get(&main_acc)?.ok_or(credentials::missing_message(profile.kind))?;
+    let preshared_key = match credentials::psk_account(profile) {
+        Some(a) => credentials::get(&a)?,
+        None => None,
+    };
+    Ok(Secrets { main, preshared_key })
+}
+
+/// `profile_id`: the first exit (None = the active one); the second exit comes from profiles.json.
 fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failure> {
-    let (profile, rule_sets) = {
+    let (profiles, rule_sets) = {
         let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;
         // Normally done at app start; here too for a service that connects before the app has run.
         rules::migrate_files()?;
         let file = config::load_profiles()?;
-        let id = profile_id.or(file.active.clone()).ok_or("还没有 Profile。先到“Profile”页新建一个。")?;
-        let p = file.profiles.into_iter().find(|p| p.id == id).ok_or("找不到这个 Profile")?;
-        (p, rules::load()?.rulesets)
+        (profiles::connection_profiles(&file, profile_id.as_deref())?, rules::load()?.rulesets)
     };
-    let name = profile.name.clone();
+    let multi = profiles.len() > 1;
+    let name = profiles.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" + ");
     step(generation, &name, Step::Prepare)?;
-    let merged = singbox::merge_rules(&profile, &rule_sets);
-    if merged.is_empty() {
-        return Err("这个 Profile 没有勾选任何开着的规则集，连接了也不会有流量走 VPN。请到“Profile”页勾选规则集。".into());
-    }
-    let given = GIVEN.lock().ok().and_then(|g| g.as_ref().filter(|(id, _)| *id == profile.id).map(|(_, s)| s.clone()));
-    let (main, psk) = match given {
-        Some(s) => (s.main, s.preshared_key),
-        None => {
-            let main_acc = credentials::main_account(&profile).ok_or("缺少凭据")?;
-            let main = credentials::get(&main_acc)?.ok_or(credentials::missing_message(profile.kind))?;
-            let psk = match credentials::psk_account(&profile) {
-                Some(a) => credentials::get(&a)?,
-                None => None,
-            };
-            (main, psk)
+    let mut merged = Vec::new();
+    for p in &profiles {
+        let m = singbox::merge_rules(p, &rule_sets);
+        if m.is_empty() {
+            return Err(if multi {
+                format!("「{}」没有勾选任何开着的规则集，这个出口连上了也不会有流量。请到“Profile”页勾选规则集，或在顶部取消“同时连”。", p.name).into()
+            } else {
+                "这个 Profile 没有勾选任何开着的规则集，连接了也不会有流量走 VPN。请到“Profile”页勾选规则集。".into()
+            });
         }
-    };
-    let mut redact = vec![main.clone()];
-    redact.extend(psk.clone());
+        merged.push(m);
+    }
+    let mut secrets = Vec::new();
+    let mut redact = Vec::new();
+    for p in &profiles {
+        let s = secrets_of(p)?;
+        redact.push(s.main.clone());
+        redact.extend(s.preshared_key.clone());
+        secrets.push(s);
+    }
     logs::set_redactions(redact);
-    logs::info(format!("开始连接：{name}（{:?}）", profile.kind));
+    let what: Vec<String> = profiles.iter().map(|p| format!("{}（{:?}）", p.name, p.kind)).collect();
+    logs::info(format!("开始连接：{}", what.join("、")));
 
     step(generation, &name, Step::Cleanup)?;
     cleanup::run(true)?;
 
     step(generation, &name, Step::Check)?;
-    let mut warnings = lan_overlaps(&merged.ip_cidr, &platform::local_ipv4_networks());
+    let all_cidrs: Vec<String> = merged.iter().flat_map(|m| m.ip_cidr.iter().cloned()).collect();
+    let mut warnings = lan_overlaps(&all_cidrs, &platform::local_ipv4_networks());
+    if multi {
+        let named: Vec<(&str, &[String])> = profiles.iter().zip(&merged).map(|(p, m)| (p.name.as_str(), m.ip_cidr.as_slice())).collect();
+        warnings.extend(exit_overlaps(&named));
+    }
     // Pangolin: the official client must be connected and the proxy reachable through it.
-    if let Some(g) = profile.pangolin.as_ref().filter(|_| profile.kind == ExitType::Pangolin) {
-        warnings.extend(exits::pangolin::precheck(g)?);
+    for p in &profiles {
+        if let Some(g) = p.pangolin.as_ref().filter(|_| p.kind == ExitType::Pangolin) {
+            warnings.extend(exits::pangolin::precheck(g)?);
+        }
     }
     for w in &warnings {
         logs::warn(w);
     }
     let exe = paths::singbox_exe();
     let api = ClashApi { port: singbox::free_port()?, secret: singbox::random_secret() };
-    let config = singbox::build_config(&profile, &merged, &Secrets { main, preshared_key: psk }, &api, &settings::load_or_default())?;
+    let exits: Vec<singbox::Exit> = profiles.iter().zip(&merged).zip(&secrets).map(|((profile, rules), secrets)| singbox::Exit { profile, rules, secrets }).collect();
+    let config = singbox::build_config_multi(&exits, &api, &settings::load_or_default())?;
+    drop(exits);
+    drop(secrets);
     singbox::check(&exe, &config)?;
 
     step(generation, &name, Step::Start)?;
@@ -330,38 +375,69 @@ fn run_connect(generation: u64, profile_id: Option<String>) -> Result<(), Failur
 
     step(generation, &name, Step::Tunnel)?;
     let mut last_error = None;
-    if profile.kind == ExitType::Cisco {
-        wait_established(&rx, &mut last_error)?;
+    let ciscos = profiles.iter().filter(|p| p.kind == ExitType::Cisco).count();
+    if ciscos > 0 {
+        wait_established(&rx, &mut last_error, ciscos)?;
     }
 
     step(generation, &name, Step::Probe)?;
-    let probe_ms = probe(generation, &api, &rx, &mut last_error).map_err(|f| match f {
-        Failure::Message(m) if m.is_empty() => Failure::Message(match profile.kind {
-            ExitType::Wireguard => "WireGuard 隧道没有反应（握手没有成功）。可能被当前网络阻挡：学校网络挡 WireGuard UDP，可以换手机热点试试。".into(),
-            ExitType::Pangolin => format!(
-                "经 Pangolin 连不到家里的代理，或代理拒绝了（测试网址 {} 在 30 秒内没有回应）。确认官方 Pangolin 客户端已连接、VPN-Server 虚拟机上的代理在运行、代理密码正确。",
-                singbox::PROBE_URL
-            ),
-            ExitType::Cisco => format!("隧道建立了，但流量过不去（测试网址 {} 在 30 秒内没有回应）。", singbox::PROBE_URL),
-        }),
-        other => other,
-    })?;
+    let infos: Vec<ExitInfo> = profiles.iter().enumerate().map(|(n, p)| ExitInfo { name: p.name.clone(), exit: p.kind, tag: singbox::exit_tag(n) }).collect();
+    let mut probe_ms = 0;
+    for (p, info) in profiles.iter().zip(&infos) {
+        let ms = probe(generation, &api, &info.tag, &rx, &mut last_error).map_err(|f| match f {
+            Failure::Message(m) if m.is_empty() => {
+                let why = match p.kind {
+                    ExitType::Wireguard => "WireGuard 隧道没有反应（握手没有成功）。可能被当前网络阻挡：学校网络挡 WireGuard UDP，可以换手机热点试试（Profile 页的“出口网卡”）。".into(),
+                    ExitType::Pangolin => format!(
+                        "经 Pangolin 连不到家里的代理，或代理拒绝了（测试网址 {} 在 30 秒内没有回应）。确认官方 Pangolin 客户端已连接、VPN-Server 虚拟机上的代理在运行、代理密码正确。",
+                        singbox::PROBE_URL
+                    ),
+                    ExitType::Cisco => format!("隧道建立了，但流量过不去（测试网址 {} 在 30 秒内没有回应）。", singbox::PROBE_URL),
+                };
+                Failure::Message(if multi { format!("「{}」：{why}", p.name) } else { why })
+            }
+            other => other,
+        })?;
+        if probe_ms == 0 {
+            probe_ms = ms;
+        }
+    }
 
     let since_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-    if !set_if_current(generation, Status::Connected { profile_name: name.clone(), exit: profile.kind, since_ms, probe_ms, warnings }) {
+    let status = Status::Connected { profile_name: name.clone(), exit: profiles[0].kind, since_ms, probe_ms, warnings, exits: infos.clone() };
+    if !set_if_current(generation, status) {
         return Err(Failure::Cancelled);
     }
     logs::info(format!("已连接：{name}，经 VPN 测试 {probe_ms} ms"));
-    let id = profile.id.clone();
+    let id = profiles[0].id.clone();
     thread::spawn(move || watch_exit(generation, rx, id));
     // Interface lines printed while starting are not a change.
     NETWORK_CHANGED.store(false, Ordering::Relaxed);
-    let (id, health_api) = (profile.id.clone(), api.clone());
-    thread::spawn(move || watch_health(generation, health_api, id));
+    let (id, health_api) = (profiles[0].id.clone(), api.clone());
+    let tags: Vec<(String, String)> = infos.into_iter().map(|i| (i.tag, if multi { format!("「{}」", i.name) } else { String::new() })).collect();
+    thread::spawn(move || watch_health(generation, health_api, id, tags));
     if let Some(app) = APP.get() {
         traffic::start(app.clone(), api, move || is_connected(generation));
     }
     Ok(())
+}
+
+/// Two exits with overlapping networks: the first exit's rule comes first and wins.
+fn exit_overlaps(exits: &[(&str, &[String])]) -> Vec<String> {
+    let mut out = Vec::new();
+    for (i, (a_name, a)) in exits.iter().enumerate() {
+        for (b_name, b) in &exits[i + 1..] {
+            for x in a.iter() {
+                let Some(xn) = config::parse_v4_cidr(x) else { continue };
+                for y in b.iter() {
+                    if config::parse_v4_cidr(y).is_some_and(|yn| config::v4_overlap(xn, yn)) {
+                        out.push(format!("「{a_name}」的网段 {x} 和「{b_name}」的网段 {y} 重叠：重叠的地址一律走「{a_name}」。"));
+                    }
+                }
+            }
+        }
+    }
+    out
 }
 
 /// A rule network (typically the home LAN) that overlaps this PC's own network never reaches the
@@ -432,12 +508,19 @@ fn strip_log_prefix(line: &str) -> &str {
     }
 }
 
-fn wait_established(rx: &Receiver<Ev>, last_error: &mut Option<String>) -> Result<(), Failure> {
+/// Waits for `count` Cisco tunnels (one per Cisco exit).
+fn wait_established(rx: &Receiver<Ev>, last_error: &mut Option<String>, count: usize) -> Result<(), Failure> {
     let deadline = Instant::now() + TUNNEL_TIMEOUT;
+    let mut left_tunnels = count;
     loop {
         let left = deadline.saturating_duration_since(Instant::now());
         match rx.recv_timeout(left) {
-            Ok(Ev::Established) => return Ok(()),
+            Ok(Ev::Established) => {
+                left_tunnels -= 1;
+                if left_tunnels == 0 {
+                    return Ok(());
+                }
+            }
             Ok(Ev::WaitingAuth) => {
                 return Err("服务器要求额外的登录信息（多半是“组别”）。请到“Profile”页填写组别，例如 Master Network。".into())
             }
@@ -452,7 +535,7 @@ fn wait_established(rx: &Receiver<Ev>, last_error: &mut Option<String>) -> Resul
 }
 
 /// Returns the delay in ms; Failure::Message("") means "timed out" (caller words it per exit type).
-fn probe(generation: u64, api: &ClashApi, rx: &Receiver<Ev>, last_error: &mut Option<String>) -> Result<u32, Failure> {
+fn probe(generation: u64, api: &ClashApi, tag: &str, rx: &Receiver<Ev>, last_error: &mut Option<String>) -> Result<u32, Failure> {
     let deadline = Instant::now() + PROBE_TIMEOUT;
     while Instant::now() < deadline {
         while let Ok(ev) = rx.try_recv() {
@@ -465,7 +548,7 @@ fn probe(generation: u64, api: &ClashApi, rx: &Receiver<Ev>, last_error: &mut Op
         if STATE.lock().map(|s| s.generation != generation).unwrap_or(true) {
             return Err(Failure::Cancelled);
         }
-        if let Some(ms) = api.probe_vpn(PROBE_EACH_MS) {
+        if let Some(ms) = api.probe_vpn(tag, PROBE_EACH_MS) {
             return Ok(ms);
         }
         thread::sleep(Duration::from_millis(500));
@@ -489,7 +572,8 @@ fn watch_exit(generation: u64, rx: Receiver<Ev>, profile_id: String) {
 /// While connected: notice sleep / wake (SPEC "系统睡眠后唤醒") and probe the exit every minute,
 /// which also catches a dead tunnel while sing-box keeps running. Sleep shows up as the wall
 /// clock jumping across one short tick, so no Windows power notification is needed.
-fn watch_health(generation: u64, api: ClashApi, profile_id: String) {
+/// `tags`: (outbound tag, name for messages) of every exit; one dead exit breaks the connection.
+fn watch_health(generation: u64, api: ClashApi, profile_id: String, tags: Vec<(String, String)>) {
     let mut last_wall = SystemTime::now();
     let mut last_check = Instant::now();
     loop {
@@ -513,30 +597,32 @@ fn watch_health(generation: u64, api: ClashApi, profile_id: String) {
             continue;
         };
         last_check = Instant::now();
-        match exit_alive(generation, &api, window) {
-            Some(true) if !after.is_empty() => logs::info(format!("{after} VPN 出口正常")),
-            Some(true) => {}
-            Some(false) => {
-                let msg = if after.is_empty() {
-                    format!("VPN 出口 {} 秒内都没有回应（隧道可能断了）。", window.as_secs())
-                } else {
-                    format!("{after}，VPN 出口 {} 秒内都没有回应。", window.as_secs())
-                };
-                return lost(generation, profile_id, msg);
+        for (tag, who) in &tags {
+            match exit_alive(generation, &api, tag, window) {
+                Some(true) if !after.is_empty() => logs::info(format!("{after} VPN 出口{who}正常")),
+                Some(true) => {}
+                Some(false) => {
+                    let msg = if after.is_empty() {
+                        format!("VPN 出口{who} {} 秒内都没有回应（隧道可能断了）。", window.as_secs())
+                    } else {
+                        format!("{after}，VPN 出口{who} {} 秒内都没有回应。", window.as_secs())
+                    };
+                    return lost(generation, profile_id, msg);
+                }
+                None => return,
             }
-            None => return,
         }
     }
 }
 
 /// Some(true): a probe got through; Some(false): silent for `window`; None: no longer connected.
-fn exit_alive(generation: u64, api: &ClashApi, window: Duration) -> Option<bool> {
+fn exit_alive(generation: u64, api: &ClashApi, tag: &str, window: Duration) -> Option<bool> {
     let deadline = Instant::now() + window;
     loop {
         if !is_connected(generation) {
             return None;
         }
-        if api.probe_vpn(PROBE_EACH_MS).is_some() {
+        if api.probe_vpn(tag, PROBE_EACH_MS).is_some() {
             return Some(true);
         }
         if Instant::now() >= deadline {

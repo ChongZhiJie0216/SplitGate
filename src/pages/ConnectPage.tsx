@@ -7,6 +7,7 @@ import Icon, { IconName } from "../components/Icon";
 import { TrafficBadges } from "./ConnectionsPage";
 import { T } from "../lib/text";
 import { duration } from "../lib/format";
+import { connectionProfiles } from "../lib/ipc";
 
 const L = T.connectPage;
 
@@ -14,7 +15,7 @@ export default function ConnectPage() {
   const { status, actionError, traffic, disconnect } = useStatus();
   const view = useProfiles((s) => s.view);
   const setPage = useApp((s) => s.setPage);
-  const active = view?.profiles.find((p) => p.profile.id === view.active)?.profile;
+  const chosen = connectionProfiles(view);
   const [now, setNow] = useState(Date.now());
   const retrying = status.state === "error" && status.retrying;
 
@@ -26,8 +27,12 @@ export default function ConnectPage() {
 
   // 等待自动重连时显示成黄色（和“连接中”一样），不是红色的“错误”。
   const look = retrying ? "connecting" : status.state;
-  const exitName =
-    status.state === "connected" ? `${status.profile_name}（${T.profile.types[status.exit]}）` : active ? `${active.name}（${T.profile.types[active.type]}）` : null;
+  // 连上时以后端说的为准（旧的后台服务没有 exits，只有第一个出口）；没连上时显示将要连的。
+  const exits =
+    status.state === "connected"
+      ? (status.exits?.map((e) => ({ name: e.name, type: e.exit })) ?? [{ name: status.profile_name, type: status.exit }])
+      : chosen.map((p) => ({ name: p.name, type: p.type }));
+  const exitName = exits.length ? exits.map((e) => `${e.name}（${T.profile.types[e.type]}）`).join(" + ") : null;
 
   return (
     <div className="card connect-card">
@@ -97,7 +102,7 @@ export default function ConnectPage() {
       )}
       {actionError && <div className="banner bad">{actionError}</div>}
 
-      {status.state === "disconnected" && <p className="muted">{active ? L.idle : L.noProfile}</p>}
+      {status.state === "disconnected" && <p className="muted">{chosen.length ? L.idle : L.noProfile}</p>}
       <div className="row">
         <ConnectButton big />
       </div>
