@@ -85,6 +85,10 @@ pub struct WireguardProfile {
     pub dns: Vec<String>,
     #[serde(default = "wg_mtu")]
     pub mtu: u16,
+    /// Adapter for the WireGuard packets (v0.28.0), e.g. a phone hotspot: school networks block
+    /// WireGuard's UDP (phase 0 V2, V9). None = system default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bind_interface: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -122,13 +126,16 @@ pub struct ProfilesFile {
     pub version: u32,
     #[serde(default)]
     pub active: Option<String>,
+    /// Second exit connected together with `active` (v0.28.0, phase 0 V9); never equal to it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub second: Option<String>,
     #[serde(default)]
     pub profiles: Vec<Profile>,
 }
 
 impl Default for ProfilesFile {
     fn default() -> Self {
-        Self { version: PROFILES_VERSION, active: None, profiles: Vec::new() }
+        Self { version: PROFILES_VERSION, active: None, second: None, profiles: Vec::new() }
     }
 }
 

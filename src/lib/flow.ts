@@ -1,7 +1,7 @@
 // 流量画布的数据：把连接列表整理成“程序 → 规则 → 出口”三列。
 // sing-box 只告诉我们命中了合并后的哪条规则，看不出是哪个规则集；这里按规则集的内容在前端再比一次，
 // 好让中间一列显示 Xbox / Steam / 家里内网 这样的名字。
-import type { Connection, RuleSet } from "./ipc";
+import { isVpn, type Connection, type RuleSet } from "./ipc";
 import { fileName } from "./format";
 
 export type Column = "program" | "rule" | "exit";
@@ -81,10 +81,14 @@ export function matchRuleSet(c: Connection, sets: RuleSet[]): RuleSet | null {
   );
 }
 
+/**
+ * setsFor(outbound)：这个出口（"vpn"、"vpn-2"）的 Profile 勾选、开着的规则集；
+ * exitName(outbound)：出口方块上写的 Profile 名。每个 VPN 出口一个方块（v0.28.0 起可以有两个）。
+ */
 export function buildFlow(
   connections: Connection[],
-  sets: RuleSet[],
-  profileName: string,
+  setsFor: (outbound: string) => RuleSet[],
+  exitName: (outbound: string) => string,
   L: FlowLabels,
 ): { nodes: FlowNode[]; edges: FlowEdge[]; members: Map<string, Connection[]> } {
   const nodes = new Map<string, FlowNode>();
@@ -117,7 +121,7 @@ export function buildFlow(
 
   for (const c of connections) {
     const bytes = c.upload + c.download;
-    const vpn = c.outbound === "vpn";
+    const vpn = isVpn(c.outbound);
     const key = c.process_path.toLowerCase();
     const prog = keep.has(key) ? `p:${key}` : "p:*other";
     const progLabel = keep.has(key) ? (c.process_path ? fileName(c.process_path) : L.system) : L.otherPrograms(dropped);
@@ -127,14 +131,14 @@ export function buildFlow(
     if (!vpn) {
       [rule, ruleLabel] = c.rule === "final" ? ["r:final", L.noRule] : ["r:direct", L.otherDirect];
     } else {
-      const set = matchRuleSet(c, sets);
+      const set = matchRuleSet(c, setsFor(c.outbound));
       [rule, ruleLabel] = set ? [`r:set:${set.id}`, set.name] : ["r:other", L.otherVpnRule];
     }
-    const exit = vpn ? "x:vpn" : "x:direct";
+    const exit = vpn ? `x:${c.outbound}` : "x:direct";
 
     add(prog, "program", progLabel, keep.has(key) ? c.process_path || L.system : progLabel, vpn, bytes);
     add(rule, "rule", ruleLabel, ruleLabel, vpn, bytes);
-    add(exit, "exit", vpn ? L.vpnExit(profileName) : L.directExit, "", vpn, bytes);
+    add(exit, "exit", vpn ? L.vpnExit(exitName(c.outbound)) : L.directExit, "", vpn, bytes);
     link(prog, rule, vpn, bytes);
     link(rule, exit, vpn, bytes);
     for (const id of [prog, rule, exit]) member(id, c);

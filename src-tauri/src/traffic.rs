@@ -15,7 +15,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 
 use crate::{block_detect, config, logs, paths};
-use crate::singbox::{ClashApi, VPN_TAG};
+use crate::singbox::{is_vpn_tag, ClashApi};
 
 const POLL: Duration = Duration::from_secs(1);
 
@@ -302,7 +302,7 @@ impl Rates {
         self.vpn_by_app.clear();
         for c in &snap.connections {
             let (pu, pd) = self.seen.get(&c.id).copied().unwrap_or((0, 0));
-            if c.outbound == VPN_TAG {
+            if is_vpn_tag(&c.outbound) {
                 let (du, dd) = (c.upload.saturating_sub(pu), c.download.saturating_sub(pd));
                 vpn_up += du;
                 vpn_down += dd;

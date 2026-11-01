@@ -80,6 +80,12 @@ pub fn set_active_profile(id: String) -> Result<ProfilesView, String> {
     edit_profiles(|f| profiles::set_active(f, &id))
 }
 
+/// The exit connected together with the active one (v0.28.0); None = only one.
+#[tauri::command]
+pub fn set_second_profile(id: Option<String>) -> Result<ProfilesView, String> {
+    edit_profiles(|f| profiles::set_second(f, id.as_deref()))
+}
+
 /// Load rules.json, apply `change`, save when needed, return the view.
 fn edit_rules(change: impl FnOnce(&mut rules::RulesFile) -> Result<bool, String>) -> Result<Vec<RuleSetView>, String> {
     let _guard = config::FILE_LOCK.lock().map_err(|_| "内部错误：文件锁")?;

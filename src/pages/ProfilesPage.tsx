@@ -122,7 +122,7 @@ export default function ProfilesPage() {
     const after = useProfiles.getState().view;
     const saved = after?.profiles.find((x) => x.profile.id === id);
     if (saved) select(saved.profile, saved.has_secret);
-    if (after?.active === id) markStale();
+    if (after?.active === id || after?.second === id) markStale();
     setMsg({ ok: true, text: L.saved });
   };
 
@@ -153,6 +153,7 @@ export default function ProfilesPage() {
                 <span>{profile.name}</span>
                 <span className="tag">{L.types[profile.type]}</span>
                 {view.active === profile.id && <span className="tag good">{L.active}</span>}
+                {view.second === profile.id && <span className="tag good">{L.secondTag}</span>}
               </button>
             </li>
           ))}
@@ -294,6 +295,11 @@ export default function ProfilesPage() {
               }}
               onError={(t) => setMsg({ ok: false, text: t })}
             />
+          )}
+          {draft.type === "wireguard" && draft.wireguard && (
+            <Field label={L.wireguard.bind} hint={L.wireguard.bindHint}>
+              <input value={draft.wireguard.bind_interface ?? ""} onChange={(e) => patch("wireguard", { bind_interface: e.target.value || null })} />
+            </Field>
           )}
 
           {msg && <div className={msg.ok ? "banner good" : "banner bad"}>{msg.text}</div>}

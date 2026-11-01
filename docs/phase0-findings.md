@@ -454,6 +454,31 @@ Microsoft 账号本身能登录；PrismLauncher（Minecraft 登录）、Steam �
 
 ---
 
+## V9 同时连两个出口 — ✅ Cisco + WireGuard 通过（2026-11-01，v0.28.0 已实现并实测通过）；其他组合待测
+
+维护者要求（2026-11-01）：在 C 点同时连 A、B 两个 VPN 服务器。维护者定：
+- 会用到的组合是 WireGuard + WireGuard、Cisco + WireGuard / Pangolin、Cisco + Cisco；Pangolin + 其他不大用。
+- 用法选“甲”：顶部“出口”可以勾两个，各自用自己 Profile 里勾选的规则集。
+- A、B 两边的家里内网网段不一样。
+
+云端预查：两个 `openconnect` endpoint 加一个 `wireguard` endpoint 放在同一个配置里，Linux 版 sing-box 1.14.4 `check` 通过。是否真的能同时连上，要在 Windows 上实测。
+
+文件：`phase0/v9-two-exits/`
+- `run.ps1`（Windows 管理员）：一个 sing-box 带 `vpn-a`、`vpn-b` 两个出口（各是 Cisco 或 WireGuard）。Cisco 密码在这里隐藏输入，WireGuard 从你自己的 `.conf` 读取，都只经 stdin 交给 sing-box。只有测试域名（A：ifconfig.me，B：api.ipify.org）和给的网段（`-ACidrs` / `-BCidrs`）走各自出口，其他直连。加 `-CheckOnly` 只检查配置，不连线。
+- `test.ps1`（第二个 PowerShell）：分别经 A、B、直连查公网 IP，三个要都不一样；`-Probe <IP>:<端口>` 试连两边家里的设备。
+- `cleanup.ps1`：同 `cleanup-all.ps1 -Apply`。
+
+实测记录（2026-11-01，维护者在学校网络，Windows）：
+- 第 1、2 次：A（Cisco）`legacy AnyConnect authentication returned HTTP 404`，原因是命令里没给组别（`-AGroup`）；B（WireGuard）包发出去没有回音，原因同 V2：学校网络挡 WireGuard 的 UDP。还发现 `test.ps1` 用单纯 TCP 连接试家里设备不算数（sing-box 的 TUN 先接住连接），改成网页请求。
+- 第 3 次：A = Cisco（补上组别），B = WireGuard。`test.ps1`：经 A、经 B、直连是三个不同的公网 IP（PASS）；两边家里的设备（各一个网页）都回 HTTP 200。**一个 sing-box 同时带一个 OpenConnect 和一个 WireGuard endpoint 可以用，分流各走各的。**
+- 对实现的影响：学校网络下 WireGuard 出口要能指定网卡（例如手机热点），或者改用走 TCP 的出口（Cisco / Pangolin）。
+
+要看的：
+1. Cisco + WireGuard：两个出口都连上，三个 IP 都不一样，两边家里的设备都连得到。
+2. Cisco + Cisco（有第二台 Cisco 服务器时）：同一个 sing-box 里两个 OpenConnect 能不能同时登录、同时用。
+3. WireGuard + WireGuard：同上。
+4. 其中一个出口断线（例如在服务器那端断开）时，另一个还能不能用，sing-box 日志怎么写。
+
 ## 第 3 阶段补记：openconnect.exe 备用做法 — 不需要（2026-10-26）
 
 V3b 没做（维护者定跳过）。第 3 阶段评估后结论是不再需要，理由和“什么时候再考虑”写在 SPEC 第 3 阶段。另外第 1 阶段已经实测：便携版只附 `sing-box.exe` 就能建 TUN，Wintun 不用另附。所以 `third_party/fetch.ps1` 默认只下载 sing-box，openconnect / Wintun / Olm 改成 `-All` 才下载。

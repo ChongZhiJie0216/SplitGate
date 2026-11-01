@@ -31,7 +31,9 @@ export default function RulesPage() {
   const { view, run: runProfiles } = useProfiles();
   const markStale = useStatus((s) => s.markStale);
   const active = view?.profiles.find((p) => p.profile.id === view.active)?.profile;
-  const used = (id: string) => !active || active.ruleset_ids.includes(id);
+  // “同时连”的第二个出口勾了也算在用；提示和“勾选”按钮只针对使用中的那个。
+  const chosen = ipc.connectionProfiles(view);
+  const used = (id: string) => !active || chosen.some((p) => p.ruleset_ids.includes(id));
 
   useEffect(() => {
     load();

@@ -25,12 +25,14 @@ pub struct ProfileView {
 #[derive(Serialize, Debug)]
 pub struct ProfilesView {
     pub active: Option<String>,
+    pub second: Option<String>,
     pub profiles: Vec<ProfileView>,
 }
 
 pub fn view(file: &ProfilesFile) -> ProfilesView {
     ProfilesView {
         active: file.active.clone(),
+        second: file.second.clone(),
         profiles: file
             .profiles
             .iter()
@@ -136,8 +138,12 @@ pub fn delete(file: &mut ProfilesFile, id: &str) -> Result<(), String> {
     for acc in [credentials::main_account(&p), credentials::psk_account(&p)].into_iter().flatten() {
         credentials::delete(&acc)?;
     }
+    if file.second.as_deref() == Some(id) {
+        file.second = None;
+    }
     if file.active.as_deref() == Some(id) {
-        file.active = file.profiles.first().map(|p| p.id.clone());
+        // The second exit moves up rather than a random profile becoming active.
+        file.active = file.second.take().or_else(|| file.profiles.first().map(|p| p.id.clone()));
     }
     Ok(())
 }
@@ -146,8 +152,36 @@ pub fn set_active(file: &mut ProfilesFile, id: &str) -> Result<(), String> {
     if !file.profiles.iter().any(|p| p.id == id) {
         return Err("找不到这个 Profile".into());
     }
+    if file.second.as_deref() == Some(id) {
+        file.second = None;
+    }
     file.active = Some(id.to_string());
     Ok(())
+}
+
+/// The exit connected together with the active one; None = only one exit.
+pub fn set_second(file: &mut ProfilesFile, id: Option<&str>) -> Result<(), String> {
+    if let Some(id) = id {
+        if !file.profiles.iter().any(|p| p.id == id) {
+            return Err("找不到这个 Profile".into());
+        }
+        if file.active.as_deref() == Some(id) {
+            return Err("第二个出口不能和第一个相同".into());
+        }
+    }
+    file.second = id.map(str::to_string);
+    Ok(())
+}
+
+/// The profiles one connection uses: `first` (or the active one), then the second exit if set.
+pub fn connection_profiles(file: &ProfilesFile, first: Option<&str>) -> Result<Vec<Profile>, String> {
+    let id = first.or(file.active.as_deref()).ok_or("还没有 Profile。先到“Profile”页新建一个。")?;
+    let find = |id: &str| file.profiles.iter().find(|p| p.id == id).cloned();
+    let mut out = vec![find(id).ok_or("找不到这个 Profile")?];
+    if let Some(s) = file.second.as_deref().filter(|s| *s != id) {
+        out.push(find(s).ok_or("找不到第二个出口的 Profile，请到顶部重新选择")?);
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -189,6 +223,38 @@ mod tests {
         delete(&mut f, "school").unwrap();
         assert_eq!(get("school:user02").unwrap(), None);
         assert_eq!(f.active, None);
+    }
+
+    #[test]
+    fn second_exit() {
+        let mut f = ProfilesFile::default();
+        for id in ["a", "b", "c"] {
+            f.profiles.push(cisco(id));
+        }
+        f.active = Some("a".into());
+        assert!(set_second(&mut f, Some("a")).is_err(), "not the active one");
+        assert!(set_second(&mut f, Some("x")).is_err());
+        set_second(&mut f, Some("b")).unwrap();
+        let ids = |f: &ProfilesFile, first| connection_profiles(f, first).unwrap().into_iter().map(|p| p.id).collect::<Vec<_>>();
+        assert_eq!(ids(&f, None), vec!["a", "b"]);
+        assert_eq!(ids(&f, Some("b")), vec!["b"], "never the same exit twice");
+
+        // Making the second one active clears it.
+        set_active(&mut f, "b").unwrap();
+        assert_eq!((f.active.as_deref(), f.second.as_deref()), (Some("b"), None));
+        // Deleting the active one: the second exit takes its place. (No Cisco settings = no
+        // credential to delete, so the shared mock store is not needed.)
+        for p in &mut f.profiles {
+            p.cisco = None;
+        }
+        set_second(&mut f, Some("c")).unwrap();
+        delete(&mut f, "b").unwrap();
+        assert_eq!((f.active.as_deref(), f.second.as_deref()), (Some("c"), None));
+        set_second(&mut f, Some("a")).unwrap();
+        delete(&mut f, "a").unwrap();
+        assert_eq!((f.active.as_deref(), f.second.as_deref()), (Some("c"), None));
+        set_second(&mut f, None).unwrap();
+        assert_eq!(ids(&f, None), vec!["c"]);
     }
 
     #[test]

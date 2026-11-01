@@ -12,7 +12,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use crate::config::Profile;
-use crate::exits::{self, ExitParts};
+use crate::exits;
 use crate::rules::RuleSet;
 use crate::settings::Settings;
 
@@ -99,14 +99,60 @@ pub fn host_of(server: &str) -> String {
     s.rsplit_once(':').map(|(h, _)| h).unwrap_or(s).to_string()
 }
 
-pub fn build_config(
-    profile: &Profile,
-    rules: &MergedRules,
-    secrets: &Secrets,
-    api: &ClashApi,
-    settings: &Settings,
-) -> Result<Value, String> {
-    let ExitParts { endpoint, dns: vpn_dns, server_host, is_outbound, local_dns } = exits::adapter(profile)?.parts(secrets)?;
+/// One VPN exit of a connection: its profile, merged rules and secrets. A connection can have
+/// several (v0.28.0, phase 0 V9); the first keeps the tags "vpn" / "vpn-dns".
+pub struct Exit<'a> {
+    pub profile: &'a Profile,
+    pub rules: &'a MergedRules,
+    pub secrets: &'a Secrets,
+}
+
+/// Outbound tag of the n-th exit (0-based): "vpn", "vpn-2", ...
+pub fn exit_tag(n: usize) -> String {
+    if n == 0 {
+        VPN_TAG.to_string()
+    } else {
+        format!("{VPN_TAG}-{}", n + 1)
+    }
+}
+
+/// Connections carried by any exit (the outbound is "vpn" or "vpn-2" ...).
+pub fn is_vpn_tag(outbound: &str) -> bool {
+    outbound == VPN_TAG || outbound.strip_prefix("vpn-").is_some_and(|n| n.parse::<u8>().is_ok())
+}
+
+fn dns_tag(n: usize) -> String {
+    if n == 0 {
+        "vpn-dns".to_string()
+    } else {
+        format!("vpn-dns-{}", n + 1)
+    }
+}
+
+/// One exit only (tests; the app always goes through `build_config_multi`).
+#[cfg(test)]
+pub fn build_config(profile: &Profile, rules: &MergedRules, secrets: &Secrets, api: &ClashApi, settings: &Settings) -> Result<Value, String> {
+    build_config_multi(&[Exit { profile, rules, secrets }], api, settings)
+}
+
+/// Rules of earlier exits come first: a domain in both goes to the first exit.
+pub fn build_config_multi(exits: &[Exit], api: &ClashApi, settings: &Settings) -> Result<Value, String> {
+    if exits.is_empty() {
+        return Err("没有出口".into());
+    }
+    let mut parts = Vec::new();
+    for (n, e) in exits.iter().enumerate() {
+        let mut p = exits::adapter(e.profile)?.parts(e.secrets)?;
+        let tag = exit_tag(n);
+        p.endpoint["tag"] = json!(tag);
+        p.dns["tag"] = json!(dns_tag(n));
+        for key in ["detour", "endpoint"] {
+            if p.dns.get(key).is_some() {
+                p.dns[key] = json!(tag);
+            }
+        }
+        parts.push(p);
+    }
 
     let mut route_rules = vec![
         json!({ "action": "sniff" }),
@@ -114,44 +160,48 @@ pub fn build_config(
         // Programs that try IPv6 are refused at once and fall back to IPv4 (SPEC "网络策略").
         json!({ "ip_version": 6, "action": "reject" }),
     ];
-    // Never send the VPN server itself into the VPN, even if a rule would match it.
-    let server_rule = if server_host.parse::<IpAddr>().is_ok() {
-        json!({ "ip_cidr": [server_host], "action": "route", "outbound": "direct" })
-    } else {
-        json!({ "domain": [server_host], "action": "route", "outbound": "direct" })
-    };
-    route_rules.push(server_rule);
-
-    // One rule each: sing-box ANDs process_path and process_name inside one rule, so together a
-    // connection had to match both lists and practically nothing matched (fixed v0.24.1).
-    for (key, list) in [("process_path", &rules.process_path), ("process_name", &rules.process_name)] {
-        if !list.is_empty() {
-            route_rules.push(json!({ key: list, "action": "route", "outbound": VPN_TAG }));
-        }
-    }
-    // domain_suffix / domain_keyword / ip_cidr are OR-ed inside one sing-box rule.
-    let mut addr = json!({ "action": "route", "outbound": VPN_TAG });
-    let mut has_addr = false;
-    for (key, list) in [("domain_suffix", &rules.domain_suffix), ("domain_keyword", &rules.domain_keyword), ("ip_cidr", &rules.ip_cidr)] {
-        if !list.is_empty() {
-            addr[key] = json!(list);
-            has_addr = true;
-        }
-    }
-    if has_addr {
-        route_rules.push(addr);
+    // Never send a VPN server itself into a VPN, even if a rule would match it.
+    for p in &parts {
+        route_rules.push(if p.server_host.parse::<IpAddr>().is_ok() {
+            json!({ "ip_cidr": [p.server_host], "action": "route", "outbound": "direct" })
+        } else {
+            json!({ "domain": [p.server_host], "action": "route", "outbound": "direct" })
+        });
     }
 
     let mut dns_rules = Vec::new();
-    if !rules.domain_suffix.is_empty() || !rules.domain_keyword.is_empty() {
-        let mut d = json!({ "server": "vpn-dns" });
-        if !rules.domain_suffix.is_empty() {
-            d["domain_suffix"] = json!(rules.domain_suffix);
+    for (n, e) in exits.iter().enumerate() {
+        let (rules, tag) = (e.rules, exit_tag(n));
+        // One rule each: sing-box ANDs process_path and process_name inside one rule, so together a
+        // connection had to match both lists and practically nothing matched (fixed v0.24.1).
+        for (key, list) in [("process_path", &rules.process_path), ("process_name", &rules.process_name)] {
+            if !list.is_empty() {
+                route_rules.push(json!({ key: list, "action": "route", "outbound": tag }));
+            }
         }
-        if !rules.domain_keyword.is_empty() {
-            d["domain_keyword"] = json!(rules.domain_keyword);
+        // domain_suffix / domain_keyword / ip_cidr are OR-ed inside one sing-box rule.
+        let mut addr = json!({ "action": "route", "outbound": tag });
+        let mut has_addr = false;
+        for (key, list) in [("domain_suffix", &rules.domain_suffix), ("domain_keyword", &rules.domain_keyword), ("ip_cidr", &rules.ip_cidr)] {
+            if !list.is_empty() {
+                addr[key] = json!(list);
+                has_addr = true;
+            }
         }
-        dns_rules.push(d);
+        if has_addr {
+            route_rules.push(addr);
+        }
+
+        if !rules.domain_suffix.is_empty() || !rules.domain_keyword.is_empty() {
+            let mut d = json!({ "server": dns_tag(n) });
+            if !rules.domain_suffix.is_empty() {
+                d["domain_suffix"] = json!(rules.domain_suffix);
+            }
+            if !rules.domain_keyword.is_empty() {
+                d["domain_keyword"] = json!(rules.domain_keyword);
+            }
+            dns_rules.push(d);
+        }
     }
 
     let mut route = json!({
@@ -165,22 +215,26 @@ pub fn build_config(
 
     // "local" (system resolver) is right for Cisco / WireGuard (phase 0 V1–V6); Pangolin asks the
     // physical adapter's DNS directly (V8).
-    let local = match local_dns {
+    let local = match parts.iter().find_map(|p| p.local_dns.clone()) {
         Some(ip) => json!({ "type": "udp", "tag": "local", "server": ip }),
         None => json!({ "type": "local", "tag": "local" }),
     };
     let mut outbounds = vec![json!({ "type": "direct", "tag": "direct" })];
     let mut endpoints = Vec::new();
-    if is_outbound {
-        outbounds.push(endpoint);
-    } else {
-        endpoints.push(endpoint);
+    let mut dns_servers = vec![local];
+    for p in parts {
+        dns_servers.push(p.dns);
+        if p.is_outbound {
+            outbounds.push(p.endpoint);
+        } else {
+            endpoints.push(p.endpoint);
+        }
     }
 
     let mut config = json!({
         "log": { "level": settings.singbox_log_level, "timestamp": true },
         "dns": {
-            "servers": [ local, vpn_dns ],
+            "servers": dns_servers,
             "rules": dns_rules,
             "final": "local",
             "strategy": "ipv4_only",
@@ -275,8 +329,8 @@ impl ClashApi {
         parse_response(&buf)
     }
 
-    /// Delay test through the VPN endpoint: Some(ms) when a request made it through the tunnel.
-    pub fn probe_vpn(&self, timeout_ms: u32) -> Option<u32> {
+    /// Delay test through one exit ("vpn", "vpn-2" ...): Some(ms) when a request made it through the tunnel.
+    pub fn probe_vpn(&self, tag: &str, timeout_ms: u32) -> Option<u32> {
         let url: String = PROBE_URL
             .bytes()
             .map(|b| match b {
@@ -284,7 +338,7 @@ impl ClashApi {
                 _ => format!("%{b:02X}"),
             })
             .collect();
-        let path = format!("/proxies/{VPN_TAG}/delay?timeout={timeout_ms}&url={url}");
+        let path = format!("/proxies/{tag}/delay?timeout={timeout_ms}&url={url}");
         let (status, body) = self.get(&path, Duration::from_millis(timeout_ms as u64 + 2000)).ok()?;
         if status != 200 {
             return None;
@@ -344,6 +398,7 @@ mod tests {
             peer: WireguardPeer { endpoint: "home.example.com:51820".into(), public_key: "B".repeat(43) + "=", persistent_keepalive: Some(25) },
             dns: vec!["10.8.0.1".into()],
             mtu: 1420,
+            bind_interface: None,
         });
         p
     }
@@ -489,6 +544,50 @@ mod tests {
         let cc = build_config(&cisco("c"), &MergedRules::default(), &secrets(), &api(), &Settings::default()).unwrap();
         assert_eq!(cc["endpoints"][0]["type"], "openconnect");
         assert_eq!(cc["dns"]["servers"][0]["type"], "local");
+    }
+
+    #[test]
+    fn two_exits_get_their_own_tags_rules_and_dns() {
+        let mut a = cisco("school");
+        a.name = "学校".into();
+        let w = wg_profile();
+        let ra = MergedRules { domain_suffix: vec!["xboxlive.com".into()], ip_cidr: vec!["192.168.2.0/24".into()], ..Default::default() };
+        let rb = MergedRules { domain_suffix: vec!["example.org".into()], process_name: vec!["app.exe".into()], ip_cidr: vec!["192.168.200.0/24".into()], ..Default::default() };
+        let sb = Secrets { main: "A".repeat(43) + "=", preshared_key: None };
+        let c = build_config_multi(&[Exit { profile: &a, rules: &ra, secrets: &secrets() }, Exit { profile: &w, rules: &rb, secrets: &sb }], &api(), &Settings::default()).unwrap();
+
+        let eps = c["endpoints"].as_array().unwrap();
+        assert_eq!((eps[0]["tag"].as_str(), eps[0]["type"].as_str()), (Some("vpn"), Some("openconnect")));
+        assert_eq!((eps[1]["tag"].as_str(), eps[1]["type"].as_str()), (Some("vpn-2"), Some("wireguard")));
+        let dns = c["dns"]["servers"].as_array().unwrap();
+        assert_eq!(dns.len(), 3);
+        assert_eq!((dns[1]["tag"].as_str(), dns[1]["endpoint"].as_str()), (Some("vpn-dns"), Some("vpn")));
+        assert_eq!((dns[2]["tag"].as_str(), dns[2]["detour"].as_str()), (Some("vpn-dns-2"), Some("vpn-2")));
+        assert_eq!(c["dns"]["rules"][1]["server"], "vpn-dns-2");
+
+        let rules = c["route"]["rules"].as_array().unwrap();
+        let to = |tag: &str| rules.iter().filter(|r| r["outbound"] == tag).count();
+        assert_eq!((to("vpn"), to("vpn-2")), (1, 2));
+        // Both servers stay direct, before any exit rule.
+        let first_exit = rules.iter().position(|r| r["outbound"] == "vpn").unwrap();
+        let directs = rules[..first_exit].iter().filter(|r| r["outbound"] == "direct").count();
+        assert_eq!(directs, 2);
+        // The first exit's rules come first.
+        assert!(first_exit < rules.iter().position(|r| r["outbound"] == "vpn-2").unwrap());
+        assert!(is_vpn_tag("vpn") && is_vpn_tag("vpn-2") && !is_vpn_tag("direct") && !is_vpn_tag("vpn-dns"));
+
+        if let Ok(dir) = std::env::var("SPLITGATE_DUMP_CONFIG") {
+            std::fs::write(std::path::Path::new(&dir).join("two-exits.json"), c.to_string()).unwrap();
+        }
+    }
+
+    #[test]
+    fn wireguard_bind_interface() {
+        let mut w = wg_profile();
+        w.wireguard.as_mut().unwrap().bind_interface = Some("Wi-Fi".into());
+        let s = Secrets { main: "A".repeat(43) + "=", preshared_key: None };
+        let c = build_config(&w, &MergedRules::default(), &s, &api(), &Settings::default()).unwrap();
+        assert_eq!(c["endpoints"][0]["bind_interface"], "Wi-Fi");
     }
 
     /// The generated configs must pass the pinned sing-box's own check (skipped when it is not downloaded).

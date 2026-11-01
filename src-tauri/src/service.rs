@@ -54,8 +54,19 @@ pub(crate) enum Request {
         main: String,
         #[serde(default)]
         preshared_key: Option<String>,
+        /// The second exit (v0.28.0); an older service ignores it.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        extra: Vec<ExitSecrets>,
     },
     Disconnect,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub(crate) struct ExitSecrets {
+    pub profile_id: String,
+    pub main: String,
+    #[serde(default)]
+    pub preshared_key: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
@@ -503,11 +514,12 @@ mod win {
             return r;
         }
         match req {
-            Request::Connect { profile_id, main, preshared_key } => {
+            Request::Connect { profile_id, main, preshared_key, extra } => {
                 OWNER.store(id, Ordering::SeqCst);
                 service_log(&format!("收到连接请求（连接 #{id}）"));
                 let secrets = crate::singbox::Secrets { main, preshared_key };
-                match crate::supervisor::connect_with_secrets(profile_id, secrets) {
+                let extra = extra.into_iter().map(|e| (e.profile_id, crate::singbox::Secrets { main: e.main, preshared_key: e.preshared_key })).collect();
+                match crate::supervisor::connect_with_secrets(profile_id, secrets, extra) {
                     Ok(()) => Reply::ok(),
                     Err(e) => Reply::err(e),
                 }
@@ -859,7 +871,14 @@ mod tests {
     #[test]
     fn protocol_shapes() {
         let c = parse_request(r#"{"cmd":"connect","profile_id":"school","main":"pw"}"#).unwrap();
-        assert_eq!(c, Request::Connect { profile_id: "school".into(), main: "pw".into(), preshared_key: None });
+        assert_eq!(c, Request::Connect { profile_id: "school".into(), main: "pw".into(), preshared_key: None, extra: vec![] });
+        let two = Request::Connect {
+            profile_id: "school".into(),
+            main: "pw".into(),
+            preshared_key: None,
+            extra: vec![ExitSecrets { profile_id: "home".into(), main: "key".into(), preshared_key: Some("psk".into()) }],
+        };
+        assert_eq!(parse_request(&serde_json::to_string(&two).unwrap()).unwrap(), two);
         let ev = serde_json::to_value(Event::Status { status: crate::supervisor::Status::Disconnected, api: None }).unwrap();
         assert_eq!(ev["event"], "status");
         assert_eq!(ev["status"]["state"], "disconnected");

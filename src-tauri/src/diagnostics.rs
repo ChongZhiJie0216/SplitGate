@@ -186,16 +186,17 @@ fn saved_secrets(profiles: &ProfilesFile) -> Vec<String> {
     out
 }
 
-/// What the active profile would hand to sing-box now, with *** for every secret.
+/// What the active profile (and the second exit) would hand to sing-box now, with *** for every secret.
 fn singbox_config(profiles: &ProfilesFile, scrub: &Scrubber) -> String {
-    let Some(p) = profiles.active.as_ref().and_then(|id| profiles.profiles.iter().find(|p| &p.id == id)) else {
+    let Ok(list) = crate::profiles::connection_profiles(profiles, None) else {
         return "（没有使用中的 Profile）".into();
     };
     let rule_sets = rules::load().map(|r| r.rulesets).unwrap_or_default();
-    let merged = singbox::merge_rules(p, &rule_sets);
-    let secrets = Secrets { main: "***".into(), preshared_key: credentials::psk_account(p).map(|_| "***".into()) };
+    let merged: Vec<_> = list.iter().map(|p| singbox::merge_rules(p, &rule_sets)).collect();
+    let secrets: Vec<_> = list.iter().map(|p| Secrets { main: "***".into(), preshared_key: credentials::psk_account(p).map(|_| "***".into()) }).collect();
+    let exits: Vec<_> = list.iter().zip(&merged).zip(&secrets).map(|((profile, rules), secrets)| singbox::Exit { profile, rules, secrets }).collect();
     let api = ClashApi { port: 0, secret: "***".into() };
-    match singbox::build_config(p, &merged, &secrets, &api, &settings::load_or_default()) {
+    match singbox::build_config_multi(&exits, &api, &settings::load_or_default()) {
         Ok(v) => scrub.json(v),
         Err(e) => scrub.text(&format!("（生成失败：{e}）")),
     }
@@ -289,6 +290,7 @@ mod tests {
                 peer: WireguardPeer { endpoint: "home.example.com:51820".into(), public_key: "pub".into(), persistent_keepalive: None },
                 dns: vec![],
                 mtu: 1420,
+                bind_interface: None,
             }),
         });
         f

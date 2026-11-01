@@ -168,6 +168,7 @@ singbox.rs 按 `ExitReady` 的种类生成 `vpn` 出口；状态机中的“等�
 - `experimental.clash_api`：只听 127.0.0.1 的随机端口，随机 secret，供连接列表页使用。
 - `services`：Cisco 出口时加 `api` 服务（见组件 1）。
 - 防回环：VPN 服务器地址固定走 `direct`。
+- **两个出口**（v0.28.0，第 0 阶段 V9 实测 Cisco + WireGuard 通过）：第一个出口照旧是 `vpn` / `vpn-dns`，第二个是 `vpn-2` / `vpn-dns-2`（`singbox::build_config_multi`）。所有出口的服务器地址先固定走 `direct`，再依次放第一个、第二个出口的规则，同一个域名或网段两边都有时第一个优先。`local` DNS：哪个出口要求（Pangolin）就用它的。
 - 先 `check` 通过才 `run`。
 
 ### 4. 凭据（credentials.rs）
@@ -259,6 +260,7 @@ Profile（`pangolin` 子对象）：`interface`（默认 `Pangolin`）、`proxy_
 {
   "version": 1,
   "active": "school-vpn",
+  "second": "home-wg",
   "profiles": [
     {
       "id": "school-vpn",
@@ -285,7 +287,7 @@ Profile（`pangolin` 子对象）：`interface`（默认 `Pangolin`）、`proxy_
 }
 ```
 
-`type` 决定使用哪个 ExitAdapter，并只读取同名的子对象。`home_cidrs`（v0.10.0–v0.26，家里内网网段）已拿掉：v0.27.0 起读到它时，每一组不同的网段变成一个规则集（`id` 为 `home-lan`、`home-lan-2`……，名称“家里内网”，只有 `ip_cidr`），在原来的 Profile 里勾选，再清掉这个栏位（`rules::migrate_home_cidrs`；界面启动时和每次连接前各跑一次，后台服务先连接也不会漏）。连接时把勾选的规则集里所有 `ip_cidr` 和本机各网卡的 IPv4 网段比较，重叠就在“已连接”状态里带 `warnings` 提示（那时流量会留在本地网络）。Cisco 的 `mfa` 取值为 `none` / `duo-push` / `saml`（MVP 只有 `none`）；`bind_interface` 为 `null` 表示系统自动。Cisco 密码、WireGuard 私钥、Pangolin 的家里代理密码存在 keyring。同一时间只有 `active` 指向的出口生效。
+`type` 决定使用哪个 ExitAdapter，并只读取同名的子对象。`second`（v0.28.0，可省略）：和 `active` 同时连的第二个出口，不能等于 `active`；把它设为 `active` 时清掉，删掉 `active` 时它顶上。WireGuard 的 `bind_interface`（v0.28.0，可省略）：WireGuard 封包走的网卡（例如手机热点；学校网络挡 WireGuard UDP，见第 0 阶段 V2、V9）。`home_cidrs`（v0.10.0–v0.26，家里内网网段）已拿掉：v0.27.0 起读到它时，每一组不同的网段变成一个规则集（`id` 为 `home-lan`、`home-lan-2`……，名称“家里内网”，只有 `ip_cidr`），在原来的 Profile 里勾选，再清掉这个栏位（`rules::migrate_home_cidrs`；界面启动时和每次连接前各跑一次，后台服务先连接也不会漏）。连接时把勾选的规则集里所有 `ip_cidr` 和本机各网卡的 IPv4 网段比较，重叠就在“已连接”状态里带 `warnings` 提示（那时流量会留在本地网络）。Cisco 的 `mfa` 取值为 `none` / `duo-push` / `saml`（MVP 只有 `none`）；`bind_interface` 为 `null` 表示系统自动。Cisco 密码、WireGuard 私钥、Pangolin 的家里代理密码存在 keyring。同一时间只有 `active` 指向的出口生效。
 
 **rules.json**：规则集（v0.27.0 起没有内置预设，新的 rules.json 是空的；旧版本复制进来的 Xbox / Minecraft / Steam 留着，当普通规则集，可以删）
 
@@ -355,6 +357,7 @@ Profile（`pangolin` 子对象）：`interface`（默认 `Pangolin`）、`proxy_
 | `list_profiles` | 无 | Profile\[\] |
 | `save_profile` | Profile, secret? | 无（secret = Cisco 密码或 WireGuard 私钥） |
 | `delete_profile` | id | 无 |
+| `set_second_profile` | id 或 null | ProfilesView（v0.28.0：同时连的第二个出口） |
 | `list_rulesets` | 无 | RuleSet\[\] |
 | `save_ruleset` | RuleSet | 无 |
 | `list_running_processes` | 无 | {name, path}\[\]（给“加程序”用） |
@@ -499,6 +502,10 @@ Bluewhale 只用来参考产品形态，不复制它的代码、图标、名称�
   - openconnect.exe 的代价：官方没有发布 Windows 版（只有 GitLab CI 产物，没有签名，CI 产物还会过期）；要另附 wintun.dll、GnuTLS 等 DLL 和它们的许可证（LGPL）；要写 JScript 连接脚本；它会自己建网卡、改路由，和 sing-box 的 TUN 抢流量（Pangolin Exit Node 那一类麻烦，见组件 2）。
   - 什么时候再考虑：sing-box 升级后 OpenConnect endpoint 被移除或不能用；服务器换成 sing-box 不支持的类型或登录方式；需要 sing-box 不支持的 MFA。
   - 连带的改变：`third_party/fetch.ps1` 默认只下载 sing-box（不再需要 7-Zip）；openconnect、Wintun、Olm 只给第 0 阶段脚本用，`fetch.ps1 -All` 才下载。
+
+### 之后的新要求
+
+- [x] 同时连两个出口（维护者 2026-11-01 要求；第 0 阶段 V9 实测 Cisco + WireGuard 通过；v0.28.0）：顶部“同时连”选第二个 Profile，各自用自己的规则集；连接状态带 `exits`；后台服务的 `connect` 请求带 `extra`（第二个出口的凭据）；任何一个出口的健康检查失败就整个重新连接。WireGuard 加“出口网卡”。
 
 ### 最后：Pangolin（备用出口）
 

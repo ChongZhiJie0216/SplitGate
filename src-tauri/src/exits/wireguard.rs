@@ -31,7 +31,7 @@ impl ExitAdapter for WireguardProfile {
         if let Some(k) = self.peer.persistent_keepalive {
             peer["persistent_keepalive_interval"] = json!(k);
         }
-        let ep = json!({
+        let mut ep = json!({
             "type": "wireguard",
             "tag": VPN_TAG,
             "address": self.address,
@@ -39,6 +39,9 @@ impl ExitAdapter for WireguardProfile {
             "mtu": self.mtu,
             "peers": [peer],
         });
+        if let Some(i) = self.bind_interface.as_deref().map(str::trim).filter(|i| !i.is_empty()) {
+            ep["bind_interface"] = json!(i);
+        }
         let server = self
             .dns
             .iter()
@@ -116,6 +119,7 @@ pub fn parse_conf(text: &str) -> Result<ImportedConf, String> {
             },
             dns,
             mtu: mtu.unwrap_or(1420),
+            bind_interface: None,
         },
         private_key,
         preshared_key: psk,

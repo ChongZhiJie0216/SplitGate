@@ -86,12 +86,16 @@ export default function CanvasPage() {
     };
   }, [connected, paused]);
 
-  const profile = view?.profiles.find((p) => p.profile.id === view.active)?.profile;
   const { nodes, edges, flowNodes, members, sets } = useMemo(() => {
-    const used = profile?.ruleset_ids ?? [];
-    const sets = (rulesets ?? []).map((r) => r.ruleset).filter((r) => r.enabled && used.includes(r.id));
-    const list = onlyVpn ? connections.filter((c) => c.outbound === "vpn") : connections;
-    const g = buildFlow(list, sets, status.state === "connected" ? status.profile_name : "", L.labels);
+    // 出口顺序和后端一样：使用中的是 "vpn"，同时连的是 "vpn-2"。
+    const chosen = ipc.connectionProfiles(view);
+    const exits = status.state === "connected" ? (status.exits ?? [{ name: status.profile_name, exit: status.exit, tag: "vpn" }]) : [];
+    const index = (outbound: string) => Math.max(0, exits.findIndex((e) => e.tag === outbound));
+    const all = (rulesets ?? []).map((r) => r.ruleset).filter((r) => r.enabled);
+    const setsFor = (outbound: string) => all.filter((r) => chosen[index(outbound)]?.ruleset_ids.includes(r.id));
+    const sets = all.filter((r) => chosen.some((p) => p.ruleset_ids.includes(r.id)));
+    const list = onlyVpn ? connections.filter((c) => ipc.isVpn(c.outbound)) : connections;
+    const g = buildFlow(list, setsFor, (outbound) => exits.find((e) => e.tag === outbound)?.name ?? "", L.labels);
     const flowEdges: Edge[] = g.edges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -102,7 +106,7 @@ export default function CanvasPage() {
       style: { strokeWidth: strokeWidth(e.bytes) },
     }));
     return { nodes: toFlow(g.nodes, selected), edges: flowEdges, flowNodes: g.nodes, members: g.members, sets };
-  }, [connections, rulesets, profile, onlyVpn, status, selected]);
+  }, [connections, rulesets, view, onlyVpn, status, selected]);
   const picked = flowNodes.find((n) => n.id === selected) ?? null;
 
   if (!connected) {
@@ -181,12 +185,12 @@ function NodeDetail(props: { node: FlowNode; conns: ipc.Connection[]; set: ipc.R
         [D.subscribed, [...set.sub_domain_suffix, ...set.sub_domain_keyword]],
       ]
     : [];
-  const note = D.notes[node.id as keyof typeof D.notes];
+  const note = D.notes[(node.id.startsWith("x:vpn") ? "x:vpn" : node.id) as keyof typeof D.notes];
   // 同一个目标的多条连接合成一行，流量大的在前。
   const rows = [...conns.reduce((m, c) => {
     const target = c.host || c.ip;
     const key = `${c.process_path}|${target}|${c.outbound}`;
-    const r = m.get(key) ?? { prog: c.process_path ? fileName(c.process_path) : L.labels.system, target, vpn: c.outbound === "vpn", rule: c.rule, n: 0, bytes: 0 };
+    const r = m.get(key) ?? { prog: c.process_path ? fileName(c.process_path) : L.labels.system, target, vpn: ipc.isVpn(c.outbound), rule: c.rule, n: 0, bytes: 0 };
     r.n++;
     r.bytes += c.upload + c.download;
     return m.set(key, r);

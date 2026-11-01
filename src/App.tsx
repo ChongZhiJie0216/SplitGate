@@ -4,7 +4,7 @@ import { useProfiles } from "./store/profiles";
 import { useStatus } from "./store/status";
 import { useBlocked } from "./store/blocked";
 import { T } from "./lib/text";
-import { getSettings, onRulesUpdated, restartAsAdmin, serviceUsable, setActiveProfile } from "./lib/ipc";
+import { connectionProfiles, getSettings, onRulesUpdated, restartAsAdmin, serviceUsable, setActiveProfile, setSecondProfile } from "./lib/ipc";
 import { useRules } from "./store/rules";
 import ConnectButton from "./components/ConnectButton";
 import Icon, { IconName } from "./components/Icon";
@@ -47,9 +47,8 @@ export default function App() {
   useEffect(() => {
     const off = onRulesUpdated((ids) => {
       useRules.getState().load();
-      const p = useProfiles.getState().view;
-      const active = p?.profiles.find((x) => x.profile.id === p.active)?.profile;
-      if (active && ids.some((id) => active.ruleset_ids.includes(id))) useStatus.getState().markStale();
+      const used = connectionProfiles(useProfiles.getState().view).flatMap((p) => p.ruleset_ids);
+      if (ids.some((id) => used.includes(id))) useStatus.getState().markStale();
     });
     return () => void off.then((f) => f());
   }, []);
@@ -103,6 +102,21 @@ export default function App() {
               ))}
             </select>
           </label>
+          {(view?.profiles.length ?? 0) > 1 && (
+            <label className="theme" title={T.profile.secondHint}>
+              {T.profile.second}
+              <select value={view?.second ?? ""} disabled={busy} onChange={(e) => run(() => setSecondProfile(e.target.value || null))}>
+                <option value="">{T.profile.secondNone}</option>
+                {view?.profiles
+                  .filter(({ profile }) => profile.id !== view.active)
+                  .map(({ profile }) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}（{T.profile.types[profile.type]}）
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
           <div className="spacer" />
         </header>
         {info && !info.isAdmin && service && !serviceUsable(service) && <NotAdminBanner />}
