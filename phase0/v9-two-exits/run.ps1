@@ -97,9 +97,14 @@ function New-Exit([string]$Name, [string]$Kind, [string]$Server, [string]$User, 
     if ($v.keepalive) { $peer.persistent_keepalive_interval = $v.keepalive }
     $mtu = if ($v.mtu) { $v.mtu } else { 1420 }
     $ep = [ordered]@{ type = 'wireguard'; tag = $tag; address = $v.address; private_key = $v.key; mtu = $mtu; peers = @($peer) }
+    # e.g. a phone hotspot's 'Wi-Fi': school networks block WireGuard's UDP (phase 0 V2)
+    if ($Bind) {
+        if (-not $CheckOnly -and -not (Get-NetAdapter -Name $Bind -ErrorAction SilentlyContinue)) { Write-Host "[ERROR] Adapter '$Bind' not found (see Get-NetAdapter)."; exit 1 }
+        $ep.bind_interface = $Bind
+    }
     $dnsServer = if ($v.dns) { $v.dns[0] } else { '1.1.1.1' }
     $dns = [ordered]@{ type = 'udp'; tag = "$Name-dns"; server = $dnsServer; detour = $tag }
-    return @{ Endpoint = $ep; Dns = $dns; ServerHost = $wgHost; Label = "WireGuard $($v.endpoint), DNS $dnsServer" }
+    return @{ Endpoint = $ep; Dns = $dns; ServerHost = $wgHost; Label = "WireGuard $($v.endpoint), DNS $dnsServer$(if ($Bind) { ", out of adapter '$Bind'" })" }
 }
 
 function Get-HostRule([string]$h) {
